@@ -32,7 +32,7 @@ Created by [@ohmybahgosh](https://github.com/ohmybahgosh)
 - **Persistent**: Fully boot-persistent using webOS Homebrew's `init.d`
 - **Simple**: Comprehensive menu-driven interface for all operations
 - **Flexible**: Easy install/uninstall/enable/disable options
-- **Clean**: Supports reverting legacy systemd installations
+- **Safe**: Checks if you're connected via the interface being modified
 
 ## 🛠️ Installation
 
@@ -63,12 +63,11 @@ Once running, you'll see the following options:
 1) Install eth0 fix
 2) Uninstall eth0 fix
 3) Check fix status
-4) Revert legacy systemd setup
-5) Reinstall eth0 fix
-6) Disable eth0 fix
-7) Re-enable eth0 fix
+4) Reinstall eth0 fix
+5) Disable eth0 fix
+6) Re-enable eth0 fix
+7) Reset all Ethernet naming
 8) Exit
-9) Reset all Ethernet naming
 ```
 
 ## 🔧 Technical Details
@@ -89,15 +88,19 @@ ip link set eth2 up
 
 3. Makes it executable and configured to auto-run at every boot
 
-## 📋 Cleanup
+## 📋 Management
 
-If you previously used a systemd-based version of this fix, the menu provides an option (#4) to remove legacy service files for a clean state.
+The script provides several management options:
+- **Check Status**: Verify if the fix is properly installed and enabled
+- **Disable/Enable**: Temporarily disable the fix without uninstalling
+- **Reset Naming**: Attempt to reset interface names to their original state
+- **Reinstall**: Perform a clean reinstallation of the fix
 
 ## 🐛 Troubleshooting
 
 - **Lost SSH during setup?** Connect via Wi-Fi and try again
 - **Apps still not working?** Verify the fix is running with option #3
-- **Need to revert?** Use option #2 to uninstall
+- **Need to revert?** Use option #2 to uninstall or option #7 to reset naming
 
 ## 🤝 Contributing
 
@@ -110,4 +113,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 👤 Author
 
 **OhMyBahGosh**  
-GitHub: [@ohmybahgosh](https://github.com/ohmybahgosh) 
+GitHub: [@ohmybahgosh](https://github.com/ohmybahgosh)
+Repository: [https://github.com/ohmybahgosh/LG-USB-2-ETH0](https://github.com/ohmybahgosh/LG-USB-2-ETH0) 
