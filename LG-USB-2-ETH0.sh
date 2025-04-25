@@ -1,11 +1,11 @@
 #!/bin/sh
 
 ###############################################################################
-# LG-USB-2-ETH0 Fixer for webOS
+# LG-USB-2-ETH0 Fixer for webOS (init.d version only)
 # Safely remaps USB Ethernet adapter to eth0 using init.d on rooted LG TVs
-#
 # Author: OhMyBahGosh
-# Repo:   https://github.com/ohmybahgosh/LG-USB-2-ETH0
+# Repository: https://github.com/ohmybahgosh/LG-USB-2-ETH0
+# Version: 1.0.1
 ###############################################################################
 
 # ANSI color codes
@@ -19,9 +19,6 @@ RESET="\033[0m"
 INIT_DIR="/var/lib/webosbrew/init.d"
 INIT_SCRIPT="$INIT_DIR/S01fix-eth"
 DISABLED_SCRIPT="$INIT_DIR/S01fix-eth.disabled"
-OLD_FIX_SCRIPT="/var/bin/fix-eth.sh"
-OLD_SERVICE="/var/systemd/services/fix-eth.service"
-OLD_TIMER="/var/systemd/services/fix-eth.timer"
 
 install_fix() {
   printf "${CYAN}Installing eth0 fix using init.d...${RESET}\n"
@@ -73,22 +70,6 @@ check_status() {
   else
     printf "${RED}✗ Not installed via init.d${RESET}\n"
   fi
-
-  if [ -f "$OLD_FIX_SCRIPT" ] || [ -f "$OLD_SERVICE" ] || [ -f "$OLD_TIMER" ]; then
-    printf "${YELLOW}⚠ Legacy systemd setup detected. Consider reverting.${RESET}\n"
-  fi
-}
-
-revert_old_systemd_setup() {
-  printf "${YELLOW}Reverting previous systemd-based setup...${RESET}\n"
-  systemctl stop fix-eth.timer 2>/dev/null
-  rm -f "$OLD_FIX_SCRIPT" "$OLD_SERVICE" "$OLD_TIMER"
-  rm -f /run/systemd/system/fix-eth.service
-  rm -f /run/systemd/system/fix-eth.timer
-  rm -f /run/systemd/system/timers.target.wants/fix-eth.timer
-  systemctl daemon-reexec
-  systemctl daemon-reload
-  printf "${GREEN}Legacy systemd setup cleaned up.${RESET}\n"
 }
 
 reset_eth_naming() {
@@ -99,11 +80,11 @@ reset_eth_naming() {
   ip link set eth2 down 2>/dev/null
 
   ip link set eth0 name ethX 2>/dev/null
-  ip link set eth1 name ethX 2>/dev/null
+  ip link set eth1 name ethY 2>/dev/null
 
   ip link set ethX name eth1 2>/dev/null
   ip link set eth2 name eth0 2>/dev/null
-  ip link set eth1 name eth2 2>/dev/null
+  ip link set ethY name eth2 2>/dev/null
 
   ip link set eth0 up 2>/dev/null
   ip link set eth1 up 2>/dev/null
@@ -135,12 +116,11 @@ main_menu() {
     echo "1) Install eth0 fix"
     echo "2) Uninstall eth0 fix"
     echo "3) Check fix status"
-    echo "4) Revert legacy systemd setup"
-    echo "5) Reinstall eth0 fix"
-    echo "6) Disable eth0 fix"
-    echo "7) Re-enable eth0 fix"
+    echo "4) Reinstall eth0 fix"
+    echo "5) Disable eth0 fix"
+    echo "6) Re-enable eth0 fix"
+    echo "7) Reset all Ethernet naming"
     echo "8) Exit"
-    echo "9) Reset all Ethernet naming"
     printf "Choose an option: "
     read CHOICE
 
@@ -148,12 +128,11 @@ main_menu() {
       1) warn_if_using_eth1; install_fix ;;
       2) uninstall_fix ;;
       3) check_status ;;
-      4) revert_old_systemd_setup ;;
-      5) uninstall_fix; warn_if_using_eth1; install_fix ;;
-      6) disable_fix ;;
-      7) enable_fix ;;
+      4) uninstall_fix; warn_if_using_eth1; install_fix ;;
+      5) disable_fix ;;
+      6) enable_fix ;;
+      7) reset_eth_naming ;;
       8) echo "Goodbye!"; exit 0 ;;
-      9) reset_eth_naming ;;
       *) echo "Invalid option." ;;
     esac
 
