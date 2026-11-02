@@ -7,4 +7,6 @@ while [ $# -gt 0 ]; do
     shift
 done
 [ -n "$out" ] || exit 2
+# Simulate a TLS failure (curl exit 35) when asked
+[ -e "$FAKE_STATE/curl_fail" ] && { echo "curl: (35) SSL connect error" >&2; exit 35; }
 if [ -f "$FAKE_STATE/download" ]; then cat "$FAKE_STATE/download" > "$out"; else echo "not the real file" > "$out"; fi

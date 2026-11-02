@@ -773,6 +773,60 @@ test_json_skips_p2p() {
     check "wlan0 chosen" python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['wifi']['name']=='wlan0'" "$SB/s.json"
 }
 
+test_boot_skips_module_for_other_kernel() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot 5.4.268-old
+    # Installed while the TV ran 5.4.268-old; a firmware update changed the kernel since
+    FAKE_KERNEL=5.4.268-old run install -y --module "$SB/r8152_oot.ko"
+    check "installed" rc_is 0
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "explains" grep -q "built for kernel 5.4.268-old" "$LOG"
+    check "never loaded" test ! -e "$STATE/insmod.log"
+    check "stays on cdc_ncm" drv eth0 cdc_ncm
+    run status
+    check "status flags it" has "probably after a firmware update"
+}
+
+test_boot_skips_changed_module() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    check "checksum saved" grep -Eq '^MODULE_SHA="[0-9a-f]{64}"' "$CONF"
+    printf 'tampered' >> "$SB/r8152_oot.ko"
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "explains" grep -q "the file changed since it was installed" "$LOG"
+    check "never loaded" test ! -e "$STATE/insmod.log"
+    run status
+    check "status flags it" has "changed since it was installed"
+    run apply -y
+    check "apply won't load it either" test ! -e "$STATE/insmod.log"
+}
+
+test_get_driver_download_fails() {
+    add_builtin
+    touch "$STATE/curl_fail"
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run get-driver -y
+    check "exit 1" rc_is 1
+    check "https only" grep -q -- "--proto =https" "$STATE/curl.log"
+    check "explains the offline route" has "get-driver --file"
+    check "mentions the clock" has "clock is right"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko.part"
+}
+
+test_get_driver_file_checked() {
+    add_builtin
+    printf 'some other file' > "$SB/r8152_oot.ko"
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run get-driver -y --file "$SB/r8152_oot.ko"
+    check "exit 1" rc_is 1
+    check "checksum refused" has "Checksum mismatch"
+    check "no download attempted" test ! -e "$STATE/curl.log"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
+}
+
 t report test_report
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
@@ -794,6 +848,10 @@ t no_settings_boot_does_nothing test_no_settings_boot_does_nothing
 t status_json test_status_json
 t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
 t json_skips_p2p test_json_skips_p2p
+t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
+t boot_skips_changed_module test_boot_skips_changed_module
+t get_driver_download_fails test_get_driver_download_fails
+t get_driver_file_checked test_get_driver_file_checked
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

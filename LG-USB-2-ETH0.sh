@@ -59,11 +59,14 @@ WAIT_SECS=120
 PARK_NAME="eth2"
 MODULE=""
 DRIVER=""
+# SHA-256 of the module file, saved at install and checked before every load
+MODULE_SHA=""
 WATCH=0
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
 SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0
 JSON=0
+DRIVER_FILE=""
 
 # === Helper Functions ===
 log() { printf '%b%s%b\n' "$1" "$2" "$NC"; }
@@ -111,7 +114,8 @@ Commands (no command opens the menu):
   doctor      Same as status
   report      Print a short report to paste into a GitHub issue
   get-driver  Download a better driver module known to work on this exact
-              kernel, if there is one, and check its checksum
+              kernel, if there is one, and check its checksum. With
+              --file PATH, check and use a copy you downloaded yourself
   version     Print the version
 
 Options:
@@ -332,14 +336,30 @@ sys_write() {
     if [ -n "$LGU2E_SYSWRITE" ]; then "$LGU2E_SYSWRITE" "$1" "$2"; else printf '%s' "$2" > "$1"; fi
 }
 
+# The kernel a .ko file was built for (its vermagic), read without modinfo
+module_kernel() {
+    tr -c '[:alnum:]_=.+ -' '\n' < "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1
+}
+
+# Load the --module driver, but only if it's the exact file that was
+# installed and it was built for the kernel running now. A firmware update
+# can change the kernel while root survives; loading a module built for
+# another kernel can crash the TV, so it's skipped instead.
 load_module() {
     [ -n "$MODULE" ] || return 0
     _m=${DRIVER:-${MODULE##*/}}
     _m=${_m%.ko}
+    _mk=""
+    [ -r "$MODULE" ] && _mk=$(module_kernel "$MODULE")
     if [ -d "$SYS_MODULES/$_m" ]; then
         echo "Module $_m already loaded."
     elif [ ! -r "$MODULE" ]; then
         echo "Module file $MODULE is missing. Skipping it."
+    elif [ -n "$_mk" ] && [ "$_mk" != "$(uname -r)" ]; then
+        echo "Not loading $MODULE: it's built for kernel $_mk, but the TV now runs $(uname -r) (a firmware update?). The adapter stays on its current driver."
+    elif [ -n "$MODULE_SHA" ] && command -v sha256sum >/dev/null 2>&1 && \
+         [ "$(sha256sum "$MODULE" | awk '{print $1}')" != "$MODULE_SHA" ]; then
+        echo "Not loading $MODULE: the file changed since it was installed. Run install again if that was you."
     elif insmod "$MODULE"; then
         echo "Loaded module $MODULE."
     else
@@ -584,20 +604,29 @@ resolve_driver() {
         [ -n "$DRIVER" ] || { DRIVER=${MODULE##*/}; DRIVER=${DRIVER%.ko}; }
     fi
     case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "Could not work out the driver name of $MODULE." ;; esac
-    _vm=$(tr -c '[:alnum:]_=.+ -' '\n' < "$MODULE" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1)
+    _vm=$(module_kernel "$MODULE")
     if [ -n "$_vm" ] && [ "$_vm" != "$(uname -r)" ]; then
         error_exit "$MODULE is built for kernel $_vm, but this TV runs $(uname -r). Loading it could crash the TV."
     fi
+    MODULE_SHA=""
+    command -v sha256sum >/dev/null 2>&1 && MODULE_SHA=$(sha256sum "$MODULE" | awk '{print $1}')
+    return 0
 }
 
 # For apply: use the installed hook's module unless one was given
 use_hook_driver() {
+    _saved_sha=""
     if [ "$SET_MODULE" = 0 ] && [ "$(hook_state)" = enabled ]; then
         MODULE=$(hook_setting MODULE)
         DRIVER=$(hook_setting DRIVER)
+        _saved_sha=$(hook_setting MODULE_SHA)
     fi
     if [ "$SET_MAC" = 0 ] && [ "$(hook_state)" = enabled ]; then PIN_MAC=$(hook_setting PIN_MAC); fi
+    [ -n "$MODULE" ] || return 0
     resolve_driver
+    # Check against the checksum saved at install, not the file as it is now
+    [ -n "$_saved_sha" ] && MODULE_SHA=$_saved_sha
+    return 0
 }
 
 # Better driver modules known to work on one exact kernel, as
@@ -611,11 +640,36 @@ known_driver() {
     esac
 }
 
+# Download over HTTPS only. TLS protects the download, but the pinned SHA-256
+# is what decides whether the file is kept, so a proxy, an old certificate
+# store or busybox wget (which may not check certificates) can't slip a
+# different file through. They can only make the download fail.
 fetch() {
-    if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$1" "$2"
-    elif command -v wget >/dev/null 2>&1; then wget -q -O "$1" "$2"
-    else echo "Neither curl nor wget is available."; return 1
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --proto '=https' --connect-timeout 20 --max-time 300 --retry 2 -o "$1" "$2"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -T 30 -O "$1" "$2"
+    else
+        echo "Neither curl nor wget is available."
+        return 1
     fi
+}
+
+# Certificates can't be checked with a clock that's years off, which happens
+# right after boot before the TV syncs its time
+clock_ok() {
+    _y=$(date +%Y 2>/dev/null)
+    case "$_y" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$_y" -ge 2025 ]
+}
+
+download_help() {
+    echo "If the download keeps failing:"
+    echo "  - Check the TV is online and its clock is right (it says: $(date))."
+    echo "  - Older firmware can have an out-of-date certificate store. Download the file on"
+    echo "    your computer instead, copy it to the TV (for example with scp), then run:"
+    echo "      sh $0 get-driver --file /path/to/$1"
+    echo "    The file is checked against the same SHA-256 either way."
 }
 
 get_driver() {
@@ -635,19 +689,35 @@ get_driver() {
     echo "  Download: $_url"
     echo "  It's a kernel module from that project, not from LG-USB-2-ETH0. It's only offered"
     echo "  for this exact kernel, and its SHA-256 is checked before it's kept."
+    command -v sha256sum >/dev/null 2>&1 || error_exit "sha256sum is missing, so the download can't be checked. Nothing changed."
     if [ -f "$_dest" ] && [ "$(sha256sum "$_dest" | awk '{print $1}')" = "$_sum" ]; then
         success "Already downloaded and verified: $_dest"
     else
-        confirm "Download it?" || { echo "Cancelled. Nothing changed."; return 1; }
         mkdir -p "$DRIVER_DIR" || error_exit "Could not create $DRIVER_DIR."
-        fetch "$_dest.part" "$_url" || { rm -f "$_dest.part"; error_exit "Download failed."; }
+        if [ -n "$DRIVER_FILE" ]; then
+            [ -r "$DRIVER_FILE" ] || error_exit "Can't read $DRIVER_FILE."
+            cp -f "$DRIVER_FILE" "$_dest.part" || error_exit "Could not copy $DRIVER_FILE."
+        else
+            confirm "Download it?" || { echo "Cancelled. Nothing changed."; return 1; }
+            clock_ok || warn "The TV's clock says $(date). Certificates can't be checked until it's right, so the download may fail."
+            if ! fetch "$_dest.part" "$_url"; then
+                rm -f "$_dest.part"
+                download_help "$_file"
+                error_exit "Download failed. Nothing changed."
+            fi
+        fi
         _got=$(sha256sum "$_dest.part" | awk '{print $1}')
         if [ "$_got" != "$_sum" ]; then
             rm -f "$_dest.part"
-            error_exit "Checksum mismatch (got $_got). The file was deleted and nothing changed."
+            error_exit "Checksum mismatch (got $_got, expected $_sum). The file was deleted and nothing changed."
+        fi
+        _vm=$(module_kernel "$_dest.part")
+        if [ -n "$_vm" ] && [ "$_vm" != "$_k" ]; then
+            rm -f "$_dest.part"
+            error_exit "The module is built for kernel $_vm, not $_k. The file was deleted and nothing changed."
         fi
         mv -f "$_dest.part" "$_dest" || error_exit "Could not save $_dest."
-        success "Downloaded and verified: $_dest"
+        success "Verified and saved: $_dest"
     fi
     echo "Install it with:"
     echo "  sh $0 install --module $_dest"
@@ -709,6 +779,7 @@ settings_ok() {
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
     case "$DRIVER" in *[!A-Za-z0-9_]*) return 1 ;; esac
+    case "$MODULE_SHA" in *[!0-9a-f]*) return 1 ;; esac
     [ -z "$PIN_MAC" ] || echo "$PIN_MAC" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || return 1
     return 0
 }
@@ -717,7 +788,7 @@ settings_ok() {
 load_settings() {
     if [ "$SET_MAC" = 0 ]; then PIN_MAC=$(hook_setting PIN_MAC); fi
     if [ "$SET_WAIT" = 0 ]; then _v=$(hook_setting WAIT_SECS); [ -n "$_v" ] && WAIT_SECS=$_v; fi
-    if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); fi
+    if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); MODULE_SHA=$(hook_setting MODULE_SHA); fi
     if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     return 0
@@ -760,6 +831,7 @@ write_hook() {
         echo "PARK_NAME=\"$PARK_NAME\""
         echo "MODULE=\"$MODULE\""
         echo "DRIVER=\"$DRIVER\""
+        echo "MODULE_SHA=\"$MODULE_SHA\""
         echo "WATCH=\"$WATCH\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
@@ -811,7 +883,7 @@ run_detached() {
         echo "The change still finishes on the TV. Wi-Fi is the safe way in."
         confirm "Go ahead?" || { echo "Cancelled. Nothing changed."; return 1; }
     fi
-    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"
+    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"; MODULE_SHA=\"$MODULE_SHA\"
 LOG_FILE=\"$LOG_FILE\"; RUN_DIR=\"$RUN_DIR\"
 $CORE
 $_what"
@@ -1078,6 +1150,21 @@ show_status() {
     done
     if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found under /sys/module or /lib/modules"; fi
 
+    _hm=$(hook_setting MODULE)
+    if [ -n "$_hm" ]; then
+        if [ ! -r "$_hm" ]; then
+            status_issue "The driver module $_hm is missing. Run 'get-driver' and 'install --module' again, or 'install --no-module'."
+        else
+            _hk=$(module_kernel "$_hm")
+            if [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ]; then
+                status_issue "The driver module is built for kernel $_hk, but the TV now runs $(uname -r), probably after a firmware update. It won't be loaded. Run 'get-driver' to see if there's one for the new kernel."
+            fi
+            _hs=$(hook_setting MODULE_SHA)
+            if [ -n "$_hs" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_hm" | awk '{print $1}')" != "$_hs" ]; then
+                status_issue "The driver module changed since it was installed, so it won't be loaded. Run 'install' again if you replaced it on purpose."
+            fi
+        fi
+    fi
     _bi=$(find_builtin_nic)
     _usb=$(find_usb_nic)
     if [ -n "$_usb" ] && [ "$(nic_driver "$_usb")" = cdc_ncm ]; then
@@ -1315,7 +1402,11 @@ while [ $# -gt 0 ]; do
             case "$MODULE" in *[!A-Za-z0-9._/-]*) error_exit "--module path may only use letters, digits, '.', '_', '-' and '/'" ;; esac ;;
         --watch) WATCH=1; SET_WATCH=1 ;;
         --no-watch) WATCH=0; SET_WATCH=1 ;;
-        --no-module) MODULE=""; DRIVER=""; SET_MODULE=1 ;;
+        --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
+        --file)
+            shift
+            DRIVER_FILE=$1
+            [ -n "$DRIVER_FILE" ] || error_exit "--file needs the path to a downloaded driver module" ;;
         --no-mac) PIN_MAC=""; SET_MAC=1 ;;
         --json) JSON=1 ;;
         --driver)
