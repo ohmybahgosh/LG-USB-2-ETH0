@@ -1,0 +1,73 @@
+/* Laid out for a 1920x1080 TV screen */
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; }
+body {
+  background: radial-gradient(1200px 700px at 75% 40%, rgba(34, 229, 132, .12), transparent),
+              linear-gradient(135deg, #0e1513, #0a0d0c);
+  color: #e8efeb;
+  font-family: "LG Smart UI", "Museo Sans", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+.mono, table, .meta, .panel-body pre { font-family: "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas, monospace; }
+
+#app { padding: 80px 110px; height: 100%; position: relative; }
+header { display: flex; align-items: center; }
+header img { width: 96px; height: 96px; margin-right: 28px; }
+header h1 { font-size: 54px; margin: 0; font-weight: 800; letter-spacing: -1px; }
+.meta { margin-left: auto; font-size: 22px; font-weight: 600; color: #6f7f78; }
+
+main { display: flex; margin-top: 64px; }
+.card {
+  flex: 1.25; margin-right: 48px; background: #111a17; border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 28px; padding: 40px 44px; min-height: 700px;
+}
+.actions { flex: 1; }
+
+.hero { display: flex; align-items: center; }
+.hero b { font-size: 44px; }
+.dot { width: 30px; height: 30px; border-radius: 50%; margin-right: 26px; flex: none; }
+.dot-ok { background: #22e584; box-shadow: 0 0 30px #22e584; }
+.dot-warn { background: #febc2e; box-shadow: 0 0 30px #febc2e; }
+.dot-bad { background: #ff5f57; box-shadow: 0 0 30px #ff5f57; }
+.dot-wait { background: #6f7f78; }
+.sub { color: #93a39b; font-size: 26px; margin: 10px 0 30px; min-height: 34px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 25px; }
+td { padding: 14px 0; border-top: 1px solid rgba(255, 255, 255, .06); vertical-align: top; }
+td:first-child { color: #6f7f78; width: 34%; }
+.ok { color: #22e584; }
+.warn { color: #febc2e; }
+
+#notes { list-style: none; padding: 0; margin: 24px 0 0; color: #93a39b; font-size: 21px; }
+#notes li { padding: 6px 0 6px 26px; position: relative; }
+#notes li:before { content: "•"; position: absolute; left: 6px; color: #febc2e; }
+
+.btn {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 30px; font-weight: 600; padding: 24px 32px; border-radius: 20px;
+  background: #16201c; margin-bottom: 18px; border: 3px solid transparent; outline: none;
+}
+.btn small { display: block; font-size: 20px; color: #6f7f78; font-weight: 500; margin-top: 4px; }
+.btn > small { margin-top: 0; text-align: right; }
+.btn:focus, .btn.focus { border-color: #22e584; background: #183026; box-shadow: 0 0 0 6px rgba(34, 229, 132, .15); }
+.btn.disabled { opacity: .45; }
+.tog { width: 72px; height: 40px; border-radius: 20px; background: #2b3632; position: relative; flex: none; }
+.tog:after { content: ""; position: absolute; left: 5px; top: 5px; width: 30px; height: 30px; border-radius: 50%; background: #6f7f78; }
+.tog.on { background: #22e584; }
+.tog.on:after { left: auto; right: 5px; background: #06140d; }
+
+footer { position: absolute; bottom: 56px; left: 110px; right: 110px; display: flex; color: #6f7f78; font-size: 22px; }
+footer > span { margin-right: 40px; }
+footer .right { margin: 0 0 0 auto; }
+.k { display: inline-block; padding: 4px 12px; border-radius: 8px; background: #1d2723; color: #c9d4cf; margin-right: 10px; font-weight: 700; }
+
+.overlay { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: rgba(5, 8, 7, .82); display: flex; align-items: center; justify-content: center; }
+.hidden { display: none; }
+.panel { width: 1100px; background: #111a17; border: 1px solid rgba(255, 255, 255, .1); border-radius: 28px; padding: 48px 56px; }
+.panel-title { font-size: 38px; font-weight: 800; margin-bottom: 20px; }
+.panel-body { font-size: 24px; color: #c9d4cf; }
+.panel-body pre { white-space: pre-wrap; word-break: break-word; font-size: 20px; color: #93a39b; max-height: 520px; overflow: hidden; margin: 0; }
+.panel-body .qr { display: flex; align-items: center; }
+.panel-body .qr svg { width: 420px; height: 420px; background: #fff; border-radius: 16px; margin-right: 44px; flex: none; }
+.panel-hint { margin-top: 28px; color: #6f7f78; font-size: 22px; }
+.spinner { width: 54px; height: 54px; border: 6px solid #2b3632; border-top-color: #22e584; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 24px; }
+@keyframes spin { to { transform: rotate(360deg); } }

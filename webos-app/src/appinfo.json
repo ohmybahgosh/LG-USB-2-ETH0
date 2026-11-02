@@ -1,0 +1,15 @@
+{
+    "id": "org.ohmybahgosh.lgusb2eth0",
+    "version": "2.3.0",
+    "vendor": "OhMyBahGosh",
+    "type": "web",
+    "main": "index.html",
+    "title": "LG-USB-2-ETH0",
+    "icon": "icon80.png",
+    "largeIcon": "icon130.png",
+    "iconColor": "#0e1513",
+    "bgColor": "#0e1513",
+    "appDescription": "Make a USB Ethernet adapter the TV's eth0",
+    "disableBackHistoryAPI": true,
+    "resolution": "1920x1080"
+}

@@ -41,3 +41,22 @@ jobs:
           sudo apt-get install -y -qq busybox dash
       - name: Run the test suite
         run: tests/run.sh ${{ matrix.shell }}
+
+  app:
+    name: TV app (IPK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check the app's JavaScript parses
+        run: node --check webos-app/src/app.js && node --check webos-app/gen-manifest.js
+      - name: Build the IPK and manifest
+        run: |
+          npm install -g @webos-tools/cli
+          webos-app/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipk
+          path: webos-app/out/

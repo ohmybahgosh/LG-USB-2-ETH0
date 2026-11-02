@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LG-USB-2-ETH0</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <img src="icon160.png" alt="">
+    <h1>LG-USB-2-ETH0</h1>
+    <span id="meta" class="meta">Loading…</span>
+  </header>
+
+  <main>
+    <section class="card" id="status">
+      <div class="hero"><span id="dot" class="dot dot-wait"></span><b id="headline">Checking the TV…</b></div>
+      <div id="subline" class="sub">Reading the network setup.</div>
+      <table id="facts"></table>
+      <ul id="notes"></ul>
+    </section>
+
+    <section class="actions" id="actions">
+      <div class="btn" tabindex="0" data-action="boot">Run at every boot <span class="tog" id="tog-boot"></span></div>
+      <div class="btn" tabindex="0" data-action="driver"><span>Faster Realtek driver<small id="driver-hint"></small></span> <span class="tog" id="tog-driver"></span></div>
+      <div class="btn" tabindex="0" data-action="watch"><span>Follow plug and unplug<small>from the next boot</small></span> <span class="tog" id="tog-watch"></span></div>
+      <div class="btn" tabindex="0" data-action="apply">Switch now <small>applies without a reboot</small></div>
+      <div class="btn" tabindex="0" data-action="report">Report for GitHub <small>shows a QR code</small></div>
+      <div class="btn" tabindex="0" data-action="off">Turn everything off <small>back to the built-in port</small></div>
+    </section>
+  </main>
+
+  <footer>
+    <span><span class="k">OK</span>Select</span>
+    <span><span class="k">▲ ▼</span>Move</span>
+    <span><span class="k">BACK</span>Exit</span>
+    <span class="right">github.com/ohmybahgosh/LG-USB-2-ETH0</span>
+  </footer>
+</div>
+
+<div id="overlay" class="overlay hidden">
+  <div class="panel">
+    <div id="overlay-title" class="panel-title"></div>
+    <div id="overlay-body" class="panel-body"></div>
+    <div id="overlay-hint" class="panel-hint"></div>
+  </div>
+</div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
