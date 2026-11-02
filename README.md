@@ -205,7 +205,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 |---------|------|-----------|--------|
 | [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
 
-It has a USB-C plug, and LG TVs have USB-A ports, so you'll need a small USB-C (female) to USB-A (male) adapter.  A 2.5G adapter is capped by the TV's USB port anyway, so on a USB 2.0 TV a gigabit Realtek adapter does about as well.
+It has a USB-C plug, and LG TVs have USB-A ports, so you'll need a small USB-C (female) to USB-A (male) adapter.  The author uses [these USB-C to USB-A adapters (Amazon, 4-pack)](https://www.amazon.com/dp/B0BJ8YQ2LM).  They're USB 2.0, which is all a USB 2.0 TV like the C2 can use anyway.  If your TV has a USB 3.0 port, get a USB 3.0 one instead, or the little adapter becomes the limit.  A 2.5G adapter is capped by the TV's USB port anyway, so on a USB 2.0 TV a gigabit Realtek adapter does about as well.
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
