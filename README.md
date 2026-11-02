@@ -30,6 +30,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 - [Commands and options](#commands-and-options)
 - [How it works](#how-it-works)
 - [Choosing an adapter](#choosing-an-adapter)
+- [A faster driver for Realtek adapters](#a-faster-driver-for-realtek-adapters)
 - [webOS compatibility](#webos-compatibility)
 - [Real speeds](#real-speeds)
 - [Troubleshooting](#troubleshooting)
@@ -74,7 +75,7 @@ Run `sh LG-USB-2-ETH0.sh` with no arguments for a menu.
 <summary>What <code>status</code> looks like once it's working</summary>
 
 ```
-=== LG-USB-2-ETH0 v2.1 status ===
+=== LG-USB-2-ETH0 v2.2 status ===
 Model:     OLED65C2PUA
 webOS:     webOS 25 (10.x), firmware 33.x
 Kernel:    aarch64, 5.4.x
@@ -128,6 +129,7 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `disable` / `enable` | Keeps the hook but stops it running at boot, or turns it back on. |
 | `status` / `doctor` | Read-only report and checks.  Safe to run any time. |
 | `report` | Short, paste-ready report for a GitHub issue.  MAC addresses are masked. |
+| `get-driver` | Downloads a better driver module, if one is known to work on your exact kernel, and checks its checksum.  See [A faster driver](#a-faster-driver-for-realtek-adapters). |
 
 | Option | What it does |
 |--------|--------------|
@@ -136,7 +138,8 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `--watch` | Keep watching after boot.  Plug the adapter in and it becomes `eth0`; unplug it and `eth0` goes back to the built-in port.  Starts from the next boot. |
 | `--mac aa:bb:cc:dd:ee:ff` | Only ever promote that adapter.  Handy with more than one adapter. |
 | `--wait 120` | Seconds the boot hook waits for the adapter to appear. |
-| `--module /home/root/r8152.ko` | Load this driver at boot before looking.  Advanced, see [Adapter not detected](#adapter-not-detected). |
+| `--module /path/driver.ko` | Load this driver module at boot, and move the adapter from the generic `cdc_ncm` driver over to it.  Refuses a module built for another kernel.  See [A faster driver](#a-faster-driver-for-realtek-adapters). |
+| `--driver NAME` | The driver name the module registers, if it can't be read from the file.  Rarely needed. |
 
 The options you install with are saved in the hook.  Run `install` again to change them.
 
@@ -148,8 +151,9 @@ At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  Th
 2. Loads your `--module`, if you gave one.
 3. Waits up to `--wait` seconds for a USB Ethernet adapter.  A device counts only if it's wired Ethernet on the USB bus, and not Wi-Fi (a USB device on many LG TVs), a phone or a modem.
 4. If none turns up, it changes nothing and the built-in port stays `eth0`.
-5. If one does, it renames the built-in `eth0` to `eth2` and the adapter to `eth0`, then brings both up.  A rename that webOS interrupts is retried, and if a step still fails, the old names are put back.
-6. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
+5. With `--module`, it moves the adapter from the generic `cdc_ncm` driver to your module's driver.  If the module doesn't take it within a few seconds, it goes back to `cdc_ncm`.  Each adapter gets one try per boot.
+6. It renames the built-in `eth0` to `eth2` and the adapter to `eth0`, then brings both up.  A rename that webOS interrupts is retried, and if a step still fails, the old names are put back.
+7. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
 
 It logs to `/tmp/lg-usb-2-eth0.log` (RAM, cleared at reboot), and `status` shows the last lines.  `apply` and `revert` run detached from your SSH session, so they finish even when the session drops, and they warn you first if you're connected through a port that's about to change.
 
@@ -163,6 +167,32 @@ What decides whether this works on your TV is **whether its kernel has a driver 
 
 Before buying, run `sh LG-USB-2-ETH0.sh status`.  It lists which USB network drivers your kernel has.  If you already have an adapter that isn't working, `status` tells you when the kernel sees it but has no driver for it.
 
+## A faster driver for Realtek adapters
+
+Many TVs give Realtek RTL8153 and RTL8156 adapters to the generic `cdc_ncm` driver.  It works, but it's slower and drops out under load.  The TV's own Realtek driver is often too old to recognize newer chips, and because it's built into the kernel, it can't be swapped out.  A newer Realtek driver, built for your exact kernel under a different name, fixes that.
+
+[DonZoomik](https://github.com/DonZoomik/webos-r8152) built one, `r8152_oot` (Realtek's v2.22.1 driver), for kernel `5.4.268-329.ptl4tv.5`.  That kernel runs on at least the 2024 C4 and the 2022 C2 on webOS 25 (10.3.1, firmware 33.31.68).  If your TV runs that kernel, `status` says so, and two commands set it up:
+
+```sh
+sh LG-USB-2-ETH0.sh get-driver
+sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/r8152_oot.ko
+sh LG-USB-2-ETH0.sh apply      # optional: switch now instead of at the next reboot
+```
+
+`get-driver` only offers a module for the exact kernel it was built for.  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  The module comes from that project, not this one, so credit and thanks go to DonZoomik.
+
+What LG-USB-2-ETH0 does with it:
+
+- **Moves the adapter over.**  The kernel still picks `cdc_ncm` first, so the script releases the adapter and binds it to the new driver.  If that doesn't work within a few seconds, the adapter goes back to `cdc_ncm`.
+- **Turns off scatter-gather** on the new driver.  In DonZoomik's testing, it made the TV's USB controller hang after a while.
+- **Never forces anything.**  A module built for another kernel is refused before it's loaded.  Each adapter gets one try per boot, so a driver that doesn't support it can't cause repeated drops.
+
+**Set up Wi-Fi on the TV first.**  Moving drivers takes the adapter offline for a moment, and Wi-Fi is your way back in if something goes wrong.  A reboot always undoes a live switch, and `uninstall` removes it for good.
+
+Already using DonZoomik's `r8152-autobind.sh`?  It does the same job.  Keep only one: run `sh /home/root/r8152-autobind.sh uninstall`, then install LG-USB-2-ETH0 with `--module`.  `status` warns if both are set up.
+
+Have a module for a different kernel?  `install --module /full/path/driver.ko` works with any USB network driver built for your exact kernel (`uname -r`).
+
 ## webOS compatibility
 
 The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every rooted webOS TV has.  It's plain POSIX `sh` and is tested under busybox `sh`, the shell on the TV.
@@ -172,6 +202,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 3.5 / 4 (2017 and 2018: B7, C7, C8) | ASIX-based adapters (Cable Matters USB 3.0) work out of the box.  TP-Link UE300 (RTL8153) didn't work on C7 or C8.  Settings show "no connection" while apps work, which is what this script fixes. | [lgwebos.com thread](https://www.lgwebos.com/topic/3395-gigabit-ethernet-on-smart-tv/page/2/) |
 | webOS 24 | Where this script was first written. | |
 | webOS 25 on a 2024 C4 | RTL8153 and RTL8156 adapters come up through the generic `cdc_ncm` driver.  They work, but slower and with drops.  A community-built `r8152` module helps. | [DonZoomik/webos-r8152](https://github.com/DonZoomik/webos-r8152) |
+| webOS 25 (10.3.1, firmware 33.31.68) on a 2022 C2 (OLED65C2PUA), kernel `5.4.268-329.ptl4tv.5` | Tested by the author.  An RTL8156 adapter (`0bda:8156`) comes up on `cdc_ncm`, and LG-USB-2-ETH0 makes it `eth0`.  With `r8152_oot` from `get-driver`, it moves over to the new driver on the first try, with scatter-gather off.  The C2's USB port runs at USB 2.0 speed. | This repo |
 | webOS 25 on 2024 QNED and OLED (Paparoa) | Reported that the Realtek driver was removed, so the adapter needs a module built for that exact kernel. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | webOS 25 on a 2025 B5 | One report of an AX88179A not being detected at all. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185) |
 
@@ -200,7 +231,7 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 **Settings still say "Not Connected", or no IP?**  Run `status`.  If the adapter is `eth0` but has no IPv4 address, give webOS a moment, then try unplugging and replugging the network cable.
 
-<a id="adapter-not-detected"></a>**Adapter not detected?**  `status` lists adapters the kernel sees but has no driver for.  Try an adapter with a different chip, use a USB 3.0 port, or try a powered hub.  If someone has built a driver module for your exact kernel (`uname -r`), install with `--module /full/path/driver.ko`.  Only use a module built for your exact kernel.
+<a id="adapter-not-detected"></a>**Adapter not detected?**  `status` lists adapters the kernel sees but has no driver for.  Try an adapter with a different chip, use a USB 3.0 port, or try a powered hub.  Run `get-driver` to see if a better driver is known for your kernel.  If someone has built a driver module for your exact kernel (`uname -r`), install with `--module /full/path/driver.ko`.  The script refuses a module built for another kernel.
 
 **Adapter plugged in after boot, or unplugged and back?**  Without `--watch`, run `apply`, or reboot.  With `--watch`, it's handled for you.
 
@@ -237,7 +268,7 @@ tests/run.sh bash
 tests/run.sh busybox watch   # only tests whose name contains "watch"
 ```
 
-It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks and the report.  CI runs ShellCheck and the whole suite under all three shells on every push.
+It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, and the report.  CI runs ShellCheck and the whole suite under all three shells on every push.
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, and publishes the script with a `SHA256SUMS` file.
 

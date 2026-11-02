@@ -19,9 +19,10 @@ So you can judge it yourself:
 - Writes one file, `/var/lib/webosbrew/init.d/S01fix-eth`, or moves it to `/var/lib/webosbrew/S01fix-eth.disabled`.
 - Renames network interfaces with `ip link`, and brings them up and down.
 - Writes its log and process ID to `/tmp` (RAM).
-- Loads a kernel module with `insmod`, only if you install with `--module`.
+- Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.
+- `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  Nothing else is downloaded.
 
-It doesn't download anything, change system files or network settings, or open any ports.
+Apart from `get-driver`, it doesn't download anything.  It never changes system files or network settings, or opens any ports.
 
 ## Verifying a download
 
