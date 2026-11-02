@@ -10,14 +10,19 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.0"
+VERSION="2.1"
 
 # === Color Codes ===
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+# Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    CYAN='\033[0;36m'
+    NC='\033[0m'
+else
+    RED='' GREEN='' YELLOW='' CYAN='' NC=''
+fi
 
 # === Paths ===
 # LGU2E_ROOT and LGU2E_SYSFS are for testing only. Leave them unset on the TV.
@@ -30,7 +35,9 @@ DISABLED_HOOK="${LGU2E_ROOT}/var/lib/webosbrew/S01fix-eth.disabled"
 # Where v1 put a disabled hook (inside init.d, so it may have kept running)
 OLD_DISABLED_HOOK="$INIT_DIR/S01fix-eth.disabled"
 LOG_FILE="${LGU2E_ROOT}/tmp/lg-usb-2-eth0.log"
-OS_INFO="/var/run/nyx/os_info.json"
+# The boot hook's background job writes its process ID here
+PID_FILE="${LGU2E_ROOT}/tmp/lg-usb-2-eth0.pid"
+OS_INFO="${LGU2E_ROOT}/var/run/nyx/os_info.json"
 HBC_DIR="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service"
 MARKER="Managed by LG-USB-2-ETH0"
 
@@ -41,6 +48,7 @@ PIN_MAC=""
 WAIT_SECS=120
 PARK_NAME="eth2"
 MODULE=""
+WATCH=0
 
 # === Helper Functions ===
 log() { printf '%b%s%b\n' "$1" "$2" "$NC"; }
@@ -86,6 +94,7 @@ Commands (no command opens the menu):
   revert      Give eth0 back to the built-in port now
   status      Show the hook, the network interfaces and any problems
   doctor      Same as status
+  report      Print a short report to paste into a GitHub issue
   version     Print the version
 
 Options:
@@ -94,6 +103,8 @@ Options:
   --mac MAC          Only ever promote the adapter with this MAC address
   --wait SECONDS     How long the boot hook waits for the adapter (default 120)
   --module FILE.ko   Load this driver module at boot before looking (advanced)
+  --watch            Keep watching after boot: swap the adapter in when it is
+                     plugged in, and give eth0 back when it is unplugged
   -h, --help         Show this help
 EOF
 }
@@ -105,6 +116,10 @@ CORE=$(cat <<'CORE_EOF'
 # LGU2E_SYSFS only exists so the script can be tested against a fake /sys
 NET=${LGU2E_SYSFS:-/sys}/class/net
 USB_DEVS=${LGU2E_SYSFS:-/sys}/bus/usb/devices
+SYS_MODULES=${LGU2E_SYSFS:-/sys}/module
+# Seconds to let a new adapter settle, and between checks in --watch mode
+SETTLE_SECS=${LGU2E_SETTLE:-3}
+WATCH_EVERY=${LGU2E_WATCH_EVERY:-5}
 
 sysval() { [ -r "$1" ] && IFS= read -r _v < "$1" 2>/dev/null && printf '%s\n' "$_v"; }
 
@@ -175,7 +190,22 @@ free_eth_name() {
     return 1
 }
 
-rename_if() { ip link set dev "$1" down && ip link set dev "$1" name "$2"; }
+# Rename an interface. It has to be down first, and webOS's connection manager
+# sometimes brings it straight back up ("Device or resource busy"), so retry.
+rename_if() {
+    _try=1
+    while :; do
+        _err=""
+        if ip link set dev "$1" down 2>/dev/null && _err=$(ip link set dev "$1" name "$2" 2>&1); then
+            return 0
+        fi
+        [ "$_try" -ge 3 ] && break
+        _try=$((_try + 1))
+        sleep 1
+    done
+    echo "Renaming $1 to $2 failed after 3 tries${_err:+: $_err}"
+    return 1
+}
 
 # Make the USB adapter eth0 and park the built-in port under another name.
 # Puts the old names back if a step fails, so the TV never ends up with the
@@ -264,7 +294,7 @@ load_module() {
     [ -n "$MODULE" ] || return 0
     _m=${MODULE##*/}
     _m=${_m%.ko}
-    if [ -d "/sys/module/$_m" ]; then
+    if [ -d "$SYS_MODULES/$_m" ]; then
         echo "Module $_m already loaded."
     elif [ ! -r "$MODULE" ]; then
         echo "Module file $MODULE is missing. Skipping it."
@@ -275,24 +305,51 @@ load_module() {
     fi
 }
 
+# --watch: keep following the adapter after boot. Plugged in: swap it in.
+# Unplugged: give eth0 back to the built-in port, so the TV is never left
+# without an eth0. Logs only when something happens.
+watch_run() {
+    echo "Watching for the adapter (every ${WATCH_EVERY}s)."
+    _skip=""
+    while :; do
+        sleep "$WATCH_EVERY"
+        _u=$(find_usb_nic)
+        if [ -n "$_u" ] && [ "$_u" != eth0 ]; then
+            # Don't retry a swap that already failed until something changes
+            [ "$_u" = "$_skip" ] && continue
+            echo "=== $(date) adapter $_u appeared ==="
+            sleep "$SETTLE_SECS"
+            swap_in || _skip=$_u
+        elif [ -z "$_u" ] && [ ! -e "$NET/eth0" ] && [ -n "$(find_builtin_nic)" ]; then
+            echo "=== $(date) adapter gone ==="
+            swap_out
+            _skip=""
+        else
+            _skip=""
+        fi
+    done
+}
+
 # What the boot hook does: wait for the adapter, then swap. The hook runs
 # this in the background, so it never holds up the Homebrew Channel startup,
 # and it changes nothing when no adapter shows up.
 boot_run() {
-    echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}) ==="
+    echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
     load_module
     _t=0
     while [ "$_t" -lt "$WAIT_SECS" ] && [ -z "$(find_usb_nic)" ]; do
         sleep 2
         _t=$((_t + 2))
     done
-    if [ -z "$(find_usb_nic)" ]; then
+    if [ -n "$(find_usb_nic)" ]; then
+        # Give a freshly attached adapter a moment to settle
+        sleep "$SETTLE_SECS"
+        swap_in
+    else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
-        return 0
     fi
-    # Give a freshly attached adapter a moment to settle
-    sleep 3
-    swap_in
+    [ "$WATCH" = 1 ] && watch_run
+    return 0
 }
 CORE_EOF
 )
@@ -316,7 +373,7 @@ tv_info() {
     WEBOS_RELEASE=$(json_get webos_release "$OS_INFO")
     FIRMWARE=$(json_get webos_manufacturing_version "$OS_INFO")
     [ -n "$WEBOS_RELEASE" ] || WEBOS_RELEASE=$(limited nyx-cmd OSInfo query webos_release 2>/dev/null)
-    [ -n "$WEBOS_RELEASE" ] || WEBOS_RELEASE=$(sed -n 's/^VERSION_ID=//p' /etc/os-release 2>/dev/null | tr -d '"')
+    [ -n "$WEBOS_RELEASE" ] || WEBOS_RELEASE=$(sed -n 's/^VERSION_ID=//p' "${LGU2E_ROOT}/etc/os-release" 2>/dev/null | tr -d '"')
     TV_MODEL=""
     if command -v luna-send >/dev/null 2>&1; then
         INFO=$(limited luna-send -n 1 -f luna://com.webos.service.tv.systemproperty/getSystemInfo \
@@ -343,7 +400,7 @@ hbc_present() { [ -d "${LGU2E_ROOT}/var/lib/webosbrew" ] || [ -d "$HBC_DIR" ]; }
 
 # Everything this script needs before it changes anything
 preflight() {
-    [ "$(id -u)" = 0 ] || error_exit "Run this as root on the TV (it needs a rooted TV)."
+    [ -n "$LGU2E_ROOT" ] || [ "$(id -u)" = 0 ] || error_exit "Run this as root on the TV (it needs a rooted TV)."
     [ -r "$OS_INFO" ] || command -v luna-send >/dev/null 2>&1 || \
         warn "This does not look like webOS. Carrying on, but check you're on the TV."
     command -v ip >/dev/null 2>&1 || error_exit "The 'ip' command is missing, so interfaces can't be renamed."
@@ -364,6 +421,24 @@ hook_state() {
     fi
 }
 
+# Stop the boot hook's background job (it only stays around with --watch, or
+# while it is still waiting for the adapter). Checks the PID is really the hook.
+stop_watcher() {
+    [ -r "$PID_FILE" ] || return 0
+    _pid=$(cat "$PID_FILE" 2>/dev/null)
+    case "$_pid" in ''|*[!0-9]*) rm -f "$PID_FILE"; return 0 ;; esac
+    if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth'; then
+        kill "$_pid" 2>/dev/null && info "Stopped the hook's background job (PID $_pid)."
+    fi
+    rm -f "$PID_FILE"
+}
+
+watcher_pid() {
+    _pid=$(cat "$PID_FILE" 2>/dev/null)
+    case "$_pid" in ''|*[!0-9]*) return 1 ;; esac
+    kill -0 "$_pid" 2>/dev/null && echo "$_pid"
+}
+
 hook_setting() {
     _f=$HOOK
     [ -f "$_f" ] || _f=$DISABLED_HOOK
@@ -382,12 +457,15 @@ write_hook() {
         echo "WAIT_SECS=\"$WAIT_SECS\""
         echo "PARK_NAME=\"$PARK_NAME\""
         echo "MODULE=\"$MODULE\""
+        echo "WATCH=\"$WATCH\""
+        echo "PID_FILE=\"$PID_FILE\""
         echo "LOG_FILE=\"$LOG_FILE\""
-        echo 'PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH'
+        echo 'PATH=$PATH:/usr/sbin:/usr/bin:/sbin:/bin'
         printf '%s\n' "$CORE"
         echo '# Keep the RAM log small'
         echo '[ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt 32768 ] && mv -f "$LOG_FILE" "$LOG_FILE.1"'
         echo '( boot_run ) >> "$LOG_FILE" 2>&1 < /dev/null &'
+        echo 'echo $! > "$PID_FILE"'
         echo 'exit 0'
     } > "$_tmp" || error_exit "Could not write $_tmp."
     { chmod 755 "$_tmp" && mv -f "$_tmp" "$HOOK"; } || error_exit "Could not install $HOOK."
@@ -435,6 +513,9 @@ $_what"
         _i=$((_i + 1))
     done
     cat "$LOG_FILE.now" 2>/dev/null
+    if kill -0 "$_pid" 2>/dev/null; then
+        warn "Still working in the background. Run 'status' in a minute to see how it went."
+    fi
     { echo "=== $(date) $_what (by hand) ==="; cat "$LOG_FILE.now"; } >> "$LOG_FILE" 2>/dev/null
     return 0
 }
@@ -466,12 +547,14 @@ install_fix() {
     [ -n "$MODULE" ] && echo "     (after loading $MODULE)"
     echo "  2. If one shows up, rename the built-in port to $PARK_NAME and the adapter to eth0"
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
+    [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
     echo "It writes $HOOK and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
     esac
     [ -z "$(find_usb_nic)" ] && warn "No adapter is visible right now. Run 'status' if it's plugged in."
     confirm "Install the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
+    stop_watcher
     write_hook
     success "Boot hook installed: $HOOK"
     if [ "$APPLY_NOW" = 1 ]; then
@@ -487,6 +570,7 @@ uninstall_fix() {
         info "No boot hook installed."
     else
         confirm "Remove the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
+        stop_watcher
         rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" || error_exit "Could not remove the hook."
         success "Boot hook removed."
     fi
@@ -501,6 +585,7 @@ uninstall_fix() {
 disable_fix() {
     case "$(hook_state)" in
         enabled|legacy)
+            stop_watcher
             { chmod 644 "$HOOK" && mv -f "$HOOK" "$DISABLED_HOOK"; } || error_exit "Could not disable the hook."
             success "Hook disabled. It won't run at boot until you enable it." ;;
         legacy-disabled)
@@ -530,13 +615,13 @@ revert_now() { preflight; run_detached swap_out; }
 # Known USB Ethernet chips (vendor:product), to spot an adapter with no driver
 known_nic_id() {
     case "$1" in
-        0bda:8050|0bda:8052|0bda:8053|0bda:8152|0bda:8153|0bda:8155|0bda:8156|0bda:8157|0bda:815a) echo "Realtek RTL815x" ;;
+        0bda:8050|0bda:8052|0bda:8053|0bda:8151|0bda:8152|0bda:8153|0bda:8155|0bda:8156|0bda:8157|0bda:815a) echo "Realtek RTL815x" ;;
         0b95:1790|0b95:178a|0b95:1780) echo "ASIX AX88179/178A" ;;
-        0b95:7720|0b95:772a|0b95:772b|0b95:7e2b) echo "ASIX AX88772" ;;
+        0b95:7720|0b95:772a|0b95:772b|0b95:7e2b|0b95:1720|05ac:1402) echo "ASIX AX88772/88172" ;;
         0424:7500|0424:7505|0424:9500|0424:ec00) echo "Microchip/SMSC" ;;
         0424:7800|0424:7801|0424:7850) echo "Microchip LAN78xx" ;;
         2357:0601|2357:0602) echo "TP-Link (Realtek)" ;;
-        045e:07ab|045e:07c6|045e:0927|13b1:0041|0b05:1976|17ef:3052|17ef:3054|17ef:3069|17ef:3082|17ef:720c|17ef:7214) echo "OEM Realtek" ;;
+        045e:07ab|045e:07c6|045e:0927|13b1:0041|0b05:1976|17ef:3052|17ef:3054|17ef:3069|17ef:3082|17ef:720c|17ef:7214|17ef:721e|17ef:a387|04e8:a101|0955:09ff) echo "OEM Realtek" ;;
         *) return 1 ;;
     esac
 }
@@ -568,7 +653,9 @@ show_status() {
             _s="  Waits $(hook_setting WAIT_SECS)s"
             [ -n "$(hook_setting PIN_MAC)" ] && _s="$_s, only for MAC $(hook_setting PIN_MAC)"
             [ -n "$(hook_setting MODULE)" ] && _s="$_s, loads $(hook_setting MODULE)"
-            echo "$_s" ;;
+            [ "$(hook_setting WATCH)" = 1 ] && _s="$_s, keeps watching (--watch)"
+            echo "$_s"
+            _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
             log "$YELLOW" "  Old v1 hook installed. It renames eth0 even with no adapter plugged in."
             status_issue "Run 'install' to replace the v1 hook." ;;
@@ -597,7 +684,11 @@ show_status() {
         case "$_spd" in ''|-1|*[!0-9]*) _spd="" ;; esac
         [ "$_car" = 1 ] && [ "$_kind" != "Wi-Fi" ] && _wired_up=$((_wired_up + 1))
         printf '  %-9s %-18s driver %-14s %s\n' "$_sn" "$_kind" "$(nic_driver "$_sn")" "$(nic_mac "$_sn")"
-        if [ "$_car" = 1 ]; then _line="cable in"; else _line="no cable"; fi
+        if [ "$_kind" = "Wi-Fi" ]; then
+            if [ "$_car" = 1 ]; then _line="connected"; else _line="not connected"; fi
+        elif [ "$_car" = 1 ]; then _line="cable in"
+        else _line="no cable"
+        fi
         [ -n "$_spd" ] && _line="$_line, link $_spd Mbit/s"
         _ip=$(iface_ipv4 "$_sn")
         _line="$_line, IPv4 ${_ip:-none}"
@@ -630,13 +721,13 @@ show_status() {
     log "$CYAN" "USB network drivers on this kernel"
     _list=""
     for _m in r8152 ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
-        if [ -d "/sys/module/$_m" ]; then
+        if [ -d "$SYS_MODULES/$_m" ]; then
             _list="$_list $_m(loaded)"
         elif [ -n "$(find "/lib/modules/$(uname -r)" -name "$_m.ko*" 2>/dev/null | head -n 1)" ]; then
             _list="$_list $_m(file)"
         fi
     done
-    echo "  ${_list:-none found under /sys/module or /lib/modules}"
+    if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found under /sys/module or /lib/modules"; fi
 
     _bi=$(find_builtin_nic)
     _usb=$(find_usb_nic)
@@ -670,6 +761,59 @@ status_issue() { log "$RED" "  ! $1"; ISSUES=$((ISSUES + 1)); }
 status_note() { NOTES="$NOTES
   - $1"; }
 
+# Hide the device-specific half of a MAC address in reports
+mask_mac() { echo "$1" | sed 's/^\(..:..:..\):.*/\1:xx:xx:xx/'; }
+
+# Short, paste-ready report for GitHub issues. MAC addresses are masked.
+show_report() {
+    tv_info
+    echo '```'
+    echo "LG-USB-2-ETH0 v$VERSION report"
+    echo "Model:   ${TV_MODEL:-unknown}"
+    echo "webOS:   $WEBOS_NAME (${WEBOS_RELEASE:-unknown}), firmware ${FIRMWARE:-unknown}"
+    echo "Kernel:  $(uname -r) ($(uname -m))"
+    _h=$(hook_state)
+    if [ "$_h" = enabled ]; then
+        _h="$_h, wait $(hook_setting WAIT_SECS)s"
+        [ -n "$(hook_setting PIN_MAC)" ] && _h="$_h, pinned MAC"
+        [ -n "$(hook_setting MODULE)" ] && _h="$_h, module $(basename "$(hook_setting MODULE)")"
+        [ "$(hook_setting WATCH)" = 1 ] && _h="$_h, watch"
+    fi
+    echo "Hook:    $_h"
+    echo "Interfaces:"
+    for _rp in "$NET"/*; do
+        _rn=${_rp##*/}
+        [ -e "$_rp/device" ] || continue
+        if is_wifi "$_rn"; then _rk=wifi
+        elif is_usb_nic "$_rn"; then _rk=usb
+        elif is_builtin_nic "$_rn"; then _rk=builtin
+        else _rk=other
+        fi
+        _rl="  $_rn $_rk driver=$(nic_driver "$_rn") mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null)"
+        _rs=$(sysval "$_rp/speed" 2>/dev/null)
+        case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
+        if [ "$_rk" = usb ]; then
+            _rl="$_rl id=$(sysval "$_rp/device/../idVendor"):$(sysval "$_rp/device/../idProduct") bus=$(speed_label "$(sysval "$_rp/device/../speed")")"
+        fi
+        echo "$_rl"
+    done
+    for _u in "$USB_DEVS"/*; do
+        [ -r "$_u/idVendor" ] || continue
+        _id="$(sysval "$_u/idVendor"):$(sysval "$_u/idProduct")"
+        _chip=$(known_nic_id "$_id") || continue
+        _has_net=0
+        for _i in "$_u"/*:*/net/*; do [ -e "$_i" ] && _has_net=1; done
+        [ "$_has_net" = 0 ] && echo "  no driver: $_id ($_chip)"
+    done
+    _list=""
+    for _m in r8152 ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
+        [ -d "$SYS_MODULES/$_m" ] && _list="$_list $_m"
+    done
+    echo "Drivers loaded:${_list:- none}"
+    echo "Default route: $(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')"
+    echo '```'
+}
+
 main_menu() {
     if [ ! -t 0 ] && ! ( : < /dev/tty ) 2>/dev/null; then
         usage
@@ -685,7 +829,8 @@ main_menu() {
         echo "5) Give eth0 back to the built-in port now"
         echo "6) Disable boot hook"
         echo "7) Enable boot hook"
-        echo "8) Exit"
+        echo "8) Report for a GitHub issue"
+        echo "9) Exit"
         read_answer "Choose an option: " || exit 1
         case "$ANSWER" in
             1) install_fix ;;
@@ -695,8 +840,9 @@ main_menu() {
             5) revert_now ;;
             6) disable_fix ;;
             7) enable_fix ;;
-            8|q|Q) echo "Bye."; exit 0 ;;
-            *) echo "Pick 1 to 8." ;;
+            8) show_report ;;
+            9|q|Q) echo "Bye."; exit 0 ;;
+            *) echo "Pick 1 to 9." ;;
         esac
         read_answer "Press Enter for the menu..." || exit 0
     done
@@ -719,10 +865,13 @@ while [ $# -gt 0 ]; do
         --module)
             shift
             MODULE=$1
-            case "$MODULE" in /*.ko) ;; *) error_exit "--module needs the full path to a .ko file" ;; esac ;;
+            case "$MODULE" in /*.ko) ;; *) error_exit "--module needs the full path to a .ko file" ;; esac
+            # It is written into a root boot script, so only allow plain path characters
+            case "$MODULE" in *[!A-Za-z0-9._/-]*) error_exit "--module path may only use letters, digits, '.', '_', '-' and '/'" ;; esac ;;
+        --watch) WATCH=1 ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
@@ -736,5 +885,6 @@ case "$CMD" in
     apply) apply_now ;;
     revert|reset) revert_now ;;
     status|doctor) show_status ;;
+    report) show_report ;;
     "") main_menu ;;
 esac
