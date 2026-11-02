@@ -1,0 +1,69 @@
+name: Compatibility report
+description: Tell us how LG-USB-2-ETH0 works on your TV and adapter, good or bad
+title: "[Compat] <TV model> + <adapter>"
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks!  Reports from real TVs are what the compatibility table needs most, including ones where it didn't work.
+  - type: input
+    id: model
+    attributes:
+      label: TV model
+      placeholder: OLED65C2PUA
+    validations:
+      required: true
+  - type: input
+    id: webos
+    attributes:
+      label: webOS version and firmware
+      placeholder: webOS 25 (10.1.0), firmware 33.20.xx
+    validations:
+      required: true
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter (brand, model and chip if you know it)
+      placeholder: Cable Matters 202023 (Realtek RTL8153)
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works, settings show the wired connection and apps play
+        - Works, but with problems (describe below)
+        - Adapter detected but the swap failed
+        - Adapter not detected (no driver)
+    validations:
+      required: true
+  - type: input
+    id: speed
+    attributes:
+      label: Measured speed (optional)
+      placeholder: About 300 Mbit/s with the Speedtest app
+  - type: dropdown
+    id: options
+    attributes:
+      label: Options used
+      multiple: true
+      options:
+        - None
+        - --watch
+        - --mac
+        - --module
+        - --wait
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `sh LG-USB-2-ETH0.sh report`
+      description: MAC addresses are masked for you.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else

@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in the script doesn't work the way it should
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Script version
+      description: Output of `sh LG-USB-2-ETH0.sh version`
+      placeholder: LG-USB-2-ETH0 v2.1
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `sh LG-USB-2-ETH0.sh report`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Boot log
+      description: Output of `cat /tmp/lg-usb-2-eth0.log`, if there is one.
+      render: text

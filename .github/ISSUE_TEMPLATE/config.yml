@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Rooting help
+    url: https://cani.rootmy.tv/
+    about: Check whether your TV can be rooted.  Rooting itself isn't covered here.
+  - name: webOS Homebrew project
+    url: https://www.webosbrew.org/
+    about: Homebrew Channel docs and general webOS homebrew help.
