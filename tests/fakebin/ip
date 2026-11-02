@@ -1,0 +1,65 @@
+#!/bin/sh
+# Fake `ip` for the test suite. Works on the fake /sys in $LGU2E_SYSFS and
+# keeps addresses and routes in $FAKE_STATE. Supports only what the script uses:
+#   ip link show
+#   ip link set dev IF up|down
+#   ip link set dev IF name NEW
+#   ip -o -4 addr show [dev IF]
+#   ip route
+# A file $FAKE_STATE/fail_rename_IF holding a number makes that many renames
+# of IF fail with "Device or resource busy", like webOS's connection manager
+# bringing the interface back up between down and rename.
+
+NET=$LGU2E_SYSFS/class/net
+echo "ip $*" >> "$FAKE_STATE/ip.log"
+
+fail() { echo "RTNETLINK answers: $1" >&2; exit 2; }
+
+case "$1" in
+    link)
+        case "$2" in
+            show)
+                for _p in "$NET"/*; do [ -e "$_p" ] && echo "${_p##*/}"; done
+                exit 0 ;;
+            set)
+                [ "$3" = dev ] || fail "bad syntax"
+                _if=$4
+                [ -e "$NET/$_if" ] || { echo "Cannot find device \"$_if\"" >&2; exit 1; }
+                _dir=$(readlink -f "$NET/$_if")
+                case "$5" in
+                    up|down)
+                        echo "$5" > "$_dir/operstate"
+                        exit 0 ;;
+                    name)
+                        _new=$6
+                        [ "$(cat "$_dir/operstate")" = down ] || fail "Device or resource busy"
+                        _ff="$FAKE_STATE/fail_rename_$_if"
+                        if [ -s "$_ff" ]; then
+                            _n=$(cat "$_ff")
+                            if [ "$_n" -gt 0 ]; then
+                                echo $((_n - 1)) > "$_ff"
+                                fail "Device or resource busy"
+                            fi
+                        fi
+                        [ -e "$NET/$_new" ] && fail "File exists"
+                        _newdir="${_dir%/*}/$_new"
+                        mv "$_dir" "$_newdir" || fail "rename failed"
+                        rm -f "$NET/$_if"
+                        ln -s "$_newdir" "$NET/$_new"
+                        exit 0 ;;
+                esac ;;
+        esac ;;
+    -o)
+        # ip -o -4 addr show [dev IF]
+        [ -f "$FAKE_STATE/addr" ] || exit 0
+        if [ "$5" = dev ]; then
+            awk -v d="$6" '$2 == d' "$FAKE_STATE/addr"
+        else
+            cat "$FAKE_STATE/addr"
+        fi
+        exit 0 ;;
+    route)
+        [ -f "$FAKE_STATE/route" ] && cat "$FAKE_STATE/route"
+        exit 0 ;;
+esac
+fail "fake ip does not support: $*"

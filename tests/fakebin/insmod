@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fake `insmod` for the test suite: records the call and marks the module loaded
+echo "insmod $*" >> "$FAKE_STATE/insmod.log"
+_m=${1##*/}
+_m=${_m%.ko}
+mkdir -p "$LGU2E_SYSFS/module/$_m"

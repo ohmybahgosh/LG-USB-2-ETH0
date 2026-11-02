@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck the script (POSIX sh, like the TV)
+        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/ip tests/fakebin/insmod
+      - name: ShellCheck the test suite
+        run: shellcheck tests/run.sh
+      - name: Script parses under dash and busybox sh
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox dash
+          dash -n LG-USB-2-ETH0.sh
+          busybox sh -n LG-USB-2-ETH0.sh
+
+  test:
+    name: Tests (${{ matrix.shell }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [busybox, dash, bash]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shells
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox dash
+      - name: Run the test suite
+        run: tests/run.sh ${{ matrix.shell }}

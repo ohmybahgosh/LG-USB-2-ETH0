@@ -1,0 +1,43 @@
+name: Release
+
+# Push a tag like v2.1.0 and this publishes a GitHub release with the script
+# and a SHA256SUMS file, after the tests pass.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shells
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox dash
+      - name: Test before releasing
+        run: |
+          shellcheck -s sh LG-USB-2-ETH0.sh
+          tests/run.sh busybox
+      - name: Check the tag matches the script version
+        run: |
+          v=$(sed -n 's/^VERSION="\(.*\)"$/\1/p' LG-USB-2-ETH0.sh)
+          tag=${GITHUB_REF_NAME#v}
+          case "$tag" in "$v"|"$v".*) ;; *) echo "Tag $GITHUB_REF_NAME does not match VERSION=$v"; exit 1 ;; esac
+      - name: Build checksums
+        run: sha256sum LG-USB-2-ETH0.sh > SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(awk -v v="${GITHUB_REF_NAME#v}" '
+            $0 ~ "^## \\[?" v { on = 1; next }
+            on && /^## / { exit }
+            on { print }' CHANGELOG.md)
+          gh release create "$GITHUB_REF_NAME" LG-USB-2-ETH0.sh SHA256SUMS \
+            --title "LG-USB-2-ETH0 $GITHUB_REF_NAME" \
+            --notes "${notes:-See CHANGELOG.md}"
