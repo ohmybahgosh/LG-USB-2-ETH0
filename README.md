@@ -24,6 +24,13 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 > It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files or network settings are touched, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
 > Undo everything with **Turn everything off** in the TV app, or `sh LG-USB-2-ETH0.sh uninstall --now`.
 
+> [!NOTE]
+> **How this is built.**  LG-USB-2-ETH0 is written with AI coding agents (Claude), directed, reviewed and tested by me, [OhMyBahGosh](https://github.com/ohmybahgosh).  I've been building software for over 17 years.  My day job is data engineering, and network security and pentesting are what I do for fun.  AI writes a lot of the code here; I decide what it does, check how it does it, and nothing ships until it's run on a real TV (an LG C2 on webOS 25).  Commits show Claude as the committer for that reason.  On top of that:
+>
+> - **Tests on every push:** 60+ tests run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.
+> - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches.  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
+> - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
+
 ## Contents
 
 - [The TV app](#the-tv-app)
