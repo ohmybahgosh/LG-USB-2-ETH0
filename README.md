@@ -197,6 +197,18 @@ What decides whether this works on your TV is **whether its kernel has a driver 
 - **ASIX AX88179:** works out of the box on many older TVs.  One report of the newer AX88179A not being detected on webOS 25.
 - **USB 2.0 is fine.**  Many LG TVs, the C2 included, only have USB 2.0 ports.  There you'll top out around 300 Mbit/s, still about three times the built-in port.  If your TV does have a USB 3.0 port (usually the blue one), use it for more.
 
+### Tested adapters
+
+Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorship, nobody paid for a spot here.
+
+| Adapter | Chip | Tested on | Result |
+|---------|------|-----------|--------|
+| [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
+
+It has a USB-C plug, and LG TVs have USB-A ports, so you'll need a small USB-C (female) to USB-A (male) adapter.  A 2.5G adapter is capped by the TV's USB port anyway, so on a USB 2.0 TV a gigabit Realtek adapter does about as well.
+
+Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
+
 Before buying, run `sh LG-USB-2-ETH0.sh status`.  It lists which USB network drivers your kernel has.  If you already have an adapter that isn't working, `status` tells you when the kernel sees it but has no driver for it.
 
 ## A faster driver for Realtek adapters
