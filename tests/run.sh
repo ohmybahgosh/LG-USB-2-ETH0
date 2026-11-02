@@ -117,8 +117,17 @@ add_wifi() {
 }
 
 # A .ko file that declares a module name and the kernel it's built for
+# fake_ko FILE NAME [KERNEL] [VID:PID...]: a fake module, optionally with the
+# USB IDs it supports as aliases (like real modules have)
 fake_ko() {
-    printf 'junk\0name=%s\0vermagic=%s SMP preempt mod_unload aarch64\0' "$2" "${3:-$(uname -r)}" > "$1"
+    local f=$1 n=$2 k=${3:-$(uname -r)} id
+    shift 3 2>/dev/null || shift $#
+    {
+        printf 'junk\0name=%s\0vermagic=%s SMP preempt mod_unload aarch64\0' "$n" "$k"
+        for id in "$@"; do
+            printf 'alias=usb:v%sp%sd*dc*dsc*dp*ic*isc*ip*in*\0' "$(echo "${id%:*}" | tr a-f A-F)" "$(echo "${id#*:}" | tr a-f A-F)"
+        done
+    } > "$f"
 }
 
 # add_unclaimed PORT VID PID: a USB adapter the kernel has no driver for
@@ -760,7 +769,7 @@ test_driver_kept_after_reenumeration() {
     remove_usb 1-1
     add_usb eth0 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
     echo 9 > "$SYS/devices/usb1/1-1/devnum"
-    check "notices" wait_log "adapter is on cdc_ncm again" 10
+    check "notices" wait_log "adapter is on a generic driver again" 10
     sleep 2
     check "moved back to the new driver" drv eth0 r8152_oot
     check "still eth0" is eth0 usb:1-1
@@ -858,15 +867,17 @@ release() {
 }
 
 test_update_check() {
-    release 2.3.0
+    local v
+    v=$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$SCRIPT")
+    release "$v"
     run update --check --json
     check "exit 0" rc_is 0
-    check "same version is not newer" json_ok "$OUT" "d['current'] == '2.3' and d['latest'] == '2.3.0' and d['newer'] is False and d['kind'] == 'script' and d['source'] == 'sideloaded'"
+    check "same version is not newer" json_ok "$OUT" "d['current'] == '$v' and d['latest'] == '$v' and d['newer'] is False and d['kind'] == 'script' and d['source'] == 'sideloaded'"
     run update --check
     check "says up to date" has "Up to date"
     release 2.10.0
     run update --check --json
-    check "2.10 is newer than 2.3" json_ok "$OUT" "d['newer'] is True and d['notes'].endswith('/tag/v2.10.0')"
+    check "2.10 is newer than 2.3.x" json_ok "$OUT" "d['newer'] is True and d['notes'].endswith('/tag/v2.10.0')"
     mkdir -p "$ROOT/var/lib/wam/Default/Local Storage/leveldb"
     printf 'xx\001repositoriesConfig\001{"repositories":[{"url":"https://ohmybahgosh.dev/repo"}]}' \
         > "$ROOT/var/lib/wam/Default/Local Storage/leveldb/000003.log"
@@ -942,6 +953,57 @@ test_update_app_bad_checksum() {
     check "never called the installer" sh -c "! grep -q dev/install '$STATE/luna.log' 2>/dev/null"
 }
 
+test_takeover_cdc_ether() {
+    add_builtin
+    # A kernel with no Realtek driver gives an RTL8153 to cdc_ether
+    add_usb eth1 1-1 cdc_ether 1 "00:e0:4c:68:00:09" 0bda 8153 480
+    fake_ko "$SB/r8152.ko" r8152 "$(uname -r)" 0bda:8152 0bda:8153
+    run install -y --module "$SB/r8152.ko"
+    check "install exits 0" rc_is 0
+    run apply -y
+    check "says it moved from cdc_ether" has "cdc_ether -> r8152"
+    check "now on the new driver" has "Now on r8152"
+    check "adapter is eth0" is eth0 usb:1-1
+    check "adapter driver" drv eth0 r8152
+}
+
+test_takeover_only_supported_ids() {
+    add_builtin
+    # The module doesn't list this adapter, so it's left alone, even on cdc_ncm
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    # And a phone tethered over cdc_ether is never touched
+    add_usb eth3 1-3 cdc_ether 1 "02:00:00:00:00:07" 18d1 4ee1 480
+    fake_ko "$SB/r8152.ko" r8152 "$(uname -r)" 0bda:8152 0bda:8153
+    run install -y --module "$SB/r8152.ko"
+    run apply -y
+    check "no takeover of the 2.5G adapter" lacks "cdc_ncm -> r8152"
+    check "phone not unbound" sh -c "! grep -q 'cdc_ether/unbind' '$STATE/syswrite.log' 2>/dev/null"
+    check "8156 still on cdc_ncm" sh -c "readlink '$SYS/devices/usb1/1-1/1-1:1.0/driver' | grep -q cdc_ncm"
+}
+
+test_driver_offer_2024() {
+    add_builtin
+    local k=5.4.268-294.17.paparoa.pine.2
+    # No driver at all for the adapter, as on 2024 TVs where LG removed it
+    add_unclaimed 1-1 0bda 8153
+    FAKE_KERNEL=$k run status --json
+    check "unclaimed RTL8153: available" offer_is available
+    FAKE_KERNEL=$k run status
+    check "status points at get-driver" has "has no driver on this TV, but one is known"
+    remove_usb 1-1
+    add_unclaimed 1-2 0bda 8156
+    FAKE_KERNEL=$k run status --json
+    check "2.5G RTL8156: not supported by that build" offer_is none
+    printf 'not the module' > "$SB/r8152.ko"
+    remove_usb 1-2
+    add_unclaimed 1-1 0bda 8153
+    FAKE_KERNEL=$k run get-driver -y --file "$SB/r8152.ko"
+    check "names the 2024 build" has "mbenitez343/lg-webos-2024-ethernet-fix"
+    check "says it fits the adapter" has "It supports your adapter (0bda:8153)"
+    check "still refuses a wrong file" has "Checksum mismatch"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152.ko"
+}
+
 test_get_driver_download_fails() {
     add_builtin
     touch "$STATE/curl_fail"
@@ -1014,6 +1076,9 @@ t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
 t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
+t takeover_cdc_ether test_takeover_cdc_ether
+t takeover_only_supported_ids test_takeover_only_supported_ids
+t driver_offer_2024 test_driver_offer_2024
 t update_check test_update_check
 t update_script test_update_script
 t update_script_bad_checksum test_update_script_bad_checksum

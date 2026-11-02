@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.3"
+VERSION="2.3.1"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -404,12 +404,53 @@ disable_sg() {
     return 0
 }
 
-# Driver takeover. The kernel gives many Realtek adapters to the generic
-# cdc_ncm driver, even when a better driver module is loaded. Move each one
-# over to $DRIVER. If that doesn't take within a few seconds, give it back to
-# cdc_ncm. Each device gets one try per boot, so a driver that doesn't support
-# it can't cause repeated drops.
+# Driver takeover. The kernel gives many Realtek adapters to a generic
+# driver (cdc_ncm, or cdc_ether when the kernel has no Realtek driver at all),
+# even when a better driver module is loaded. Move each one over to $DRIVER.
+# If that doesn't take within a few seconds, give it back. Each device gets
+# one try per boot, so a driver that doesn't support it can't cause repeated
+# drops.
+#
+# Only devices the module says it supports (its USB IDs) are moved, so a phone
+# tethered over cdc_ether is never touched.  A module that lists no IDs is
+# trusted with cdc_ncm only, as before.
 TAKEOVER_STATE=${RUN_DIR:-/tmp}/lg-usb-2-eth0.takeover
+GENERIC_DRIVERS="cdc_ncm cdc_ether"
+
+# module_ids FILE: the vid:pid pairs a .ko declares, lowercase, space-separated
+module_ids() {
+    tr -c '[:alnum:]_=:*' '\n' < "$1" 2>/dev/null | sed -n 's/^alias=usb:v\([0-9A-Fa-f]\{4\}\)p\([0-9A-Fa-f]\{4\}\).*/\1:\2/p' \
+        | tr 'A-F' 'a-f' | sort -u | tr '\n' ' '
+}
+
+# Read once and kept: the module file can't change under us (its checksum
+# was checked before it was loaded)
+TAKEOVER_IDS=""
+TAKEOVER_IDS_READ=0
+takeover_ids() {
+    [ "$TAKEOVER_IDS_READ" = 1 ] && return 0
+    TAKEOVER_IDS_READ=1
+    [ -n "$MODULE" ] && [ -r "$MODULE" ] && TAKEOVER_IDS=$(module_ids "$MODULE")
+    return 0
+}
+
+# takeover_fits NAME: NAME is on a generic driver and $DRIVER should get it.
+# Sets _gd to the generic driver and _tok to the device's one-try token.
+takeover_fits() {
+    _gd=$(nic_driver "$1")
+    case " $GENERIC_DRIVERS " in *" $_gd "*) ;; *) return 1 ;; esac
+    _ifc=$(readlink -f "$NET/$1/device") || return 1
+    _in=${_ifc##*/}
+    _dev=${_in%%:*}
+    _vid=$(sysval "$USB_DEVS/$_dev/idVendor"); _pid=$(sysval "$USB_DEVS/$_dev/idProduct")
+    _tok="$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$_vid:$_pid"
+    takeover_ids
+    if [ -n "$TAKEOVER_IDS" ]; then
+        case " $TAKEOVER_IDS " in *" $_vid:$_pid "*) return 0 ;; *) return 1 ;; esac
+    fi
+    [ "$_gd" = cdc_ncm ]
+}
+
 take_over() {
     [ -n "$DRIVER" ] || return 0
     if [ ! -d "$USB_DRIVERS/$DRIVER" ]; then
@@ -419,16 +460,12 @@ take_over() {
     for _p in "$NET"/*; do
         _n=${_p##*/}
         is_usb_nic "$_n" || continue
-        [ "$(nic_driver "$_n")" = cdc_ncm ] || continue
-        _ifc=$(readlink -f "$NET/$_n/device") || continue
-        _in=${_ifc##*/}
-        _dev=${_in%%:*}
-        _tok="$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")"
+        takeover_fits "$_n" || continue
         grep -qx "$_tok" "$TAKEOVER_STATE" 2>/dev/null && continue
         echo "$_tok" >> "$TAKEOVER_STATE"
-        echo "USB $_n ($_dev, $(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")): cdc_ncm -> $DRIVER"
-        if ! sys_write "$USB_DRIVERS/cdc_ncm/unbind" "$_in" 2>/dev/null; then
-            echo "Could not release it from cdc_ncm. Leaving it as it is."
+        echo "USB $_n ($_dev, $_vid:$_pid): $_gd -> $DRIVER"
+        if ! sys_write "$USB_DRIVERS/$_gd/unbind" "$_in" 2>/dev/null; then
+            echo "Could not release it from $_gd. Leaving it as it is."
             continue
         fi
         # The driver may switch the adapter's USB configuration, which makes
@@ -440,8 +477,8 @@ take_over() {
             echo "Now on $DRIVER."
             continue
         fi
-        echo "$DRIVER did not take it. Giving it back to cdc_ncm."
-        [ -d "$_ifc" ] && sys_write "$USB_DRIVERS/cdc_ncm/bind" "$_in" 2>/dev/null
+        echo "$DRIVER did not take it. Giving it back to $_gd."
+        [ -d "$_ifc" ] && sys_write "$USB_DRIVERS/$_gd/bind" "$_in" 2>/dev/null
     done
     disable_sg
     return 0
@@ -462,10 +499,7 @@ takeover_pending() {
     for _p in "$NET"/*; do
         _n=${_p##*/}
         is_usb_nic "$_n" || continue
-        [ "$(nic_driver "$_n")" = cdc_ncm ] || continue
-        _ifc=$(readlink -f "$NET/$_n/device") || continue
-        _dev=${_ifc##*/}; _dev=${_dev%%:*}
-        _tok="$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")"
+        takeover_fits "$_n" || continue
         grep -qx "$_tok" "$TAKEOVER_STATE" 2>/dev/null || return 0
     done
     return 1
@@ -485,17 +519,17 @@ watch_run() {
     while :; do
         sleep "$WATCH_EVERY"
         # Cheap checks first, with no subprocesses: is anything bound to
-        # cdc_ncm, and did the list of network interfaces change? Only then
+        # cdc_ncm or cdc_ether, and did the list of network interfaces change? Only then
         # look closer. This keeps each check to well under a millisecond.
         _cdc=0
-        for _f in "$USB_DRIVERS"/cdc_ncm/*:*; do [ -e "$_f" ] && { _cdc=1; break; }; done
+        for _f in "$USB_DRIVERS"/cdc_ncm/*:* "$USB_DRIVERS"/cdc_ether/*:*; do [ -e "$_f" ] && { _cdc=1; break; }; done
         _now=""
         for _p in "$NET"/*; do _now="$_now ${_p##*/}"; done
         _changed=0
         [ "$_now" != "$_last" ] && _changed=1
         _last=$_now
         if [ -n "$DRIVER" ] && [ "$_cdc" = 1 ] && takeover_pending; then
-            echo "=== $(date) adapter is on cdc_ncm again ==="
+            echo "=== $(date) adapter is on a generic driver again ==="
             take_over
             wait_for_nic
             _u=$(find_usb_nic)
@@ -648,12 +682,42 @@ use_hook_driver() {
 # Better driver modules known to work on one exact kernel, as
 # "url sha256 file author-page". They're built and published by their
 # authors. get-driver checks the SHA-256 before keeping a download.
+# known_driver KERNEL: "url sha256 file page ids" for a driver module known
+# to work on exactly that kernel.  Each one is pinned to a fixed commit and
+# kept only if its SHA-256 matches.  ids are the USB adapters the module
+# supports (from its own aliases): it's only offered when one is plugged in.
 known_driver() {
     case "$1" in
         5.4.268-329.ptl4tv.5)
-            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152" ;;
+            # DonZoomik's build of Realtek's v2.22.1 driver (2022 C2, 2024 C4 on webOS 25)
+            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152 045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012" ;;
+        5.4.268-294.17.paparoa.pine.2)
+            # mbenitez343's build of the kernel's own r8152 v1.10.11, for 2024
+            # QNED and OLED (K25lp / Paparoa) on webOS 25, where LG removed
+            # it.  Gigabit RTL8152/RTL8153 adapters only, not 2.5G ones.
+            echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601" ;;
         *) return 1 ;;
     esac
+}
+
+# adapter_id NAME: the vid:pid of a USB network interface
+adapter_id() { echo "$(sysval "$NET/$1/device/../idVendor"):$(sysval "$NET/$1/device/../idProduct")"; }
+
+# supported_adapter IDS: the vid:pid of a plugged-in adapter that's in the
+# comma-separated IDS, whether or not the kernel gave it a driver yet (on
+# TVs where LG removed the Realtek driver, it may have none at all)
+supported_adapter() {
+    _sa=$(find_usb_nic)
+    if [ -n "$_sa" ]; then
+        _sid=$(adapter_id "$_sa")
+        case ",$1," in *",$_sid,"*) echo "$_sid"; return 0 ;; esac
+    fi
+    for _u in "$USB_DEVS"/*; do
+        [ -r "$_u/idVendor" ] || continue
+        _sid="$(sysval "$_u/idVendor"):$(sysval "$_u/idProduct")"
+        case ",$1," in *",$_sid,"*) echo "$_sid"; return 0 ;; esac
+    done
+    return 1
 }
 
 # Download over HTTPS only. TLS protects the download, but the pinned SHA-256
@@ -698,13 +762,18 @@ get_driver() {
     }
     # shellcheck disable=SC2086 # split the fields on purpose
     set -- $_kd
-    _url=$1 _sum=$2 _file=$3 _page=$4
+    _url=$1 _sum=$2 _file=$3 _page=$4 _ids=$5
     _dest="$DRIVER_DIR/$_file"
     info "Kernel $_k has a known better driver: $_file"
     echo "  Built and published by: $_page"
     echo "  Download: $_url"
     echo "  It's a kernel module from that project, not from LG-USB-2-ETH0. It's only offered"
     echo "  for this exact kernel, and its SHA-256 is checked before it's kept."
+    if _gid=$(supported_adapter "$_ids"); then
+        echo "  It supports your adapter ($_gid)."
+    elif [ -n "$(find_usb_nic)" ]; then
+        warn "It doesn't support your adapter ($(adapter_id "$(find_usb_nic)")), so it wouldn't help with this one."
+    fi
     command -v sha256sum >/dev/null 2>&1 || error_exit "sha256sum is missing, so the download can't be checked. Nothing changed."
     if [ -f "$_dest" ] && [ "$(sha256sum "$_dest" | awk '{print $1}')" = "$_sum" ]; then
         success "Already downloaded and verified: $_dest"
@@ -760,11 +829,9 @@ driver_offer() {
         fi
         echo active; return
     fi
-    known_driver "$(uname -r)" >/dev/null || { echo none; return; }
-    _oa=$(find_usb_nic)
-    [ -n "$_oa" ] || { echo none; return; }
-    _oid="$(sysval "$NET/$_oa/device/../idVendor"):$(sysval "$NET/$_oa/device/../idProduct")"
-    case "$(known_nic_id "$_oid")" in *Realtek*) echo available ;; *) echo none ;; esac
+    _okd=$(known_driver "$(uname -r)") || { echo none; return; }
+    # Only when the module supports a plugged-in adapter
+    if supported_adapter "${_okd##* }" >/dev/null; then echo available; else echo none; fi
 }
 
 # === Hook state ===
@@ -1211,12 +1278,17 @@ show_status() {
     fi
     _bi=$(find_builtin_nic)
     _usb=$(find_usb_nic)
-    if [ -n "$_usb" ] && [ "$(nic_driver "$_usb")" = cdc_ncm ]; then
+    _ud=""
+    [ -n "$_usb" ] && _ud=$(nic_driver "$_usb")
+    case "$_ud" in cdc_ncm|cdc_ether)
         if [ -n "$_hd" ]; then
-            status_note "$_usb is still on cdc_ncm, not $_hd. Run 'apply', or check $LOG_FILE."
+            status_note "$_usb is still on $_ud, not $_hd. Run 'apply', or check $LOG_FILE."
         elif [ "$(driver_offer)" = available ]; then
-            status_note "$_usb uses the generic cdc_ncm driver. A faster, steadier driver is known for this kernel: run 'get-driver'."
-        fi
+            status_note "$_usb uses the generic $_ud driver. A better driver is known for this kernel and adapter: run 'get-driver'."
+        fi ;;
+    esac
+    if [ -z "$_usb" ] && [ -z "$_hd" ] && [ "$(driver_offer)" = available ]; then
+        status_note "Your adapter has no driver on this TV, but one is known for this kernel and adapter: run 'get-driver'."
     fi
     if { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; }; then
         if [ -n "$_hd" ]; then

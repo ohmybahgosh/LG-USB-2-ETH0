@@ -233,11 +233,18 @@ sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/r8152_oot.
 sh LG-USB-2-ETH0.sh apply      # optional: switch now instead of at the next reboot
 ```
 
-`get-driver` only offers a module for the exact kernel it was built for.  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  The module comes from that project, not this one, so credit and thanks go to DonZoomik.
+**2024 QNED and OLED (K25lp / Paparoa) on webOS 25:** LG removed the Realtek driver from these TVs altogether, so a Realtek adapter gets no driver at all.  [mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) built the kernel's own `r8152` (v1.10.11) for kernel `5.4.268-294.17.paparoa.pine.2`.  It's for **gigabit RTL8152 and RTL8153 adapters** (like the TP-Link UE300), not 2.5G ones.  Same commands, with that file:
+
+```sh
+sh LG-USB-2-ETH0.sh get-driver
+sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/r8152.ko
+```
+
+`get-driver` only offers a module for the exact kernel it was built for, and only when an adapter it supports is plugged in (it checks the adapter's USB ID against the module's own list).  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  The modules come from those projects, not this one, so credit and thanks go to DonZoomik and mbenitez343.
 
 What LG-USB-2-ETH0 does with it:
 
-- **Moves the adapter over.**  The kernel still picks `cdc_ncm` first, so the script releases the adapter and binds it to the new driver.  If that doesn't work within a few seconds, the adapter goes back to `cdc_ncm`.
+- **Moves the adapter over.**  The kernel may still give the adapter to a generic driver first (`cdc_ncm`, or `cdc_ether` on TVs with no Realtek driver), so the script releases it and binds it to the new driver.  If that doesn't work within a few seconds, the adapter goes back where it was.  Only adapters the module lists as supported are moved, so a phone tethered over USB is never touched.
 - **Turns off scatter-gather** on the new driver.  In DonZoomik's testing, it made the TV's USB controller hang after a while.
 - **Never forces anything.**  A module built for another kernel is refused before it's loaded.  Each adapter gets one try per boot, so a driver that doesn't support it can't cause repeated drops.
 
@@ -257,7 +264,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 24 | Where this script was first written. | |
 | webOS 25 on a 2024 C4 | RTL8153 and RTL8156 adapters come up through the generic `cdc_ncm` driver.  They work, but slower and with drops.  A community-built `r8152` module helps. | [DonZoomik/webos-r8152](https://github.com/DonZoomik/webos-r8152) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2022 C2 (OLED65C2PUA), kernel `5.4.268-329.ptl4tv.5` | Tested by the author.  An RTL8156 adapter (`0bda:8156`) comes up on `cdc_ncm`, and LG-USB-2-ETH0 makes it `eth0`.  With `r8152_oot` from `get-driver` and `install --module`, it's confirmed through a full reboot: at startup the hook loads the driver, moves the adapter over on the first try, turns scatter-gather off and makes it `eth0`, with traffic going out the adapter.  The C2's USB port runs at USB 2.0 speed. | This repo |
-| webOS 25 on 2024 QNED and OLED (Paparoa) | Reported that the Realtek driver was removed, so the adapter needs a module built for that exact kernel. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
+| webOS 25 on 2024 QNED and OLED (Paparoa), kernel `5.4.268-294.17.paparoa.pine.2` | The Realtek driver was removed.  A gigabit RTL8153 adapter works with mbenitez343's `r8152` build (stable on a QNED86, per its author), which `get-driver` now offers.  Not yet tested with LG-USB-2-ETH0 on one of these TVs, so a report helps. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | webOS 25 on a 2025 B5 | One report of an AX88179A not being detected at all. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185) |
 
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
@@ -340,6 +347,8 @@ Pull requests are welcome.  Please keep the script POSIX `sh` (it has to run und
 ## Thanks
 
 A big thank you to **[DonZoomik](https://github.com/DonZoomik)** for [webos-r8152](https://github.com/DonZoomik/webos-r8152).  He found the right kernel source in LG's open-source bundles, built Realtek's current driver for webOS 25 under its own name so it can sit beside the TV's built-in one, and tracked down the scatter-gather setting that hangs the TV's USB controller.  He also published careful benchmarks.  That work is what turns a USB adapter on these TVs from "works, but drops out" into a steady connection, and `get-driver` and `--module` are built on it.  If it helps you too, go give his repo a star.
+
+Thanks to **[mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix)** too, for building and sharing the `r8152` driver that brings wired USB Ethernet back to 2024 LG TVs.
 
 Thanks also to the [webOS Homebrew](https://www.webosbrew.org/) project for the Homebrew Channel and the startup hooks this script relies on, and to [RootMyTV](https://rootmy.tv/) for making rooting possible.
 

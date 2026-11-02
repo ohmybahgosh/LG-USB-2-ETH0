@@ -1,11 +1,11 @@
 #!/bin/sh
 # Fake sysfs writer for the test suite (the script uses it via LGU2E_SYSWRITE).
 # Plain files can't react like sysfs, so this acts out what the kernel does:
-#   .../drivers/cdc_ncm/unbind IFACE   cdc_ncm lets go: its network device goes away
+#   .../drivers/cdc_ncm/unbind IFACE   cdc_ncm (or cdc_ether) lets go: its network device goes away
 #   .../drivers/NAME/bind IFACE        NAME takes the adapter: like r8152, it
 #                                      switches to USB configuration 1 and makes
 #                                      a new network device with the lowest free ethN
-#   .../drivers/cdc_ncm/bind IFACE     cdc_ncm takes it back
+#   .../drivers/cdc_ncm/bind IFACE     cdc_ncm (or cdc_ether) takes it back
 #   anything else                      written as a plain file
 # $FAKE_STATE/bind_fail makes binds to drivers other than cdc_ncm fail.
 
@@ -37,14 +37,15 @@ make_netdev() {
     echo down > "$_d/operstate"
     ln -s "$_if" "$_d/device"
     ln -s "$_d" "$NET/$_n"
-    if [ "$3" != cdc_ncm ]; then
+    if [ "$3" != cdc_ncm ] && [ "$3" != cdc_ether ]; then
         mkdir -p "$_d/rtl_adv"
         echo enable > "$_d/rtl_adv/sg_en"
     fi
 }
 
 case "$1" in
-    */drivers/cdc_ncm/unbind)
+    */drivers/cdc_ncm/unbind|*/drivers/cdc_ether/unbind)
+        _g=${1%/unbind}; _g=${_g##*/}
         _dev=${2%%:*}
         _if=$SYS/devices/usb1/$_dev/$2
         for _l in "$NET"/*; do
@@ -54,12 +55,13 @@ case "$1" in
             esac
         done
         rm -rf "$_if/net"
-        rm -f "$_if/driver" "$SYS/bus/usb/drivers/cdc_ncm/$2"
+        rm -f "$_if/driver" "$SYS/bus/usb/drivers/$_g/$2"
         exit 0 ;;
-    */drivers/cdc_ncm/bind)
+    */drivers/cdc_ncm/bind|*/drivers/cdc_ether/bind)
+        _g=${1%/bind}; _g=${_g##*/}
         _dev=${2%%:*}
         rm -rf "$SYS/devices/usb1/$_dev/$2"
-        make_netdev "$_dev" "${2#*:}" cdc_ncm
+        make_netdev "$_dev" "${2#*:}" "$_g"
         exit 0 ;;
     */drivers/*/bind)
         [ -e "$FAKE_STATE/bind_fail" ] && { echo "No such device" >&2; exit 1; }
