@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2119,SC2120 # fixture helpers take optional arguments
 # Test suite for LG-USB-2-ETH0.sh
 #
 # Runs the script against a fake /sys and a fake `ip`, so nothing on the
