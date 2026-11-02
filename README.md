@@ -10,7 +10,7 @@
 [![Listed in awesome-webos](https://img.shields.io/badge/listed%20in-awesome--webos-fc60a8)](https://github.com/tolgakurtuluss/awesome-webos)
 [![GitHub stars](https://img.shields.io/github/stars/ohmybahgosh/LG-USB-2-ETH0?style=social)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
 
-<img src="USB-2-ETH0-BANNER.gif" width="720" alt="Animated banner: a USB Ethernet adapter plugged into an LG TV becomes eth0" />
+<img src="assets/banner.svg" width="100%" alt="LG-USB-2-ETH0: a terminal on the TV runs apply, the built-in port becomes eth2 and the USB adapter becomes eth0" />
 
 </div>
 
