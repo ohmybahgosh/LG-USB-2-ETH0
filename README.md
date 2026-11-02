@@ -205,7 +205,17 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 |---------|------|-----------|--------|
 | [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
 
-It has a USB-C plug, and LG TVs have USB-A ports, so you'll need a small USB-C (female) to USB-A (male) adapter.  The author uses [these USB-C to USB-A adapters (Amazon, 4-pack)](https://www.amazon.com/dp/B0BJ8YQ2LM).  They're USB 2.0, which is all a USB 2.0 TV like the C2 can use anyway.  If your TV has a USB 3.0 port, get a USB 3.0 one instead, or the little adapter becomes the limit.  A 2.5G adapter is capped by the TV's USB port anyway, so on a USB 2.0 TV a gigabit Realtek adapter does about as well.
+It has a USB-C plug, and LG TVs have USB-A ports, so it's plugged in through a small USB-C (female) to USB-A (male) adapter ([this 4-pack on Amazon](https://www.amazon.com/dp/B0BJ8YQ2LM)).  That's not the ideal setup: it's just what the author had on hand, and it works.  Those little adapters are USB 2.0, which is all the C2's port can do anyway, but on a TV with a USB 3.0 port they'd hold the adapter back.  If you're buying, get a USB-A adapter like the ones below and skip the converter.
+
+**Same chip, with a USB-A plug.**  These use the same Realtek RTL8156BG chip as the tested UGREEN, so they should get the same driver and similar results.  They haven't been tested on a TV yet, so a report helps.
+
+| Adapter | Chip | Plug |
+|---------|------|------|
+| [UGREEN USB to 2.5G Ethernet, model 25051 (Amazon)](https://www.amazon.com/dp/B0CWV2Q6HJ) | RTL8156BG | USB-A, USB 3.0.  The USB-A version of the tested one. |
+| [Cable Matters USB to 2.5Gb Ethernet, model 202485 (Amazon)](https://www.amazon.com/dp/B0GFHS6L87) | RTL8156BG | USB-A, USB 3.0 |
+| [SABRENT USB-A to 2.5Gbps Ethernet, NT-UA25 (Amazon)](https://www.amazon.com/dp/B0FMBXSNKL) | RTL8156BG | USB-A, USB 3.0 |
+
+Same deal: plain links, no affiliate codes.  Check the listing says RTL8156B or RTL8156BG before you buy, since sellers sometimes change parts.
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
