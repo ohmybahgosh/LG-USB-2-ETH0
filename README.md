@@ -25,11 +25,15 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 > Undo everything with **Turn everything off** in the TV app, or `sh LG-USB-2-ETH0.sh uninstall --now`.
 
 > [!NOTE]
-> **How this is built.**  LG-USB-2-ETH0 is written with AI coding agents (Claude), directed, reviewed and tested by me, [OhMyBahGosh](https://github.com/ohmybahgosh).  I've been building software for over 17 years.  My day job is data engineering, and network security and pentesting are what I do for fun.  AI writes a lot of the code here; I decide what it does, check how it does it, and nothing ships until it's run on a real TV (an LG C2 on webOS 25).  Commits show Claude as the committer for that reason.  On top of that:
+> **How this is built.**  I, [OhMyBahGosh](https://github.com/ohmybahgosh), wrote v1 by hand.  From v2.0 on, it's written with AI coding agents (Claude), directed, reviewed and tested by me.  I've been building software for over 17 years.  My day job is data engineering, and network security and pentesting are what I do for fun.  AI writes a lot of the code here; I decide what it does, check how it does it, and nothing ships until it's run on a real TV (an LG C2 on webOS 25).
 >
-> - **Tests on every push:** 60+ tests run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.
+> The fixes that mattered most came from that real-TV testing, not from the AI: standby putting the adapter back on the slow driver, webOS quietly sending traffic over Wi-Fi instead of the adapter, and the GitHub report form opening blank on a phone.  The [changelog](CHANGELOG.md) has the full story.
+>
+> - **Tests on every push:** 60+ [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
 > - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches.  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 > - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
+>
+> The driver modules `get-driver` offers aren't part of this code: [DonZoomik](https://github.com/DonZoomik/webos-r8152) and [mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) built them, and this script only checks and loads them.  Commits list me as the author and Claude as the committer, which is why they show as Verified.  Found a problem?  See [SECURITY.md](SECURITY.md) or open an issue.
 
 ## Contents
 
@@ -350,6 +354,8 @@ Releases are made by pushing a `v*` tag.  The release workflow runs the tests, c
 Real TV reports help most: your model, webOS version, adapter chip, and the output of `report`.  Use the [compatibility report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml).
 
 Pull requests are welcome.  Please keep the script POSIX `sh` (it has to run under busybox), and add or update a test in `tests/run.sh` for any change in behavior.  For security issues, see [SECURITY.md](SECURITY.md).
+
+AI-assisted pull requests are welcome too, held to the same standard as the rest of this project: say in the pull request that AI was used, make sure you understand and have reviewed every change, and test it on a real TV (say which model and webOS version).
 
 ## Thanks
 
