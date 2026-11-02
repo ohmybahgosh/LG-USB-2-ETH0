@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fake `uname` for the test suite: `uname -r` prints $FAKE_KERNEL when it's set.
+# Anything else goes to the real uname (the next one on PATH).
+if [ "$1" = -r ] && [ -n "$FAKE_KERNEL" ]; then
+    echo "$FAKE_KERNEL"
+    exit 0
+fi
+PATH=${PATH#*:} exec uname "$@"

@@ -1,0 +1,75 @@
+#!/bin/sh
+# Fake sysfs writer for the test suite (the script uses it via LGU2E_SYSWRITE).
+# Plain files can't react like sysfs, so this acts out what the kernel does:
+#   .../drivers/cdc_ncm/unbind IFACE   cdc_ncm lets go: its network device goes away
+#   .../drivers/NAME/bind IFACE        NAME takes the adapter: like r8152, it
+#                                      switches to USB configuration 1 and makes
+#                                      a new network device with the lowest free ethN
+#   .../drivers/cdc_ncm/bind IFACE     cdc_ncm takes it back
+#   anything else                      written as a plain file
+# $FAKE_STATE/bind_fail makes binds to drivers other than cdc_ncm fail.
+
+SYS=$LGU2E_SYSFS
+NET=$SYS/class/net
+echo "syswrite $1 $2" >> "$FAKE_STATE/syswrite.log"
+
+lowest_eth() {
+    _i=0
+    while [ -e "$NET/eth$_i" ]; do _i=$((_i + 1)); done
+    echo "eth$_i"
+}
+
+# make_netdev USBDEV CONFIG DRIVER
+make_netdev() {
+    _u=$SYS/devices/usb1/$1
+    _if=$_u/$1:$2
+    mkdir -p "$_if" "$SYS/bus/usb/drivers/$3"
+    ln -sfn "$SYS/bus/usb/drivers/$3" "$_if/driver"
+    ln -sfn "$SYS/bus/usb" "$_if/subsystem"
+    echo 02 > "$_if/bInterfaceClass"
+    _n=$(lowest_eth)
+    _d=$_if/net/$_n
+    mkdir -p "$_d"
+    echo 1 > "$_d/type"
+    cat "$FAKE_STATE/mac_$1" > "$_d/address"
+    echo 1 > "$_d/carrier"
+    echo down > "$_d/operstate"
+    ln -s "$_if" "$_d/device"
+    ln -s "$_d" "$NET/$_n"
+    if [ "$3" != cdc_ncm ]; then
+        mkdir -p "$_d/rtl_adv"
+        echo enable > "$_d/rtl_adv/sg_en"
+    fi
+}
+
+case "$1" in
+    */drivers/cdc_ncm/unbind)
+        _dev=${2%%:*}
+        _if=$SYS/devices/usb1/$_dev/$2
+        for _l in "$NET"/*; do
+            case "$(readlink "$_l")" in "$_if"/*)
+                cat "$_l/address" > "$FAKE_STATE/mac_$_dev"
+                rm -f "$_l" ;;
+            esac
+        done
+        rm -rf "$_if/net"
+        rm -f "$_if/driver"
+        exit 0 ;;
+    */drivers/cdc_ncm/bind)
+        _dev=${2%%:*}
+        rm -rf "$SYS/devices/usb1/$_dev/$2"
+        make_netdev "$_dev" "${2#*:}" cdc_ncm
+        exit 0 ;;
+    */drivers/*/bind)
+        [ -e "$FAKE_STATE/bind_fail" ] && { echo "No such device" >&2; exit 1; }
+        _drv=${1%/bind}
+        _drv=${_drv##*/}
+        _dev=${2%%:*}
+        rm -rf "$SYS/devices/usb1/$_dev/$_dev":*
+        make_netdev "$_dev" 1.0 "$_drv"
+        # Like r8152 after a configuration switch: the bind call reports ENODEV
+        echo "No such device" >&2
+        exit 1 ;;
+    *)
+        printf '%s' "$2" > "$1" ;;
+esac

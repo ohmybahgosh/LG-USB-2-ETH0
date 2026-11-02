@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.1"
+VERSION="2.2"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -40,6 +40,10 @@ PID_FILE="${LGU2E_ROOT}/tmp/lg-usb-2-eth0.pid"
 OS_INFO="${LGU2E_ROOT}/var/run/nyx/os_info.json"
 HBC_DIR="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service"
 MARKER="Managed by LG-USB-2-ETH0"
+# Where get-driver keeps downloaded driver modules (persistent storage)
+DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
+# DonZoomik's own boot hook for r8152_oot, which does the same job as --module
+AUTOBIND_HOOK="$INIT_DIR/90-r8152-oot"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -48,6 +52,7 @@ PIN_MAC=""
 WAIT_SECS=120
 PARK_NAME="eth2"
 MODULE=""
+DRIVER=""
 WATCH=0
 
 # === Helper Functions ===
@@ -95,6 +100,8 @@ Commands (no command opens the menu):
   status      Show the hook, the network interfaces and any problems
   doctor      Same as status
   report      Print a short report to paste into a GitHub issue
+  get-driver  Download a better driver module known to work on this exact
+              kernel, if there is one, and check its checksum
   version     Print the version
 
 Options:
@@ -102,7 +109,8 @@ Options:
   --now              With install or uninstall, also swap right away
   --mac MAC          Only ever promote the adapter with this MAC address
   --wait SECONDS     How long the boot hook waits for the adapter (default 120)
-  --module FILE.ko   Load this driver module at boot before looking (advanced)
+  --module FILE.ko   Load this driver module at boot, and move the adapter
+                     from the generic cdc_ncm driver over to it
   --watch            Keep watching after boot: swap the adapter in when it is
                      plugged in, and give eth0 back when it is unplugged
   -h, --help         Show this help
@@ -117,6 +125,7 @@ CORE=$(cat <<'CORE_EOF'
 NET=${LGU2E_SYSFS:-/sys}/class/net
 USB_DEVS=${LGU2E_SYSFS:-/sys}/bus/usb/devices
 SYS_MODULES=${LGU2E_SYSFS:-/sys}/module
+USB_DRIVERS=${LGU2E_SYSFS:-/sys}/bus/usb/drivers
 # Seconds to let a new adapter settle, and between checks in --watch mode
 SETTLE_SECS=${LGU2E_SETTLE:-3}
 WATCH_EVERY=${LGU2E_WATCH_EVERY:-5}
@@ -127,7 +136,15 @@ is_wifi() { [ -d "$NET/$1/wireless" ] || [ -e "$NET/$1/phy80211" ]; }
 
 nic_driver() {
     _l=$(readlink "$NET/$1/device/driver" 2>/dev/null) || return 0
-    echo "${_l##*/}"
+    _l=${_l##*/}
+    # Some Wi-Fi modules hang off the USB device itself, whose driver is just
+    # "usb". The real driver is on its interface.
+    if [ "$_l" = usb ]; then
+        for _d in "$NET/$1/device"/*:*/driver; do
+            [ -e "$_d" ] && { _l=$(readlink "$_d"); _l=${_l##*/}; break; }
+        done
+    fi
+    echo "$_l"
 }
 
 nic_mac() { sysval "$NET/$1/address" | tr 'A-F' 'a-f'; }
@@ -290,9 +307,14 @@ swap_out() {
     return 0
 }
 
+# Write to a sysfs file. LGU2E_SYSWRITE only exists for the test suite.
+sys_write() {
+    if [ -n "$LGU2E_SYSWRITE" ]; then "$LGU2E_SYSWRITE" "$1" "$2"; else printf '%s' "$2" > "$1"; fi
+}
+
 load_module() {
     [ -n "$MODULE" ] || return 0
-    _m=${MODULE##*/}
+    _m=${DRIVER:-${MODULE##*/}}
     _m=${_m%.ko}
     if [ -d "$SYS_MODULES/$_m" ]; then
         echo "Module $_m already loaded."
@@ -303,6 +325,76 @@ load_module() {
     else
         echo "insmod $MODULE failed (built for another kernel?). See dmesg. Carrying on without it."
     fi
+}
+
+# True when any interface of USB device $1 is bound to $DRIVER
+on_driver() {
+    for _i in "$USB_DEVS/$1"/*:*; do
+        [ "$(nic_driver_path "$_i")" = "$DRIVER" ] && return 0
+    done
+    return 1
+}
+nic_driver_path() { _l=$(readlink "$1/driver" 2>/dev/null) && echo "${_l##*/}"; }
+
+# Turn off scatter-gather on adapters run by $DRIVER. On LG's xHCI it makes
+# the TV's USB controller hang after a while (found by DonZoomik).
+disable_sg() {
+    for _p in "$NET"/*; do
+        _f="$_p/rtl_adv/sg_en"
+        [ -w "$_f" ] || continue
+        [ "$(nic_driver "${_p##*/}")" = "$DRIVER" ] || continue
+        [ "$(sysval "$_f")" = disable ] || sys_write "$_f" disable 2>/dev/null
+    done
+    return 0
+}
+
+# Driver takeover. The kernel gives many Realtek adapters to the generic
+# cdc_ncm driver, even when a better driver module is loaded. Move each one
+# over to $DRIVER. If that doesn't take within a few seconds, give it back to
+# cdc_ncm. Each device gets one try per boot, so a driver that doesn't support
+# it can't cause repeated drops.
+TAKEOVER_STATE=${LOG_FILE%.log}.takeover
+take_over() {
+    [ -n "$DRIVER" ] || return 0
+    if [ ! -d "$USB_DRIVERS/$DRIVER" ]; then
+        echo "Driver $DRIVER is not loaded, so the adapter stays on its current driver."
+        return 0
+    fi
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        is_usb_nic "$_n" || continue
+        [ "$(nic_driver "$_n")" = cdc_ncm ] || continue
+        _ifc=$(readlink -f "$NET/$_n/device") || continue
+        _in=${_ifc##*/}
+        _dev=${_in%%:*}
+        _tok="$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")"
+        grep -qx "$_tok" "$TAKEOVER_STATE" 2>/dev/null && continue
+        echo "$_tok" >> "$TAKEOVER_STATE"
+        echo "USB $_n ($_dev, $(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")): cdc_ncm -> $DRIVER"
+        if ! sys_write "$USB_DRIVERS/cdc_ncm/unbind" "$_in" 2>/dev/null; then
+            echo "Could not release it from cdc_ncm. Leaving it as it is."
+            continue
+        fi
+        # The driver may switch the adapter's USB configuration, which makes
+        # the bind look like it failed even when it worked, so check after.
+        sys_write "$USB_DRIVERS/$DRIVER/bind" "$_in" 2>/dev/null
+        _t=0
+        while [ "$_t" -lt 5 ] && ! on_driver "$_dev"; do sleep 1; _t=$((_t + 1)); done
+        if on_driver "$_dev"; then
+            echo "Now on $DRIVER."
+            continue
+        fi
+        echo "$DRIVER did not take it. Giving it back to cdc_ncm."
+        [ -d "$_ifc" ] && sys_write "$USB_DRIVERS/cdc_ncm/bind" "$_in" 2>/dev/null
+    done
+    disable_sg
+    return 0
+}
+
+# Wait up to 10 s for a USB network device to come back after a takeover
+wait_for_nic() {
+    _t=0
+    while [ "$_t" -lt 10 ] && [ -z "$(find_usb_nic)" ]; do sleep 1; _t=$((_t + 1)); done
 }
 
 # --watch: keep following the adapter after boot. Plugged in: swap it in.
@@ -319,7 +411,9 @@ watch_run() {
             [ "$_u" = "$_skip" ] && continue
             echo "=== $(date) adapter $_u appeared ==="
             sleep "$SETTLE_SECS"
-            swap_in || _skip=$_u
+            take_over
+            wait_for_nic
+            swap_in || _skip=$(find_usb_nic)
         elif [ -z "$_u" ] && [ ! -e "$NET/eth0" ] && [ -n "$(find_builtin_nic)" ]; then
             echo "=== $(date) adapter gone ==="
             swap_out
@@ -344,6 +438,8 @@ boot_run() {
     if [ -n "$(find_usb_nic)" ]; then
         # Give a freshly attached adapter a moment to settle
         sleep "$SETTLE_SECS"
+        take_over
+        wait_for_nic
         swap_in
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
@@ -408,6 +504,89 @@ preflight() {
     [ -d "$NET" ] || error_exit "$NET is missing, so network devices can't be checked."
 }
 
+# === Driver modules ===
+# The name a .ko file registers as, read from its modinfo (no modinfo on TVs)
+module_name() {
+    tr -c '[:alnum:]_=.-' '\n' < "$1" 2>/dev/null | sed -n 's/^name=//p' | head -n 1
+}
+
+# Fill DRIVER from MODULE, and check both
+resolve_driver() {
+    [ -n "$MODULE" ] || return 0
+    [ -r "$MODULE" ] || error_exit "Module file $MODULE does not exist."
+    if [ -z "$DRIVER" ]; then
+        DRIVER=$(module_name "$MODULE")
+        [ -n "$DRIVER" ] || { DRIVER=${MODULE##*/}; DRIVER=${DRIVER%.ko}; }
+    fi
+    case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "Could not work out the driver name of $MODULE." ;; esac
+    _vm=$(tr -c '[:alnum:]_=.+ -' '\n' < "$MODULE" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1)
+    if [ -n "$_vm" ] && [ "$_vm" != "$(uname -r)" ]; then
+        error_exit "$MODULE is built for kernel $_vm, but this TV runs $(uname -r). Loading it could crash the TV."
+    fi
+}
+
+# For apply: use the installed hook's module unless one was given
+use_hook_driver() {
+    if [ -z "$MODULE" ] && [ "$(hook_state)" = enabled ]; then
+        MODULE=$(hook_setting MODULE)
+        DRIVER=$(hook_setting DRIVER)
+    fi
+    resolve_driver
+}
+
+# Better driver modules known to work on one exact kernel, as
+# "url sha256 file author-page". They're built and published by their
+# authors. get-driver checks the SHA-256 before keeping a download.
+known_driver() {
+    case "$1" in
+        5.4.268-329.ptl4tv.5)
+            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152" ;;
+        *) return 1 ;;
+    esac
+}
+
+fetch() {
+    if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$1" "$2"
+    elif command -v wget >/dev/null 2>&1; then wget -q -O "$1" "$2"
+    else echo "Neither curl nor wget is available."; return 1
+    fi
+}
+
+get_driver() {
+    preflight
+    _k=$(uname -r)
+    _kd=$(known_driver "$_k") || {
+        info "No known better driver for kernel $_k."
+        echo "If someone has built one for this exact kernel, install it with --module /full/path/driver.ko."
+        return 0
+    }
+    # shellcheck disable=SC2086 # split the fields on purpose
+    set -- $_kd
+    _url=$1 _sum=$2 _file=$3 _page=$4
+    _dest="$DRIVER_DIR/$_file"
+    info "Kernel $_k has a known better driver: $_file"
+    echo "  Built and published by: $_page"
+    echo "  Download: $_url"
+    echo "  It's a kernel module from that project, not from LG-USB-2-ETH0. It's only offered"
+    echo "  for this exact kernel, and its SHA-256 is checked before it's kept."
+    if [ -f "$_dest" ] && [ "$(sha256sum "$_dest" | awk '{print $1}')" = "$_sum" ]; then
+        success "Already downloaded and verified: $_dest"
+    else
+        confirm "Download it?" || { echo "Cancelled. Nothing changed."; return 1; }
+        mkdir -p "$DRIVER_DIR" || error_exit "Could not create $DRIVER_DIR."
+        fetch "$_dest.part" "$_url" || { rm -f "$_dest.part"; error_exit "Download failed."; }
+        _got=$(sha256sum "$_dest.part" | awk '{print $1}')
+        if [ "$_got" != "$_sum" ]; then
+            rm -f "$_dest.part"
+            error_exit "Checksum mismatch (got $_got). The file was deleted and nothing changed."
+        fi
+        mv -f "$_dest.part" "$_dest" || error_exit "Could not save $_dest."
+        success "Downloaded and verified: $_dest"
+    fi
+    echo "Install it with:"
+    echo "  sh $0 install --module $_dest"
+}
+
 # === Hook state ===
 hook_state() {
     if [ -f "$HOOK" ]; then
@@ -457,6 +636,7 @@ write_hook() {
         echo "WAIT_SECS=\"$WAIT_SECS\""
         echo "PARK_NAME=\"$PARK_NAME\""
         echo "MODULE=\"$MODULE\""
+        echo "DRIVER=\"$DRIVER\""
         echo "WATCH=\"$WATCH\""
         echo "PID_FILE=\"$PID_FILE\""
         echo "LOG_FILE=\"$LOG_FILE\""
@@ -497,7 +677,8 @@ run_detached() {
         echo "The change still finishes on the TV. Wi-Fi is the safe way in."
         confirm "Go ahead?" || { echo "Cancelled. Nothing changed."; return 1; }
     fi
-    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"
+    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"
+LOG_FILE=\"$LOG_FILE\"
 $CORE
 $_what"
     : > "$LOG_FILE.now"
@@ -538,13 +719,11 @@ show_plan() {
 install_fix() {
     preflight
     hbc_present || error_exit "Homebrew Channel not found. It runs the boot hook, so install it first."
-    if [ -n "$MODULE" ] && [ ! -r "$MODULE" ]; then
-        error_exit "Module file $MODULE does not exist."
-    fi
+    resolve_driver
     show_plan
     info "At every boot the hook will:"
     echo "  1. Wait up to ${WAIT_SECS}s in the background for a USB Ethernet adapter${PIN_MAC:+ with MAC $PIN_MAC}"
-    [ -n "$MODULE" ] && echo "     (after loading $MODULE)"
+    [ -n "$MODULE" ] && echo "     (after loading $MODULE, and moving the adapter from cdc_ncm to $DRIVER)"
     echo "  2. If one shows up, rename the built-in port to $PARK_NAME and the adapter to eth0"
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
@@ -553,6 +732,10 @@ install_fix() {
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
     esac
     [ -z "$(find_usb_nic)" ] && warn "No adapter is visible right now. Run 'status' if it's plugged in."
+    if [ -n "$MODULE" ] && { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; }; then
+        warn "DonZoomik's r8152-autobind boot hook is installed too ($AUTOBIND_HOOK)."
+        echo "  It does the same job as --module. Keep only one: sh /home/root/r8152-autobind.sh uninstall"
+    fi
     confirm "Install the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
     stop_watcher
     write_hook
@@ -609,7 +792,16 @@ enable_fix() {
     grep -q "$MARKER" "$HOOK" || warn "This is the v1 hook. Run 'install' to upgrade it."
 }
 
-apply_now() { preflight; run_detached swap_in; }
+apply_now() {
+    preflight
+    use_hook_driver
+    if [ -n "$DRIVER" ]; then
+        rm -f "$TAKEOVER_STATE"
+        run_detached "load_module; take_over; wait_for_nic; swap_in"
+    else
+        run_detached swap_in
+    fi
+}
 revert_now() { preflight; run_detached swap_out; }
 
 # Known USB Ethernet chips (vendor:product), to spot an adapter with no driver
@@ -653,6 +845,7 @@ show_status() {
             _s="  Waits $(hook_setting WAIT_SECS)s"
             [ -n "$(hook_setting PIN_MAC)" ] && _s="$_s, only for MAC $(hook_setting PIN_MAC)"
             [ -n "$(hook_setting MODULE)" ] && _s="$_s, loads $(hook_setting MODULE)"
+            [ -n "$(hook_setting DRIVER)" ] && _s="$_s (driver $(hook_setting DRIVER))"
             [ "$(hook_setting WATCH)" = 1 ] && _s="$_s, keeps watching (--watch)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
@@ -720,7 +913,11 @@ show_status() {
     echo
     log "$CYAN" "USB network drivers on this kernel"
     _list=""
-    for _m in r8152 ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
+    _hd=$(hook_setting DRIVER)
+    _seen=""
+    for _m in r8152 $_hd r8152_oot ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
+        case " $_seen " in *" $_m "*) continue ;; esac
+        _seen="$_seen $_m"
         if [ -d "$SYS_MODULES/$_m" ]; then
             _list="$_list $_m(loaded)"
         elif [ -n "$(find "/lib/modules/$(uname -r)" -name "$_m.ko*" 2>/dev/null | head -n 1)" ]; then
@@ -731,6 +928,20 @@ show_status() {
 
     _bi=$(find_builtin_nic)
     _usb=$(find_usb_nic)
+    if [ -n "$_usb" ] && [ "$(nic_driver "$_usb")" = cdc_ncm ]; then
+        if [ -n "$_hd" ]; then
+            status_note "$_usb is still on cdc_ncm, not $_hd. Run 'apply', or check $LOG_FILE."
+        elif known_driver "$(uname -r)" >/dev/null; then
+            status_note "$_usb uses the generic cdc_ncm driver. A faster, steadier driver is known for this kernel: run 'get-driver'."
+        fi
+    fi
+    if { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; }; then
+        if [ -n "$_hd" ]; then
+            status_issue "DonZoomik's r8152-autobind hook and --module both manage the driver. Keep one: sh /home/root/r8152-autobind.sh uninstall"
+        else
+            status_note "DonZoomik's r8152-autobind hook is installed. 'install --module' can do the same job inside LG-USB-2-ETH0."
+        fi
+    fi
     case "$(hook_state)" in
         enabled|legacy|legacy-disabled)
             [ "$_usb_seen" = 0 ] && status_note "The hook is on, but no adapter is visible now, so a boot right now would change nothing." ;;
@@ -789,7 +1000,7 @@ show_report() {
         elif is_builtin_nic "$_rn"; then _rk=builtin
         else _rk=other
         fi
-        _rl="  $_rn $_rk driver=$(nic_driver "$_rn") mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null)"
+        _rl="  $_rn $_rk driver=$(nic_driver "$_rn") mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null || echo down)"
         _rs=$(sysval "$_rp/speed" 2>/dev/null)
         case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
         if [ "$_rk" = usb ]; then
@@ -806,7 +1017,8 @@ show_report() {
         [ "$_has_net" = 0 ] && echo "  no driver: $_id ($_chip)"
     done
     _list=""
-    for _m in r8152 ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
+    for _m in r8152 r8152_oot $(hook_setting DRIVER) ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
+        case " $_list " in *" $_m "*) continue ;; esac
         [ -d "$SYS_MODULES/$_m" ] && _list="$_list $_m"
     done
     echo "Drivers loaded:${_list:- none}"
@@ -830,7 +1042,8 @@ main_menu() {
         echo "6) Disable boot hook"
         echo "7) Enable boot hook"
         echo "8) Report for a GitHub issue"
-        echo "9) Exit"
+        echo "9) Get a better driver for this TV"
+        echo "0) Exit"
         read_answer "Choose an option: " || exit 1
         case "$ANSWER" in
             1) install_fix ;;
@@ -841,8 +1054,9 @@ main_menu() {
             6) disable_fix ;;
             7) enable_fix ;;
             8) show_report ;;
-            9|q|Q) echo "Bye."; exit 0 ;;
-            *) echo "Pick 1 to 9." ;;
+            9) get_driver ;;
+            0|q|Q) echo "Bye."; exit 0 ;;
+            *) echo "Pick 0 to 9." ;;
         esac
         read_answer "Press Enter for the menu..." || exit 0
     done
@@ -869,9 +1083,13 @@ while [ $# -gt 0 ]; do
             # It is written into a root boot script, so only allow plain path characters
             case "$MODULE" in *[!A-Za-z0-9._/-]*) error_exit "--module path may only use letters, digits, '.', '_', '-' and '/'" ;; esac ;;
         --watch) WATCH=1 ;;
+        --driver)
+            shift
+            DRIVER=$1
+            case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
@@ -886,5 +1104,6 @@ case "$CMD" in
     revert|reset) revert_now ;;
     status|doctor) show_status ;;
     report) show_report ;;
+    get-driver) get_driver ;;
     "") main_menu ;;
 esac

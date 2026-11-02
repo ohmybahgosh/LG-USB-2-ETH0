@@ -81,6 +81,8 @@ usbdev() {
     echo "$2" > "$u/idVendor"
     echo "$3" > "$u/idProduct"
     echo "${4:-5000}" > "$u/speed"
+    echo 1 > "$u/busnum"
+    echo "${1##*-}" > "$u/devnum"
     ln -s "$u" "$SYS/bus/usb/devices/$1"
 }
 
@@ -96,9 +98,22 @@ add_usb() {
 }
 
 # add_wifi NAME PORT: a USB Wi-Fi module, like many LG TVs have
+# Like LG's own Wi-Fi: the network device hangs off the USB device itself,
+# whose driver is "usb", and the real driver is on its interface.
 add_wifi() {
-    add_usb "$1" "$2" mt7601u 1 "00:11:22:33:44:55" 148f 7601 480
-    mkdir -p "$SYS/devices/usb1/$2/$2:1.0/net/$1/wireless"
+    usbdev "$2" 148f 7601 480
+    local u=$SYS/devices/usb1/$2
+    mkdir -p "$SYS/bus/usb/drivers/usb" "$SYS/bus/usb/drivers/mt7601u"
+    ln -s "$SYS/bus/usb/drivers/usb" "$u/driver"
+    ln -s "$SYS/bus/usb/drivers/mt7601u" "$u/$2:1.0/driver"
+    netdev "$u/net/$1" "$1" "00:11:22:33:44:55" 1
+    ln -s "$u" "$u/net/$1/device"
+    mkdir -p "$u/net/$1/wireless"
+}
+
+# A .ko file that declares a module name and the kernel it's built for
+fake_ko() {
+    printf 'junk\0name=%s\0vermagic=%s SMP preempt mod_unload aarch64\0' "$2" "${3:-$(uname -r)}" > "$1"
 }
 
 # add_unclaimed PORT VID PID: a USB adapter the kernel has no driver for
@@ -129,6 +144,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -140,6 +156,7 @@ run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" \
         $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -502,7 +519,136 @@ t module_missing test_module_missing
 t module_loaded_at_boot test_module_loaded_at_boot
 t unclaimed_adapter test_unclaimed_adapter
 t usb2_note test_usb2_note
+drv() { kind_ok=$(nic_drv "$1"); [ "$kind_ok" = "$2" ] || { echo "    $1 driver is $kind_ok, wanted $2"; return 1; }; }
+nic_drv() { local l; l=$(readlink "$SYS/class/net/$1/device/driver") && echo "${l##*/}"; }
+
+test_takeover_apply() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    check "install exits 0" rc_is 0
+    check "hook has DRIVER" grep -q '^DRIVER="r8152_oot"' "$HOOK"
+    run apply -y
+    check "says it moved" has "cdc_ncm -> r8152_oot"
+    check "now on the new driver" has "Now on r8152_oot"
+    check "adapter is eth0" is eth0 usb:1-1
+    check "adapter driver" drv eth0 r8152_oot
+    check "built-in parked" is eth2 builtin
+    check "scatter-gather off" grep -qx disable "$SYS/class/net/eth0/rtl_adv/sg_en"
+    run status
+    check "status lists the driver" has "r8152_oot(loaded)"
+    check "status names the driver" has "(driver r8152_oot)"
+}
+
+test_takeover_boot() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    check "log shows takeover" grep -q "Now on r8152_oot" "$LOG"
+    check "adapter is eth0" is eth0 usb:1-1
+    check "adapter driver" drv eth0 r8152_oot
+}
+
+test_takeover_fallback() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    touch "$STATE/bind_fail"
+    run install -y --module "$SB/r8152_oot.ko"
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0" 25
+    check "gave it back" grep -q "Giving it back to cdc_ncm" "$LOG"
+    check "adapter is eth0" is eth0 usb:1-1
+    check "back on cdc_ncm" drv eth0 cdc_ncm
+    run status
+    check "status says still on cdc_ncm" has "still on cdc_ncm"
+}
+
+test_takeover_insmod_fails() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    touch "$STATE/insmod_fail"
+    run install -y --module "$SB/r8152_oot.ko"
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "explains" grep -q "is not loaded" "$LOG"
+    check "nothing unbound" sh -c "! grep -q unbind '$STATE/syswrite.log' 2>/dev/null"
+    check "stays on cdc_ncm" drv eth0 cdc_ncm
+}
+
+test_module_wrong_kernel() {
+    add_builtin
+    fake_ko "$SB/r8152_oot.ko" r8152_oot 9.9.9-other
+    run install -y --module "$SB/r8152_oot.ko"
+    check "exit 1" rc_is 1
+    check "explains" has "built for kernel 9.9.9-other"
+    check "no hook" test ! -e "$HOOK"
+}
+
+test_get_driver_unknown_kernel() {
+    add_builtin
+    run get-driver -y
+    check "exit 0" rc_is 0
+    check "explains" has "No known better driver"
+    check "nothing downloaded" test ! -e "$STATE/curl.log"
+}
+
+test_get_driver_bad_checksum() {
+    add_builtin
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run get-driver -y
+    check "exit 1" rc_is 1
+    check "credits the author" has "github.com/DonZoomik/webos-r8152"
+    check "pinned download" grep -q "raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98" "$STATE/curl.log"
+    check "explains" has "Checksum mismatch"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
+    check "no partial file" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko.part"
+}
+
+test_status_suggests_driver() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run status
+    check "suggests get-driver" has "run 'get-driver'"
+}
+
+test_autobind_hook_noticed() {
+    add_builtin
+    ln -s /home/root/r8152-autobind.sh "$ROOT/var/lib/webosbrew/init.d/90-r8152-oot"
+    run status
+    check "notes the other hook" has "r8152-autobind hook is installed"
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    check "install warns" has "Keep only one"
+    run status
+    check "status flags both" has "both manage the driver"
+}
+
+test_wifi_driver_name() {
+    add_builtin
+    add_wifi wlan0 1-2
+    rm -f "$SYS/class/net/wlan0/carrier"
+    run status
+    check "real wifi driver" has "mt7601u"
+    run report
+    check "carrier down" has "wifi driver=mt7601u mac=00:11:22:xx:xx:xx carrier=down"
+}
+
 t report test_report
+t takeover_apply test_takeover_apply
+t takeover_boot test_takeover_boot
+t takeover_fallback test_takeover_fallback
+t takeover_insmod_fails test_takeover_insmod_fails
+t module_wrong_kernel test_module_wrong_kernel
+t get_driver_unknown_kernel test_get_driver_unknown_kernel
+t get_driver_bad_checksum test_get_driver_bad_checksum
+t status_suggests_driver test_status_suggests_driver
+t autobind_hook_noticed test_autobind_hook_noticed
+t wifi_driver_name test_wifi_driver_name
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

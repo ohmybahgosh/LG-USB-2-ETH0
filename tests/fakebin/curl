@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fake `curl` for the test suite: never touches the network. Writes
+# $FAKE_STATE/download (or "not the real file") to the file given with -o.
+echo "curl $*" >> "$FAKE_STATE/curl.log"
+while [ $# -gt 0 ]; do
+    case "$1" in -o) shift; out=$1 ;; esac
+    shift
+done
+[ -n "$out" ] || exit 2
+if [ -f "$FAKE_STATE/download" ]; then cat "$FAKE_STATE/download" > "$out"; else echo "not the real file" > "$out"; fi

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Fake `insmod` for the test suite: records the call and marks the module loaded
+# Fake `insmod` for the test suite: records the call, then marks the module
+# loaded and registers its USB driver, under the name the .ko file declares.
 echo "insmod $*" >> "$FAKE_STATE/insmod.log"
-_m=${1##*/}
-_m=${_m%.ko}
-mkdir -p "$LGU2E_SYSFS/module/$_m"
+[ -e "$FAKE_STATE/insmod_fail" ] && { echo "insmod: can't insert '$1': invalid module format" >&2; exit 1; }
+_m=$(tr -c '[:alnum:]_=.-' '\n' < "$1" | sed -n 's/^name=//p' | head -n 1)
+[ -n "$_m" ] || { _m=${1##*/}; _m=${_m%.ko}; }
+mkdir -p "$LGU2E_SYSFS/module/$_m" "$LGU2E_SYSFS/bus/usb/drivers/$_m"
