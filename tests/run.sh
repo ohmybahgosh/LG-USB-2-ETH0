@@ -93,6 +93,7 @@ add_usb() {
     local i=$SYS/devices/usb1/$2/$2:1.0
     mkdir -p "$SYS/bus/usb/drivers/$3"
     ln -s "$SYS/bus/usb/drivers/$3" "$i/driver"
+    ln -s "$i" "$SYS/bus/usb/drivers/$3/$2:1.0"
     ln -s "$SYS/bus/usb" "$i/subsystem"
     netdev "$i/net/$1" "$1" "$5" "$4"
     ln -s "$i" "$i/net/$1/device"
@@ -129,6 +130,7 @@ remove_usb() {
     for l in "$SYS/class/net"/*; do
         case "$(readlink "$l")" in "$u"/*) rm -f "$l" ;; esac
     done
+    for l in "$SYS/bus/usb/drivers"/*/"$1":*; do [ -L "$l" ] && rm -f "$l"; done
     rm -rf "$u" "$SYS/bus/usb/devices/$1"
 }
 

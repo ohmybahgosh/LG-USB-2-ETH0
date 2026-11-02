@@ -445,9 +445,20 @@ watch_run() {
         echo "Keeping the adapter on $DRIVER (checking every ${WATCH_EVERY}s)."
     fi
     _skip=""
+    _last=""
     while :; do
         sleep "$WATCH_EVERY"
-        if [ -n "$DRIVER" ] && takeover_pending; then
+        # Cheap checks first, with no subprocesses: is anything bound to
+        # cdc_ncm, and did the list of network interfaces change? Only then
+        # look closer. This keeps each check to well under a millisecond.
+        _cdc=0
+        for _f in "$USB_DRIVERS"/cdc_ncm/*:*; do [ -e "$_f" ] && { _cdc=1; break; }; done
+        _now=""
+        for _p in "$NET"/*; do _now="$_now ${_p##*/}"; done
+        _changed=0
+        [ "$_now" != "$_last" ] && _changed=1
+        _last=$_now
+        if [ -n "$DRIVER" ] && [ "$_cdc" = 1 ] && takeover_pending; then
             echo "=== $(date) adapter is on cdc_ncm again ==="
             take_over
             wait_for_nic
@@ -456,6 +467,9 @@ watch_run() {
             continue
         fi
         [ "$WATCH" = 1 ] || continue
+        # Plugging or unplugging adds or removes an interface. A swap that
+        # failed is retried only when something changes.
+        [ "$_changed" = 1 ] || continue
         _u=$(find_usb_nic)
         if [ -n "$_u" ] && [ "$_u" != eth0 ]; then
             # Don't retry a swap that already failed until something changes
