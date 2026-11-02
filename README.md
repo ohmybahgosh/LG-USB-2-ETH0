@@ -15,7 +15,7 @@
 
 </div>
 
-LG TVs ship with a 100 Mbit/s wired port.  A USB 3.0 gigabit adapter is two to three times faster on the same TV, but webOS names it `eth1`, and parts of webOS only look at `eth0`.  So the settings screen says "Not Connected" while the internet works, and some streaming apps refuse to play.
+LG TVs ship with a 100 Mbit/s wired port.  A gigabit USB adapter is two to three times faster on the same TV, even on the USB 2.0 ports many models have (a 2022 C2 included), but webOS names it `eth1`, and parts of webOS only look at `eth0`.  So the settings screen says "Not Connected" while the internet works, and some streaming apps refuse to play.
 
 This script renames the adapter to `eth0` and parks the built-in port under another name, so webOS and its apps treat the adapter as the TV's wired connection.  A small boot hook does it again at every start.
 
@@ -88,7 +88,7 @@ Boot hook
 
 Network interfaces
   eth0      USB Ethernet       driver r8152          00:e0:4c:68:12:34
-            cable in, link 1000 Mbit/s, IPv4 192.168.1.42/24, on USB 3.0
+            cable in, link 1000 Mbit/s, IPv4 192.168.1.42/24, on USB 2.0
   eth2      built-in Ethernet  driver lg-eth         a8:23:fe:00:00:01
             no cable, IPv4 none
   wlan0     Wi-Fi              driver mt7601u        00:11:22:33:44:55
@@ -165,7 +165,7 @@ What decides whether this works on your TV is **whether its kernel has a driver 
 
 - **Realtek RTL8153 (gigabit) and RTL8156 (2.5G):** the most common chips.  Newer kernels may only have the generic `cdc_ncm` driver for them, which works but is slower.
 - **ASIX AX88179:** works out of the box on many older TVs.  One report of the newer AX88179A not being detected on webOS 25.
-- **Use a USB 3.0 port** if your TV has one.  On USB 2.0 you'll top out around 300 Mbit/s.
+- **USB 2.0 is fine.**  Many LG TVs, the C2 included, only have USB 2.0 ports.  There you'll top out around 300 Mbit/s, still about three times the built-in port.  If your TV does have a USB 3.0 port (usually the blue one), use it for more.
 
 Before buying, run `sh LG-USB-2-ETH0.sh status`.  It lists which USB network drivers your kernel has.  If you already have an adapter that isn't working, `status` tells you when the kernel sees it but has no driver for it.
 
@@ -235,7 +235,7 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 **Settings still say "Not Connected", or no IP?**  Run `status`.  If the adapter is `eth0` but has no IPv4 address, give webOS a moment, then try unplugging and replugging the network cable.
 
-<a id="adapter-not-detected"></a>**Adapter not detected?**  `status` lists adapters the kernel sees but has no driver for.  Try an adapter with a different chip, use a USB 3.0 port, or try a powered hub.  Run `get-driver` to see if a better driver is known for your kernel.  If someone has built a driver module for your exact kernel (`uname -r`), install with `--module /full/path/driver.ko`.  The script refuses a module built for another kernel.
+<a id="adapter-not-detected"></a>**Adapter not detected?**  `status` lists adapters the kernel sees but has no driver for.  Try an adapter with a different chip, another USB port, or a powered hub.  Run `get-driver` to see if a better driver is known for your kernel.  If someone has built a driver module for your exact kernel (`uname -r`), install with `--module /full/path/driver.ko`.  The script refuses a module built for another kernel.
 
 **Adapter plugged in after boot, or unplugged and back?**  Without `--watch`, run `apply`, or reboot.  With `--watch`, it's handled for you.
 
