@@ -69,17 +69,56 @@
 
     // ------------------------------------------------------------------ status
 
-    function refresh() {
+    function refresh(cb) {
         runScript('status --json', function (ok, out, err) {
             var data = null;
             try { data = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { data = null; }
             if (!data) {
                 showNoRoot(ok ? 'The script gave an unexpected answer.' : err);
+                if (cb) { cb(null); }
                 return;
             }
             state = data;
             render();
+            if (cb) { cb(data); }
         });
+    }
+
+    // Whichever port is eth0 right now, and its address
+    function eth0(s) {
+        var n = [s.adapter, s.builtin];
+        for (var i = 0; i < n.length; i++) {
+            if (n[i] && n[i].name === 'eth0') { return n[i]; }
+        }
+        return null;
+    }
+
+    // After a switch the network drops for a moment and eth0 has to get an
+    // address again (DHCP), which takes a few seconds after the script is
+    // done.  Keep checking until it has one, so the screen doesn't stay on
+    // "none yet".
+    var waitTimer = null;
+    function waitForAddress() {
+        var tries = 0;
+        if (waitTimer) { clearTimeout(waitTimer); }
+        function hint(text) {
+            if (overlayMode === 'message') { $('overlay-hint').textContent = text; }
+        }
+        function check() {
+            waitTimer = null;
+            refresh(function (s) {
+                var e = s && eth0(s);
+                if (e && e.ip) {
+                    hint('eth0 is connected at ' + e.ip.replace(/\/\d+$/, '') + '.  Press OK or BACK to close.');
+                } else if (++tries < 20) {
+                    hint('Waiting for eth0 to get an address…  Press OK or BACK to close.');
+                    waitTimer = setTimeout(check, 2000);
+                } else {
+                    hint('eth0 has no address after 40 seconds.  Check the cable and the router.  Press OK or BACK to close.');
+                }
+            });
+        }
+        check();
     }
 
     function showNoRoot(detail) {
@@ -182,7 +221,7 @@
     }
 
     // Run a script command with a busy screen, then show its output
-    function act(title, args, after) {
+    function act(title, args, after, network) {
         if (busy) { return; }
         busy = true;
         overlay('busy', title, '<span class="spinner"></span>Working on it…  The picture is fine, only the network is changing.', '');
@@ -193,7 +232,7 @@
             if (lines.length > 14) { lines = lines.slice(lines.length - 14); }
             overlay('message', ok ? title + ': done' : title + ': something went wrong',
                 '<pre>' + esc(lines.join('\n')) + '</pre>', 'Press OK or BACK to close.');
-            refresh();
+            if (network && ok) { waitForAddress(); } else { refresh(); }
             if (after) { after(ok); }
         });
     }
@@ -232,7 +271,7 @@
                     'Moving the adapter to it takes the network down for a moment.  Wi-Fi is a good way back in if anything goes wrong.',
                     function () {
                         act('Faster driver', 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
-                            ' && sh ' + shq(SCRIPT) + ' apply -y');
+                            ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);
                     });
             }
         },
@@ -243,7 +282,7 @@
         },
         apply: function () {
             confirmThen('Switch now?', 'The network drops for a few seconds while the adapter becomes eth0.', function () {
-                act('Switch now', 'apply -y');
+                act('Switch now', 'apply -y', null, true);
             });
         },
         report: function () {
@@ -286,7 +325,7 @@
         },
         off: function () {
             confirmThen('Turn everything off?', 'This removes the boot hook and gives eth0 back to the built-in port now.  Do this before removing the app.', function () {
-                act('Turn everything off', 'uninstall -y --now');
+                act('Turn everything off', 'uninstall -y --now', null, true);
             });
         }
     };
@@ -352,6 +391,9 @@
     // Refresh when the app comes back to the foreground
     document.addEventListener('webOSRelaunch', refresh);
     document.addEventListener('visibilitychange', function () { if (!document.hidden && !busy) { refresh(); } });
+
+    // And now and then while it's open, so plugging or unplugging shows up
+    setInterval(function () { if (!document.hidden && !busy && !waitTimer) { refresh(); } }, 30000);
 
     focusCurrent();
     refresh();
