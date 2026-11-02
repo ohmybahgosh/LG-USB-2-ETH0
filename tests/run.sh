@@ -740,6 +740,37 @@ test_status_json() {
     check "no colour codes" lacks "$(printf '\033')"
 }
 
+test_driver_kept_after_reenumeration() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    check "on the new driver" drv eth0 r8152_oot
+    check "keeps checking" wait_log "Keeping the adapter on r8152_oot"
+    # TV standby resets USB: the adapter comes back, with a new device number, on cdc_ncm
+    remove_usb 1-1
+    add_usb eth0 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    echo 9 > "$SYS/devices/usb1/1-1/devnum"
+    check "notices" wait_log "adapter is on cdc_ncm again" 10
+    sleep 2
+    check "moved back to the new driver" drv eth0 r8152_oot
+    check "still eth0" is eth0 usb:1-1
+    check "built-in still parked" is eth2 builtin
+}
+
+test_json_skips_p2p() {
+    add_builtin
+    add_wifi wlan0 1-2
+    mkdir -p "$SYS/devices/usb1/1-2/net/p2p0/wireless"
+    netdev "$SYS/devices/usb1/1-2/net/p2p0" p2p0 "02:11:22:33:44:55" 0
+    ln -s "$SYS/devices/usb1/1-2" "$SYS/devices/usb1/1-2/net/p2p0/device"
+    run status --json
+    printf '%s' "$OUT" > "$SB/s.json"
+    check "wlan0 chosen" python3 -c "import json,sys; assert json.load(open(sys.argv[1]))['wifi']['name']=='wlan0'" "$SB/s.json"
+}
+
 t report test_report
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
@@ -759,6 +790,8 @@ t broken_hook test_broken_hook
 t invalid_settings_do_nothing test_invalid_settings_do_nothing
 t no_settings_boot_does_nothing test_no_settings_boot_does_nothing
 t status_json test_status_json
+t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
+t json_skips_p2p test_json_skips_p2p
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

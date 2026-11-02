@@ -420,11 +420,42 @@ wait_for_nic() {
 # --watch: keep following the adapter after boot. Plugged in: swap it in.
 # Unplugged: give eth0 back to the built-in port, so the TV is never left
 # without an eth0. Logs only when something happens.
+# True when an adapter is on cdc_ncm and hasn't had its one try yet. A new
+# USB enumeration (after standby, a USB reset or a replug) counts as new.
+takeover_pending() {
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        is_usb_nic "$_n" || continue
+        [ "$(nic_driver "$_n")" = cdc_ncm ] || continue
+        _ifc=$(readlink -f "$NET/$_n/device") || continue
+        _dev=${_ifc##*/}; _dev=${_dev%%:*}
+        _tok="$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$(sysval "$USB_DEVS/$_dev/idVendor"):$(sysval "$USB_DEVS/$_dev/idProduct")"
+        grep -qx "$_tok" "$TAKEOVER_STATE" 2>/dev/null || return 0
+    done
+    return 1
+}
+
+# Runs after boot when --watch is on, or when a --module driver is in use.
+# With a driver: if the adapter comes back on cdc_ncm (TV standby can reset
+# USB), move it over again. With --watch: also follow plug and unplug.
 watch_run() {
-    echo "Watching for the adapter (every ${WATCH_EVERY}s)."
+    if [ "$WATCH" = 1 ]; then
+        echo "Watching for the adapter (every ${WATCH_EVERY}s)."
+    else
+        echo "Keeping the adapter on $DRIVER (checking every ${WATCH_EVERY}s)."
+    fi
     _skip=""
     while :; do
         sleep "$WATCH_EVERY"
+        if [ -n "$DRIVER" ] && takeover_pending; then
+            echo "=== $(date) adapter is on cdc_ncm again ==="
+            take_over
+            wait_for_nic
+            _u=$(find_usb_nic)
+            [ -n "$_u" ] && [ "$_u" != eth0 ] && swap_in
+            continue
+        fi
+        [ "$WATCH" = 1 ] || continue
         _u=$(find_usb_nic)
         if [ -n "$_u" ] && [ "$_u" != eth0 ]; then
             # Don't retry a swap that already failed until something changes
@@ -464,7 +495,7 @@ boot_run() {
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
     fi
-    [ "$WATCH" = 1 ] && watch_run
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ]; then watch_run; fi
     return 0
 }
 CORE_EOF
@@ -1125,8 +1156,13 @@ show_json() {
     tv_info
     _ju=$(find_usb_nic)
     _jbi=$(find_builtin_nic)
+    # The main Wi-Fi interface: wlan* first, never a p2p* (Wi-Fi Direct) one
     _jw=""
-    for _p in "$NET"/*; do is_wifi "${_p##*/}" && { _jw=${_p##*/}; break; }; done
+    for _p in "$NET"/wlan* "$NET"/*; do
+        _n=${_p##*/}
+        case "$_n" in p2p*) continue ;; esac
+        [ -e "$_p" ] && is_wifi "$_n" && { _jw=$_n; break; }
+    done
     _jpid=$(watcher_pid) || _jpid=""
     _kd=0; _kf=""
     if _k=$(known_driver "$(uname -r)"); then
