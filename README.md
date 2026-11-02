@@ -227,6 +227,8 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 **Want everything back the way it was?**  `sh LG-USB-2-ETH0.sh uninstall --now`.  Or just `uninstall` and reboot.
 
+**Wi-Fi on too?**  webOS may send traffic over Wi-Fi while it's connected, even with the adapter working.  `status` warns when that happens.  Turn Wi-Fi off in the TV's settings once the adapter works, or keep it on only as a way back in while you set things up.
+
 **Both cables plugged in?**  Unplug the built-in one.  With two wired links up, traffic can take the slower port.
 
 **Settings still say "Not Connected", or no IP?**  Run `status`.  If the adapter is `eth0` but has no IPv4 address, give webOS a moment, then try unplugging and replugging the network cable.

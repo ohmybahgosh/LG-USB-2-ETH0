@@ -138,10 +138,15 @@ nic_driver() {
     _l=$(readlink "$NET/$1/device/driver" 2>/dev/null) || return 0
     _l=${_l##*/}
     # Some Wi-Fi modules hang off the USB device itself, whose driver is just
-    # "usb". The real driver is on its interface.
+    # "usb". The real driver is on one of its interfaces. Combo chips also
+    # have Bluetooth, audio or HID interfaces, so skip those.
     if [ "$_l" = usb ]; then
         for _d in "$NET/$1/device"/*:*/driver; do
-            [ -e "$_d" ] && { _l=$(readlink "$_d"); _l=${_l##*/}; break; }
+            [ -e "$_d" ] || continue
+            _x=$(readlink "$_d")
+            case "${_x##*/}" in bt*|*bluetooth*|usbhid|snd-usb-audio|uvcvideo) continue ;; esac
+            _l=${_x##*/}
+            break
         done
     fi
     echo "$_l"
@@ -948,6 +953,9 @@ show_status() {
     esac
     if [ -n "$_usb" ] && [ "$_usb" != eth0 ] && [ "$(hook_state)" = enabled ]; then
         status_note "The adapter is $_usb, not eth0 yet. Reboot, run 'apply', or check $LOG_FILE."
+    fi
+    if [ "$_usb" = eth0 ] && [ "$(sysval "$NET/eth0/carrier" 2>/dev/null)" = 1 ] && [ -n "$_def" ] && [ "$_def" != eth0 ]; then
+        status_note "Traffic goes out $_def, not the adapter. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable."
     fi
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."
     if [ "$_usb" = eth0 ]; then

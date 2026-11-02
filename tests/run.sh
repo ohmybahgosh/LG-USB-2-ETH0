@@ -105,7 +105,10 @@ add_wifi() {
     local u=$SYS/devices/usb1/$2
     mkdir -p "$SYS/bus/usb/drivers/usb" "$SYS/bus/usb/drivers/mt7601u"
     ln -s "$SYS/bus/usb/drivers/usb" "$u/driver"
-    ln -s "$SYS/bus/usb/drivers/mt7601u" "$u/$2:1.0/driver"
+    # A combo chip: Bluetooth on the first interface, Wi-Fi on the second
+    mkdir -p "$u/$2:1.1" "$SYS/bus/usb/drivers/btmtk_usb"
+    ln -s "$SYS/bus/usb/drivers/btmtk_usb" "$u/$2:1.0/driver"
+    ln -s "$SYS/bus/usb/drivers/mt7601u" "$u/$2:1.1/driver"
     netdev "$u/net/$1" "$1" "00:11:22:33:44:55" 1
     ln -s "$u" "$u/net/$1/device"
     mkdir -p "$u/net/$1/wireless"
@@ -638,6 +641,19 @@ test_wifi_driver_name() {
     check "carrier down" has "wifi driver=mt7601u mac=00:11:22:xx:xx:xx carrier=down"
 }
 
+test_default_route_wifi() {
+    add_builtin
+    add_wifi wlan0 1-2
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev wlan0" > "$STATE/route"
+    run status
+    check "warns traffic uses wifi" has "Traffic goes out wlan0"
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run status
+    check "no warning on eth0" lacks "Traffic goes out"
+}
+
 t report test_report
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
@@ -649,6 +665,7 @@ t get_driver_bad_checksum test_get_driver_bad_checksum
 t status_suggests_driver test_status_suggests_driver
 t autobind_hook_noticed test_autobind_hook_noticed
 t wifi_driver_name test_wifi_driver_name
+t default_route_wifi test_default_route_wifi
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo
