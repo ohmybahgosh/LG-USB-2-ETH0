@@ -792,7 +792,7 @@ watcher_pid() {
 # its settings inside itself
 hook_setting() {
     for _f in "$CONF" "$HOOK" "$DISABLED_HOOK"; do
-        [ -f "$_f" ] && [ ! -L "$_f" ] || continue
+        if [ ! -f "$_f" ] || [ -L "$_f" ]; then continue; fi
         grep -q "^$1=" "$_f" 2>/dev/null || continue
         sed -n "s/^$1=\"\(.*\)\"$/\1/p" "$_f" 2>/dev/null | head -n 1
         return 0
@@ -1263,7 +1263,7 @@ jarr() {
 
 # nic_json NAME: one interface as a JSON object, or null
 nic_json() {
-    [ -n "$1" ] && [ -e "$NET/$1" ] || { printf null; return; }
+    if [ -z "$1" ] || [ ! -e "$NET/$1" ]; then printf null; return; fi
     _jp="$NET/$1"
     _jc=$(sysval "$_jp/carrier" 2>/dev/null)
     _js=$(sysval "$_jp/speed" 2>/dev/null)
