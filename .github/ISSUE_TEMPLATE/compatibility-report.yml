@@ -44,17 +44,12 @@ body:
     attributes:
       label: Measured speed (optional)
       placeholder: About 300 Mbit/s with the Speedtest app
-  - type: dropdown
+  - type: input
     id: options
     attributes:
       label: Options used
-      multiple: true
-      options:
-        - No options (the defaults)
-        - --watch
-        - --mac
-        - --module
-        - --wait
+      description: Install options you set, if any (--watch, --mac, --module, --wait).
+      placeholder: --module --watch
   - type: textarea
     id: report
     attributes:

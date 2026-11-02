@@ -100,7 +100,7 @@
         if (h.mac) { o.push('--mac'); }
         if (h.module) { o.push('--module'); }
         if (h.wait && h.wait !== '120') { o.push('--wait'); }
-        return o.length ? o.join(',') : 'No options (the defaults)';
+        return o.length ? o.join(' ') : 'None, the defaults';
     }
 
     // Whichever port is eth0 right now, and its address
