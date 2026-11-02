@@ -36,6 +36,8 @@ jobs:
           npm install -g @webos-tools/cli
           webos-app/build.sh "${GITHUB_REF_NAME#v}"
           cp webos-app/out/*.ipk webos-app/out/*.manifest.json .
+      - name: Build the AI knowledge base
+        run: sh scripts/ai-context.sh lg-usb-2-eth0-for-ai.md
       - name: Build checksums
         run: sha256sum LG-USB-2-ETH0.sh > SHA256SUMS
       - name: Publish the release
@@ -46,6 +48,6 @@ jobs:
             $0 ~ "^## \\[?" v { on = 1; next }
             on && /^## / { exit }
             on { print }' CHANGELOG.md)
-          gh release create "$GITHUB_REF_NAME" LG-USB-2-ETH0.sh *.ipk *.manifest.json SHA256SUMS \
+          gh release create "$GITHUB_REF_NAME" LG-USB-2-ETH0.sh *.ipk *.manifest.json SHA256SUMS lg-usb-2-eth0-for-ai.md \
             --title "LG-USB-2-ETH0 $GITHUB_REF_NAME" \
             --notes "${notes:-See CHANGELOG.md}"
