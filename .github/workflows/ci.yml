@@ -26,6 +26,14 @@ jobs:
           dash -n LG-USB-2-ETH0.sh
           busybox sh -n LG-USB-2-ETH0.sh
 
+  issue-forms:
+    name: Issue forms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the issue forms are valid (GitHub silently opens a blank issue if not)
+        run: python3 tests/check-issue-forms.py
+
   test:
     name: Tests (${{ matrix.shell }})
     runs-on: ubuntu-latest

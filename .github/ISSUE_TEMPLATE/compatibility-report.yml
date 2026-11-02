@@ -50,7 +50,7 @@ body:
       label: Options used
       multiple: true
       options:
-        - None
+        - No options (the defaults)
         - --watch
         - --mac
         - --module
