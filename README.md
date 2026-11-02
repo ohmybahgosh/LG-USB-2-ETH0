@@ -8,6 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/ohmybahgosh/LG-USB-2-ETH0?sort=semver)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Listed in awesome-webos](https://img.shields.io/badge/listed%20in-awesome--webos-fc60a8)](https://github.com/tolgakurtuluss/awesome-webos)
+[![Project page](https://img.shields.io/badge/ohmybahgosh.dev-project%20page-3ddc97)](https://ohmybahgosh.dev/lg-usb-2-eth0/)
 [![GitHub stars](https://img.shields.io/github/stars/ohmybahgosh/LG-USB-2-ETH0?style=social)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
 
 <img src="assets/banner.svg" width="100%" alt="LG-USB-2-ETH0: a terminal on the TV runs apply, the built-in port becomes eth2 and the USB adapter becomes eth0" />
