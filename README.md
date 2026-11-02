@@ -55,7 +55,32 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 
 ## The TV app
 
-The easiest way in.  It runs the same script underneath, as root through the Homebrew Channel, so you don't need SSH at all.
+The easiest way in.  It runs the same script underneath, as root through the Homebrew Channel, so you don't need SSH at all.  It works with the remote's arrows and OK, or the Magic Remote pointer.
+
+<p align="center">
+  <img src="assets/app-demo.gif" width="100%" alt="The TV app: moving down to Speed test, running it (272 down, 287 up, 7 ms), then opening the GitHub report QR code" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-home.png" alt="Status screen: USB adapter is eth0, Realtek RTL8156 on r8152_oot, 1000 Mbit/s link over USB 2.0, with switches for Run at every boot, Faster Realtek driver and Follow plug and unplug" /></td>
+    <td width="50%"><img src="assets/screenshots/app-speed.png" alt="Speed test result: 272 Mbit/s download, 287 Mbit/s upload, 7 ms latency, over eth0 to Cloudflare" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Status at a glance</b></td>
+    <td align="center"><b>Speed test</b></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
+    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.3.2, you have v2.3.1, downloads and installs" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Report for GitHub</b></td>
+    <td align="center"><b>Updates</b></td>
+  </tr>
+</table>
+
+<sub>Screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found.
 - **Run at every boot**, **Follow plug and unplug**, and **Switch now**, as on/off switches.
@@ -149,6 +174,8 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 </details>
 
 ## What it fixes
+
+<img src="assets/how-it-works.svg" width="100%" alt="Before: webOS and its apps use eth0, the 100 Mbit/s built-in port, and the USB adapter sits unused as eth1.  After: the USB adapter is eth0 at about 300 Mbit/s, and the built-in port is parked as eth2." />
 
 | Problem | What you see | What this does |
 |---------|--------------|----------------|
@@ -284,6 +311,8 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 Don't expect gigabit.  The TV's USB controller and CPU are the limit.  Measured on real TVs:
 
+<img src="assets/speeds.svg" width="100%" alt="Bar chart of measured speeds in Mbit/s: built-in port about 95; RTL8153 on the generic cdc_ncm driver 200 to 255; the same adapter with the r8152 module 290 to 330; RTL8156 on a C2 over USB 2.0 with r8152_oot 272 down and 287 up." />
+
 | Setup | Speed | Source |
 |-------|-------|--------|
 | Built-in port (any model) | about 95 Mbit/s | 100 Mbit/s port |
@@ -346,6 +375,8 @@ tests/run.sh busybox watch   # only tests whose name contains "watch"
 It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, keeping the faster driver after standby, the speed test, updates (refusing a bad checksum, for the app and the plain script), and the report.  A fake `curl` and `luna-send` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
+
+The app screenshots and the GIF above come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK and its manifest.
 

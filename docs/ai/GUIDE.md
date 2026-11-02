@@ -81,13 +81,14 @@ Four parts live in this repository:
 | Add something to the app | A button in `webos-app/src/index.html` (`data-action`), an entry in `actions` in `webos-app/src/app.js`, usually a script command with `--json`, and styles in `style.css` |
 | Change the GitHub report | `show_report` (the text), the report action in `app.js` (the QR link), `.github/ISSUE_TEMPLATE/compatibility-report.yml` (field ids must match the link's parameters) |
 | Change downloads | `fetch`, `get_driver`, `update_app`, `update_script`.  Keep them pinned and checked |
+| Change what the app looks like | `webos-app/src/`, then the README screenshots: `scripts/screenshots/take.js` (and `demo.js` for new data) |
 | Change the release | `.github/workflows/release.yml`, `webos-app/build.sh`, `webos-app/gen-manifest.js` |
 
 ## Testing without a TV
 
 The test suite fakes the TV: `LGU2E_ROOT` moves every path under a temporary folder, `LGU2E_SYSFS` points at a fake `/sys`, and `LGU2E_SYSWRITE` routes writes to sysfs files (bind, unbind) through `tests/fakebin/syswrite`, which acts out what the kernel would do.  `LGU2E_SETTLE`, `LGU2E_WATCH_EVERY`, `LGU2E_SPEED_SECS`, `LGU2E_SPEED_URL` and `LGU2E_RELEASES` shorten waits and point downloads at the fake `curl`.  These are for tests only.
 
-To preview the TV app in a desktop browser, open `webos-app/src/index.html` with a `window.LGU2E_DEMO = function (args, cb) { ... }` defined first.  It receives the script arguments and calls `cb(ok, stdout, stderr)` with made-up output (for example a saved `status --json`).
+To preview the TV app in a desktop browser, open `webos-app/src/index.html` with a `window.LGU2E_DEMO = function (args, cb) { ... }` defined first.  It receives the script arguments and calls `cb(ok, stdout, stderr)` with made-up output.  `scripts/screenshots/demo.js` is a ready one, and `scripts/screenshots/take.js` uses it to take the README screenshots and GIF (`sh webos-app/build.sh && node scripts/screenshots/take.js`, with Playwright and ffmpeg).  If a change shows up on screen, take them again; keep the data made up.
 
 ## Things that look like bugs but are on purpose
 

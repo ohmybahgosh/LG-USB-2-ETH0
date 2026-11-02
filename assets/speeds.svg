@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="470" viewBox="0 0 1280 470" role="img" aria-labelledby="t d">
+  <title id="t">Measured speeds</title>
+  <desc id="d">Measured on real LG TVs, in Mbit/s.  Built-in port: about 95.  RTL8153 on the generic cdc_ncm driver: 200 to 255.  The same adapter with the community r8152 module: 290 to 330.  RTL8156 on a C2 over USB 2.0 with r8152_oot: 272 down and 287 up.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f14"/>
+      <stop offset="1" stop-color="#101a16"/>
+    </linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#14a05c"/>
+      <stop offset="1" stop-color="#22e584"/>
+    </linearGradient>
+    <style>
+      .sans { font-family: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+      .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+      .bar { transform-box: fill-box; transform-origin: left center; animation: grow 1.6s cubic-bezier(.2,.8,.2,1) both; }
+      .b2 { animation-delay: .25s; } .b3 { animation-delay: .5s; } .b4 { animation-delay: .75s; } .b5 { animation-delay: .9s; }
+      @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+      .num { animation: fade .6s ease-out both; }
+      .n1 { animation-delay: 1.2s; } .n2 { animation-delay: 1.45s; } .n3 { animation-delay: 1.7s; } .n4 { animation-delay: 2s; }
+      @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { .bar, .num { animation: none; } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="470" fill="url(#bg)"/>
+
+  <text x="60" y="62" class="sans" font-size="16" font-weight="700" fill="#22e584" letter-spacing="3">REAL SPEEDS</text>
+  <text x="60" y="96" class="sans" font-size="28" font-weight="800" fill="#f2f5f3">Measured on real LG TVs, in Mbit/s</text>
+
+  <!-- grid: x = 430 + v * 2 (0..330) -->
+  <g stroke="#ffffff" stroke-opacity="0.06">
+    <line x1="430" y1="122" x2="430" y2="410"/>
+    <line x1="630" y1="122" x2="630" y2="410"/>
+    <line x1="830" y1="122" x2="830" y2="410"/>
+    <line x1="1030" y1="122" x2="1030" y2="410"/>
+  </g>
+  <g class="mono" font-size="14" fill="#5b6a63" text-anchor="middle">
+    <text x="430" y="434">0</text>
+    <text x="630" y="434">100</text>
+    <text x="830" y="434">200</text>
+    <text x="1030" y="434">300</text>
+  </g>
+
+  <!-- Row 1: built-in -->
+  <text x="60" y="152" class="sans" font-size="19" font-weight="700" fill="#e8efeb">Built-in port</text>
+  <text x="60" y="176" class="sans" font-size="15" fill="#6f7f78">any model, 100 Mbit/s port</text>
+  <rect class="bar" x="430" y="140" width="190" height="30" rx="8" fill="#febc2e" fill-opacity="0.85"/>
+  <text class="num n1 mono" x="634" y="162" font-size="17" font-weight="700" fill="#febc2e">~95</text>
+
+  <!-- Row 2: cdc_ncm -->
+  <text x="60" y="222" class="sans" font-size="19" font-weight="700" fill="#e8efeb">RTL8153, generic driver</text>
+  <text x="60" y="246" class="sans" font-size="15" fill="#6f7f78">2024 C4, webOS 25, cdc_ncm</text>
+  <rect class="bar b2" x="430" y="210" width="400" height="30" rx="8" fill="#22e584" fill-opacity="0.45"/>
+  <rect class="bar b2" x="430" y="210" width="510" height="30" rx="8" fill="#22e584" fill-opacity="0.18"/>
+  <text class="num n2 mono" x="954" y="232" font-size="17" font-weight="700" fill="#93a39b">200 to 255, with drops</text>
+
+  <!-- Row 3: r8152 -->
+  <text x="60" y="292" class="sans" font-size="19" font-weight="700" fill="#e8efeb">RTL8153, r8152 module</text>
+  <text x="60" y="316" class="sans" font-size="15" fill="#6f7f78">same TV, community driver</text>
+  <rect class="bar b3" x="430" y="280" width="660" height="30" rx="8" fill="#22e584" fill-opacity="0.25"/>
+  <rect class="bar b3" x="430" y="280" width="580" height="30" rx="8" fill="url(#g)"/>
+  <text class="num n3 mono" x="1104" y="302" font-size="17" font-weight="700" fill="#22e584">290 to 330</text>
+
+  <!-- Row 4: this repo, C2 -->
+  <text x="60" y="362" class="sans" font-size="19" font-weight="700" fill="#e8efeb">RTL8156 on a C2, USB 2.0</text>
+  <text x="60" y="386" class="sans" font-size="15" fill="#6f7f78">r8152_oot, measured with speedtest</text>
+  <rect class="bar b4" x="430" y="348" width="544" height="16" rx="6" fill="url(#g)"/>
+  <rect class="bar b5" x="430" y="368" width="574" height="16" rx="6" fill="#22e584" fill-opacity="0.55"/>
+  <text class="num n4 mono" x="1018" y="370" font-size="17" font-weight="700" fill="#22e584">272 down</text>
+  <text class="num n4 mono" x="1018" y="386" font-size="13" font-weight="600" fill="#93a39b">287 up</text>
+</svg>
