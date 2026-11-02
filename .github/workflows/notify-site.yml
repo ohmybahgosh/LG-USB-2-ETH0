@@ -1,0 +1,36 @@
+name: Notify ohmybahgosh.dev
+
+# Tells ohmybahgosh.dev about a new release right away, so the project page and
+# the Homebrew Channel repo (https://ohmybahgosh.dev/repo) update within minutes.
+# Needs a SITE_DISPATCH_TOKEN secret (fine-grained token for ohmybahgosh/ohmybahgosh.dev
+# with Contents: read and write).  Without it this does nothing, and the site still
+# catches up on its own within about 15 minutes.
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository_dispatch to the site
+        env:
+          TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::No SITE_DISPATCH_TOKEN secret; the site will pick this up on its next check."
+            exit 0
+          fi
+          curl -fsS -X POST https://api.github.com/repos/ohmybahgosh/ohmybahgosh.dev/dispatches \
+            -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            -d "{\"event_type\":\"release\",\"client_payload\":{\"repo\":\"$REPO\",\"tag\":\"$TAG\"}}"
+          echo "Notified ohmybahgosh.dev about $REPO $TAG"
