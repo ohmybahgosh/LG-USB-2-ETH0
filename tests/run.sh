@@ -827,6 +827,43 @@ test_get_driver_file_checked() {
     check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
 }
 
+offer_is() {
+    printf '%s' "$OUT" > "$SB/o.json"
+    python3 -c "import json,sys; v=json.load(open(sys.argv[1]))['driverOffer']; assert v==sys.argv[2], v" "$SB/o.json" "$1" || { echo "    driverOffer is not $1"; return 1; }
+}
+
+test_driver_offer() {
+    add_builtin
+    run status --json
+    check "no adapter: none" offer_is none
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    run status --json
+    check "other kernel: none" offer_is none
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run status --json
+    check "known kernel and Realtek: available" offer_is available
+    add_usb eth3 1-3 ax88179_178a 1 "00:0e:c6:00:00:02" 0b95 1790
+    remove_usb 1-1
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run status --json
+    check "known kernel but ASIX: none" offer_is none
+}
+
+test_driver_offer_states() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    run status --json
+    check "set up: active" offer_is active
+    FAKE_KERNEL=9.9.9 run status --json
+    check "kernel changed: wrong-kernel" offer_is wrong-kernel
+    printf 'x' >> "$SB/r8152_oot.ko"
+    run status --json
+    check "file changed: changed" offer_is changed
+    rm -f "$SB/r8152_oot.ko"
+    run status --json
+    check "file gone: missing" offer_is missing
+}
+
 t report test_report
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
@@ -852,6 +889,8 @@ t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t boot_skips_changed_module test_boot_skips_changed_module
 t get_driver_download_fails test_get_driver_download_fails
 t get_driver_file_checked test_get_driver_file_checked
+t driver_offer test_driver_offer
+t driver_offer_states test_driver_offer_states
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

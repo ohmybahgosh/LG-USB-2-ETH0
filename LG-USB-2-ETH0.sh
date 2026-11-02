@@ -723,6 +723,34 @@ get_driver() {
     echo "  sh $0 install --module $_dest"
 }
 
+# Where the faster-driver option stands, so it's only offered when it fits:
+#   active       a --module driver is set up and passes its checks
+#   wrong-kernel set up, but built for another kernel (after a firmware update)
+#   changed      set up, but the file changed since install
+#   missing      set up, but the file is gone
+#   available    not set up; a driver is known for this exact kernel and the
+#                adapter plugged in now is a Realtek one it can run
+#   none         nothing to offer: no known driver for this kernel, or no
+#                adapter, or an adapter the driver isn't for
+driver_offer() {
+    _om=$(hook_setting MODULE)
+    if [ -n "$_om" ]; then
+        [ -r "$_om" ] || { echo missing; return; }
+        _ok=$(module_kernel "$_om")
+        [ -z "$_ok" ] || [ "$_ok" = "$(uname -r)" ] || { echo wrong-kernel; return; }
+        _os=$(hook_setting MODULE_SHA)
+        if [ -n "$_os" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_om" | awk '{print $1}')" != "$_os" ]; then
+            echo changed; return
+        fi
+        echo active; return
+    fi
+    known_driver "$(uname -r)" >/dev/null || { echo none; return; }
+    _oa=$(find_usb_nic)
+    [ -n "$_oa" ] || { echo none; return; }
+    _oid="$(sysval "$NET/$_oa/device/../idVendor"):$(sysval "$NET/$_oa/device/../idProduct")"
+    case "$(known_nic_id "$_oid")" in *Realtek*) echo available ;; *) echo none ;; esac
+}
+
 # === Hook state ===
 # enabled   the hook runs at boot (a symlink to this script, or a 2.0-2.2 copy)
 # broken    the hook is a symlink to a script that's gone (an app was removed)
@@ -1170,7 +1198,7 @@ show_status() {
     if [ -n "$_usb" ] && [ "$(nic_driver "$_usb")" = cdc_ncm ]; then
         if [ -n "$_hd" ]; then
             status_note "$_usb is still on cdc_ncm, not $_hd. Run 'apply', or check $LOG_FILE."
-        elif known_driver "$(uname -r)" >/dev/null; then
+        elif [ "$(driver_offer)" = available ]; then
             status_note "$_usb uses the generic cdc_ncm driver. A faster, steadier driver is known for this kernel: run 'get-driver'."
         fi
     fi
@@ -1281,8 +1309,8 @@ show_json() {
         "$(jb "$(hook_setting WATCH)")" "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
-    printf '"defaultRoute":%s,"knownDriver":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
-        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$_kf")" \
+    printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
+        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" \
         "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
     printf '"issues":%s,"notes":%s,"log":%s}\n' "$(jarr "$ISSUE_LIST")" "$(jarr "$NOTES")" "$(jarr "$(tail -n 8 "$LOG_FILE" 2>/dev/null)")"
 }
@@ -1357,7 +1385,9 @@ main_menu() {
         echo "6) Disable boot hook"
         echo "7) Enable boot hook"
         echo "8) Report for a GitHub issue"
-        echo "9) Get a better driver for this TV"
+        # Only offered when a driver is known for this exact kernel and adapter
+        _offer=$(driver_offer)
+        case "$_offer" in available) echo "9) Get the faster Realtek driver for this TV" ;; esac
         echo "0) Exit"
         read_answer "Choose an option: " || exit 1
         case "$ANSWER" in
@@ -1369,9 +1399,9 @@ main_menu() {
             6) disable_fix ;;
             7) enable_fix ;;
             8) show_report ;;
-            9) get_driver ;;
+            9) if [ "$_offer" = available ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
-            *) echo "Pick 0 to 9." ;;
+            *) echo "Pick one of the numbers shown." ;;
         esac
         read_answer "Press Enter for the menu..." || exit 0
     done

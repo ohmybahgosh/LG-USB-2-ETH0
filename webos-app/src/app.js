@@ -9,7 +9,14 @@
 (function () {
     'use strict';
 
-    var REPO = 'https://github.com/ohmybahgosh/LG-USB-2-ETH0';
+    var REPO_PATH = '/ohmybahgosh/LG-USB-2-ETH0';
+    var REPO = 'https://github.com' + REPO_PATH;
+
+    // Query-string encoding that keeps the URL short: spaces become + and the
+    // characters that are safe in a query value stay as they are
+    function q(v) {
+        return encodeURIComponent(v).replace(/%20/g, '+').replace(/%3A/g, ':').replace(/%2C/g, ',').replace(/%2F/g, '/');
+    }
     var HBC_EXEC = 'luna://org.webosbrew.hbchannel.service/exec';
     var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, ENTER: 13, BACK: 461, ESC: 27, BACKSPACE: 8 };
 
@@ -139,16 +146,23 @@
         // Toggles
         var bootOn = h.state === 'enabled';
         $('tog-boot').className = 'tog' + (bootOn ? ' on' : '');
-        $('tog-driver').className = 'tog' + (bootOn && h.module ? ' on' : '');
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
+        // The faster-driver row only appears when it fits this TV: a driver is
+        // known for this exact kernel and the adapter is a Realtek one, or a
+        // driver is already set up (so it can be turned off again).
+        var offer = s.driverOffer || 'none';
         var driverBtn = document.querySelector('[data-action="driver"]');
-        if (s.knownDriver || h.module) {
-            driverBtn.className = 'btn';
-            $('driver-hint').textContent = h.module ? (h.driver || 'custom module') : 'known for this TV';
-        } else {
-            driverBtn.className = 'btn disabled';
-            $('driver-hint').textContent = 'none known for this TV';
-        }
+        var hints = {
+            available: 'built for this TV\'s kernel',
+            active: h.driver || 'custom module',
+            'wrong-kernel': 'built for an older kernel, not loaded',
+            changed: 'file changed, not loaded',
+            missing: 'module file is missing'
+        };
+        driverBtn.style.display = offer === 'none' ? 'none' : '';
+        $('driver-hint').textContent = hints[offer] || '';
+        $('tog-driver').className = 'tog' + (offer !== 'none' && offer !== 'available' && bootOn ? ' on' : '');
+        if (current >= buttons().length) { current = buttons().length - 1; }
     }
 
     // ------------------------------------------------------------------ overlay
@@ -207,11 +221,12 @@
         driver: function () {
             if (!state) { return; }
             var h = state.hook;
-            if (h.state === 'enabled' && h.module) {
+            if (state.driverOffer === 'none') { return; }
+            if (h.module) {
                 confirmThen('Stop using the faster driver?', 'The boot hook stops loading it.  It stays in use until the next reboot.', function () {
                     act('Faster driver off', installArgs('--no-module'));
                 });
-            } else if (state.knownDriver) {
+            } else if (state.driverOffer === 'available') {
                 confirmThen('Use the faster Realtek driver?',
                     'This downloads a driver module built for this exact TV kernel by DonZoomik (github.com/DonZoomik/webos-r8152), checks its checksum, and loads it at every boot.  ' +
                     'Moving the adapter to it takes the network down for a moment.  Wi-Fi is a good way back in if anything goes wrong.',
@@ -233,26 +248,39 @@
         },
         report: function () {
             runScript('report', function (ok, out) {
-                // The issue form adds its own code block, so drop the fences
-                var report = (out || '').replace(/\x1b\[[0-9;]*m/g, '').replace(/^```\s*$/mg, '').trim();
+                // The issue form adds its own code block, so drop the fences.  Squeeze
+                // runs of spaces so the QR code stays easy to scan.
+                var report = (out || '').replace(/\x1b\[[0-9;]*m/g, '').replace(/^```\s*$/mg, '')
+                    .replace(/ {2,}/g, ' ').trim();
                 var s = state || { model: '', webos: '', webosRelease: '', firmware: '', adapter: null };
-                var url = REPO + '/issues/new?template=compatibility-report.yml' +
-                    '&title=' + encodeURIComponent('[Compat] ' + (s.model || 'LG TV') + ' + ' + (s.adapter ? (s.adapter.chip || s.adapter.id) : 'adapter')) +
-                    '&model=' + encodeURIComponent(s.model || '') +
-                    '&webos=' + encodeURIComponent((s.webos || '') + ' (' + (s.webosRelease || '') + '), firmware ' + (s.firmware || '')) +
-                    '&report=' + encodeURIComponent(report);
+                var a = s.adapter;
+                var adapter = a ? ((a.chip || 'USB adapter') + (a.id ? ' (' + a.id + ')' : '')) : '';
+                // The form has its own fields for the model and webOS, so the report
+                // field skips those lines.  Shorter URL, easier QR code.
+                var short = report.split('\n').filter(function (l) { return !/^(Model|webOS):/.test(l); }).join('\n');
+                var form = REPO_PATH + '/issues/new?template=compatibility-report.yml' +
+                    '&title=' + q('[Compat] ' + (s.model || 'LG TV') + ' + ' + (a ? (a.chip || a.id) : 'adapter')) +
+                    '&model=' + q(s.model || '') +
+                    '&webos=' + q((s.webos || '') + ' (' + (s.webosRelease || '') + '), firmware ' + (s.firmware || '')) +
+                    '&adapter=' + q(adapter) +
+                    '&report=' + q(short);
+                // The GitHub phone apps grab github.com/<owner>/<repo> links and open
+                // a blank issue, dropping the filled-in fields.  They leave /login
+                // alone, so the phone's browser opens it, and GitHub then forwards to
+                // the form (straight away if you're already signed in).
+                var url = 'https://github.com/login?return_to=' + encodeURIComponent(form);
                 var svg = '';
                 try {
                     var qr = window.qrcode(0, 'L');
                     qr.addData(url);
                     qr.make();
-                    svg = qr.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
+                    svg = qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
                 } catch (e) {
                     svg = '';
                 }
                 overlay('message', 'Report for GitHub',
                     '<div class="qr">' + svg + '<div>Scan this with your phone to open a compatibility report on GitHub, already filled in.  ' +
-                    'MAC addresses are hidden.<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
+                    'It opens in your browser so the details carry over.  Just pick the result and submit.  MAC addresses are hidden.<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
                     'Press OK or BACK to close.');
             });
         },
@@ -265,7 +293,12 @@
 
     // ------------------------------------------------------------------ remote / keyboard
 
-    function buttons() { return Array.prototype.slice.call(document.querySelectorAll('.btn')); }
+    // Only the buttons on screen, in order (hidden rows are skipped)
+    function buttons() {
+        return Array.prototype.slice.call(document.querySelectorAll('.btn')).filter(function (b) {
+            return b.style.display !== 'none';
+        });
+    }
     var current = 0;
     function focusCurrent() {
         var list = buttons();
@@ -304,10 +337,10 @@
     });
 
     // Magic Remote pointer: hovering moves focus, clicking acts
-    buttons().forEach(function (btn, i) {
-        btn.addEventListener('mouseover', function () { current = i; focusCurrent(); });
+    Array.prototype.slice.call(document.querySelectorAll('.btn')).forEach(function (btn) {
+        btn.addEventListener('mouseover', function () { current = buttons().indexOf(btn); focusCurrent(); });
         btn.addEventListener('click', function () {
-            current = i;
+            current = buttons().indexOf(btn);
             if (!overlayMode && btn.className.indexOf('disabled') < 0) { actions[btn.getAttribute('data-action')](); }
         });
     });

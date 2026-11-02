@@ -67,7 +67,7 @@ footer .right { margin: 0 0 0 auto; }
 .panel-body { font-size: 24px; color: #c9d4cf; }
 .panel-body pre { white-space: pre-wrap; word-break: break-word; font-size: 20px; color: #93a39b; max-height: 520px; overflow: hidden; margin: 0; }
 .panel-body .qr { display: flex; align-items: center; }
-.panel-body .qr svg { width: 420px; height: 420px; background: #fff; border-radius: 16px; margin-right: 44px; flex: none; }
+.panel-body .qr svg { width: 480px; height: 480px; background: #fff; border-radius: 16px; margin-right: 44px; flex: none; }
 .panel-hint { margin-top: 28px; color: #6f7f78; font-size: 22px; }
 .spinner { width: 54px; height: 54px; border: 6px solid #2b3632; border-top-color: #22e584; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 24px; }
 @keyframes spin { to { transform: rotate(360deg); } }
