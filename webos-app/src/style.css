@@ -15,7 +15,7 @@ header img { width: 96px; height: 96px; margin-right: 28px; }
 header h1 { font-size: 54px; margin: 0; font-weight: 800; letter-spacing: -1px; }
 .meta { margin-left: auto; font-size: 22px; font-weight: 600; color: #6f7f78; }
 
-main { display: flex; margin-top: 64px; }
+main { display: flex; margin-top: 48px; }
 .card {
   flex: 1.25; margin-right: 48px; background: #111a17; border: 1px solid rgba(255, 255, 255, .07);
   border-radius: 28px; padding: 40px 44px; min-height: 700px;
@@ -43,8 +43,8 @@ td:first-child { color: #6f7f78; width: 34%; }
 
 .btn {
   display: flex; align-items: center; justify-content: space-between;
-  font-size: 30px; font-weight: 600; padding: 24px 32px; border-radius: 20px;
-  background: #16201c; margin-bottom: 18px; border: 3px solid transparent; outline: none;
+  font-size: 30px; font-weight: 600; padding: 19px 32px; border-radius: 20px;
+  background: #16201c; margin-bottom: 14px; border: 3px solid transparent; outline: none;
 }
 .btn small { display: block; font-size: 20px; color: #6f7f78; font-weight: 500; margin-top: 4px; }
 .btn > small { margin-top: 0; text-align: right; }
@@ -71,3 +71,14 @@ footer .right { margin: 0 0 0 auto; }
 .panel-hint { margin-top: 28px; color: #6f7f78; font-size: 22px; }
 .spinner { width: 54px; height: 54px; border: 6px solid #2b3632; border-top-color: #22e584; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 24px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Speed test */
+.speed { display: flex; margin: 10px 0 6px; }
+.tile { flex: 1; background: #16201c; border-radius: 22px; padding: 30px 32px; margin-right: 22px; }
+.tile:last-child { margin-right: 0; }
+.tile small { display: block; font-size: 22px; color: #6f7f78; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; }
+.tile b { display: block; font-size: 84px; font-weight: 800; letter-spacing: -2px; margin: 10px 0 0; color: #e8efeb; }
+.tile b.wait { color: #2b3632; }
+.tile span { font-size: 24px; color: #93a39b; }
+.tile.run { box-shadow: inset 0 0 0 3px #22e584; }
+.speed-meta { margin-top: 22px; color: #93a39b; font-size: 22px; }

@@ -66,6 +66,7 @@ WATCH=0
 # current setting when 'install' is run again.
 SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0
 JSON=0
+PHASE=""
 DRIVER_FILE=""
 
 # === Helper Functions ===
@@ -113,6 +114,8 @@ Commands (no command opens the menu):
   status      Show the hook, the network interfaces and any problems
   doctor      Same as status
   report      Print a short report to paste into a GitHub issue
+  speedtest   Measure latency, download and upload speed through the TV's
+              current connection, against Cloudflare's nearest server
   get-driver  Download a better driver module known to work on this exact
               kernel, if there is one, and check its checksum. With
               --file PATH, check and use a copy you downloaded yourself
@@ -129,7 +132,9 @@ Options:
                      plugged in, and give eth0 back when it is unplugged
   --no-watch, --no-module, --no-mac
                      Turn that setting off again
-  --json             With status: machine-readable output (used by the TV app)
+  --json             With status or speedtest: machine-readable output (used
+                     by the TV app)
+  --phase PHASE      With speedtest: run only ping, down or up
 
 Running 'install' again keeps every setting you don't change.
   -h, --help         Show this help
@@ -1312,10 +1317,123 @@ show_json() {
     printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
         "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" \
         "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
+    if [ -n "$(speed_get down)$(speed_get up)" ]; then
+        printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"at":%s},' \
+            "$(js "$(speed_get iface)")" "$(js "$(speed_get server)")" "$(speed_get ping | grep . || echo null)" \
+            "$(speed_get down | grep . || echo null)" "$(speed_get up | grep . || echo null)" "$(speed_get at | grep . || echo null)"
+    else
+        printf '"speed":null,'
+    fi
     printf '"issues":%s,"notes":%s,"log":%s}\n' "$(jarr "$ISSUE_LIST")" "$(jarr "$NOTES")" "$(jarr "$(tail -n 8 "$LOG_FILE" 2>/dev/null)")"
 }
 
 # Hide the device-specific half of a MAC address in reports
+# === Speed test ===
+# Cloudflare's speed test endpoints: no account, and the nearest of their
+# servers answers.  Several streams at once, for a few seconds each way, like
+# speed.cloudflare.com itself.  Each transfer is 25 MB; a worker repeats
+# them until its time is up and reports its own rate, and the rates add up.
+SPEED_URL=${LGU2E_SPEED_URL:-https://speed.cloudflare.com}
+SPEED_SECS=${LGU2E_SPEED_SECS:-6}
+SPEED_STREAMS=4
+SPEED_CHUNK=25000000
+SPEED_FILE="$RUN_DIR/lg-usb-2-eth0.speed"
+
+# speed_worker down|up OUTFILE: write "bytes seconds" for this stream
+speed_worker() {
+    _se=$(( $(date +%s) + SPEED_SECS ))
+    _sb=0; _st=0; _sn=0
+    while [ "$_sn" -lt 20 ]; do
+        _sl=$(( _se - $(date +%s) ))
+        # Always at least one transfer, even if the clock just ticked over
+        if [ "$_sl" -le 0 ]; then
+            [ "$_sn" = 0 ] || break
+            _sl=1
+        fi
+        if [ "$1" = down ]; then
+            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
+        else
+            _sr=$(head -c "$SPEED_CHUNK" /dev/zero | curl -s -o /dev/null --max-time "$_sl" -X POST \
+                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total}' "$SPEED_URL/__up" 2>/dev/null)
+        fi
+        case "$_sr" in *[0-9]' '[0-9]*) ;; *) break ;; esac
+        _sb=$(awk -v a="$_sb" -v b="${_sr% *}" 'BEGIN { printf "%.0f", a + b }')
+        _st=$(awk -v a="$_st" -v b="${_sr#* }" 'BEGIN { printf "%.3f", a + b }')
+        _sn=$((_sn + 1))
+    done
+    echo "$_sb $_st" > "$2"
+}
+
+# speed_run down|up: Mbit/s over all streams, or nothing if it failed
+speed_run() {
+    _sp="$RUN_DIR/lg-usb-2-eth0.sp"
+    _si=1
+    while [ "$_si" -le "$SPEED_STREAMS" ]; do
+        speed_worker "$1" "$_sp.$_si" &
+        _si=$((_si + 1))
+    done
+    wait
+    cat "$_sp".* 2>/dev/null | awk '$2 > 0 { r += $1 * 8 / $2 / 1000000 } END { if (r > 0) printf "%.0f", r }'
+    rm -f "$_sp".*
+}
+
+# speed_ping: the fastest of 5 TCP connects, in ms
+speed_ping() {
+    _pi=0
+    while [ "$_pi" -lt 5 ]; do
+        curl -s -o /dev/null --max-time 5 -w '%{time_connect} %{time_namelookup}\n' "$SPEED_URL/__down?bytes=0" 2>/dev/null
+        _pi=$((_pi + 1))
+    done | awk '$1 > 0 { v = ($1 - $2) * 1000; if (m == "" || v < m) m = v } END { if (m != "") printf "%.0f", m }'
+}
+
+# speed_set KEY VALUE: remember one result for the report and the app
+speed_set() {
+    { grep -v "^$1=" "$SPEED_FILE" 2>/dev/null; echo "$1=$2"; } > "$SPEED_FILE.new" && mv -f "$SPEED_FILE.new" "$SPEED_FILE"
+}
+speed_get() { sed -n "s/^$1=//p" "$SPEED_FILE" 2>/dev/null | head -n 1; }
+
+speed_test() {
+    command -v curl >/dev/null 2>&1 || error_exit "The speed test needs curl, and this TV doesn't have it."
+    case "$PHASE" in ''|ping|down|up) ;; *) error_exit "--phase is ping, down or up" ;; esac
+    _iface=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    [ -n "$_iface" ] || error_exit "The TV has no internet connection (no default route)."
+    _ping=""; _down=""; _up=""; _colo=""
+    if [ -z "$PHASE" ] || [ "$PHASE" = ping ]; then
+        [ "$JSON" = 1 ] || info "Speed test over $_iface, against Cloudflare.  This uses a few hundred MB of data."
+        _colo=$(curl -s -D - -o /dev/null --max-time 10 "$SPEED_URL/__down?bytes=0" 2>/dev/null | tr -d '\r' | sed -n 's/^[Cc]olo: *//p' | head -n 1)
+        _ping=$(speed_ping)
+        [ -n "$_ping" ] || error_exit "Couldn't reach $SPEED_URL.  Check the TV's internet connection."
+        rm -f "$SPEED_FILE"
+        speed_set ping "$_ping"; speed_set iface "$_iface"; speed_set server "$_colo"; speed_set at "$(date +%s)"
+    fi
+    if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then
+        _down=$(speed_run down)
+        speed_set down "$_down"
+    fi
+    if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then
+        _up=$(speed_run up)
+        speed_set up "$_up"
+    fi
+    if [ "$JSON" = 1 ]; then
+        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s}\n' \
+            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}"
+        return 0
+    fi
+    _where=Cloudflare
+    [ -n "$_colo" ] && _where="Cloudflare $_colo"
+    echo "Speed test over $_iface ($_where)"
+    [ -n "$_ping" ] && echo "  Latency   $_ping ms"
+    if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then echo "  Download  ${_down:-failed} ${_down:+Mbit/s}"; fi
+    if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
+}
+
+# The last speed test as a line for the report, or nothing
+speed_summary() {
+    _d=$(speed_get down); _u=$(speed_get up)
+    [ -n "$_d$_u" ] || return 0
+    echo "${_d:-?} down / ${_u:-?} up Mbit/s, $(speed_get ping) ms, over $(speed_get iface) (speedtest)"
+}
+
 mask_mac() { echo "$1" | sed 's/^\(..:..:..\):.*/\1:xx:xx:xx/'; }
 
 # Short, paste-ready report for GitHub issues. MAC addresses are masked.
@@ -1366,6 +1484,8 @@ show_report() {
     done
     echo "Drivers loaded:${_list:- none}"
     echo "Default route: $(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')"
+    _sp=$(speed_summary)
+    [ -n "$_sp" ] && echo "Speed:   $_sp"
     echo '```'
 }
 
@@ -1385,6 +1505,7 @@ main_menu() {
         echo "6) Disable boot hook"
         echo "7) Enable boot hook"
         echo "8) Report for a GitHub issue"
+        echo "s) Speed test"
         # Only offered when a driver is known for this exact kernel and adapter
         _offer=$(driver_offer)
         case "$_offer" in available) echo "9) Get the faster Realtek driver for this TV" ;; esac
@@ -1399,6 +1520,7 @@ main_menu() {
             6) disable_fix ;;
             7) enable_fix ;;
             8) show_report ;;
+            s|S) speed_test ;;
             9) if [ "$_offer" = available ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
             *) echo "Pick one of the numbers shown." ;;
@@ -1439,13 +1561,14 @@ while [ $# -gt 0 ]; do
             [ -n "$DRIVER_FILE" ] || error_exit "--file needs the path to a downloaded driver module" ;;
         --no-mac) PIN_MAC=""; SET_MAC=1 ;;
         --json) JSON=1 ;;
+        --phase) shift; PHASE=$1 ;;
         --driver)
             shift
             DRIVER=$1; SET_MODULE=1
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|speedtest) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
@@ -1461,5 +1584,6 @@ case "$CMD" in
     status|doctor) if [ "$JSON" = 1 ]; then show_json; else show_status; fi ;;
     report) show_report ;;
     get-driver) get_driver ;;
+    speedtest) speed_test ;;
     "") main_menu ;;
 esac

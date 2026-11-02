@@ -189,6 +189,10 @@
         } else {
             html += row('Adapter', 'none');
         }
+        if (s.speed && (s.speed.downMbps || s.speed.upMbps)) {
+            html += row('Speed', esc((s.speed.downMbps || '?') + ' down · ' + (s.speed.upMbps || '?') + ' up Mbit/s' +
+                (s.speed.pingMs !== null ? ' · ' + s.speed.pingMs + ' ms' : '')));
+        }
         if (b) { html += row('Built-in port', esc(b.name + ' · ' + (b.carrier ? 'cable in' : 'no cable'))); }
         if (w) { html += row('Wi-Fi', w.carrier ? '<span class="warn">connected</span>' : 'off'); }
         var hookText = { enabled: 'on', disabled: 'off (disabled)', none: 'off', broken: 'broken link', legacy: 'old v1 hook', 'legacy-disabled': 'old v1 hook' }[h.state] || h.state;
@@ -304,6 +308,49 @@
                 act('Switch now', 'apply -y', null, true);
             });
         },
+        speed: function () {
+            if (busy) { return; }
+            busy = true;
+            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '' };
+            function tile(label, value, unit, running) {
+                return '<div class="tile' + (running ? ' run' : '') + '"><small>' + label + '</small>' +
+                    (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
+                    '<span>' + unit + '</span></div>';
+            }
+            function draw(stage, done) {
+                var where = r.interface ? 'Over ' + r.interface + (r.server ? ', to Cloudflare\'s ' + r.server + ' server' : ', to Cloudflare') + '.' : 'Finding the nearest Cloudflare server…';
+                overlay(done ? 'message' : 'busy', done ? 'Speed test' : 'Speed test: ' + stage,
+                    '<div class="speed">' + tile('Download', r.downMbps, 'Mbit/s', stage === 'download') +
+                    tile('Upload', r.upMbps, 'Mbit/s', stage === 'upload') + tile('Latency', r.pingMs, 'ms', stage === 'latency') +
+                    '</div><div class="speed-meta">' + esc(where) + '  Uses a few hundred MB of data.</div>',
+                    done ? 'Press OK or BACK to close.' : 'This takes about 15 seconds.');
+            }
+            function fail(text) {
+                busy = false;
+                overlay('message', 'Speed test: something went wrong',
+                    '<pre>' + esc((text || 'No answer from the script.').replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>', 'Press OK or BACK to close.');
+                refresh();
+            }
+            function step(phase, stage, next) {
+                draw(stage, false);
+                runScript('speedtest --json --phase ' + phase, function (ok, out, err) {
+                    var d = null;
+                    try { d = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { d = null; }
+                    if (!d) { fail(out || err); return; }
+                    for (var k in d) { if (d[k] !== null && d[k] !== '') { r[k] = d[k]; } }
+                    next();
+                });
+            }
+            step('ping', 'latency', function () {
+                step('down', 'download', function () {
+                    step('up', 'upload', function () {
+                        busy = false;
+                        draw('', true);
+                        refresh();
+                    });
+                });
+            });
+        },
         report: function () {
             runScript('report', function (ok, out) {
                 // The issue form adds its own code block, so drop the fences.  Squeeze
@@ -321,6 +368,8 @@
                     '&model=' + q(s.model || '') +
                     '&webos=' + q((s.webos || '') + ' (' + (s.webosRelease || '') + '), firmware ' + (s.firmware || '')) +
                     '&adapter=' + q(adapter) +
+                    (s.speed && s.speed.downMbps ? '&speed=' + q(s.speed.downMbps + ' down / ' + (s.speed.upMbps || '?') +
+                        ' up Mbit/s with the app\'s speed test' + (a && a.bus ? ' (' + a.bus + ')' : '')) : '') +
                     '&result=' + q(guessResult(s)) +
                     (usedOptions(s) ? '&options=' + q(usedOptions(s)) : '') +
                     '&report=' + q(short);

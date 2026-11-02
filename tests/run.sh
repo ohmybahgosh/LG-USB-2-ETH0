@@ -150,7 +150,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" LGU2E_SPEED_SECS=1 \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -199,6 +199,11 @@ check() {
 is() { [ "$(kind "$1")" = "$2" ] || { echo "    $1 is $(kind "$1"), wanted $2"; return 1; }; }
 has() { case "$OUT" in *"$1"*) return 0 ;; esac; echo "    output lacks: $1"; return 1; }
 lacks() { case "$OUT" in *"$1"*) echo "    output has: $1"; return 1 ;; esac; return 0; }
+# json_ok JSON EXPR: JSON parses and the Python expression on it (as d) holds
+json_ok() {
+    printf '%s' "$1" | python3 -c 'import json, sys; d = json.loads(sys.stdin.read()); sys.exit(0 if eval(sys.argv[1]) else 1)' "$2" \
+        || { echo "    json check failed: $2"; return 1; }
+}
 rc_is() { [ "$RC" = "$1" ] || { echo "    exit code $RC, wanted $1"; return 1; }; }
 
 t() {
@@ -806,6 +811,40 @@ test_boot_skips_changed_module() {
     check "apply won't load it either" test ! -e "$STATE/insmod.log"
 }
 
+test_speedtest() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run speedtest
+    check "exit 0" rc_is 0
+    check "names the interface and server" has "Speed test over eth0 (Cloudflare TST)"
+    check "latency" has "Latency   12 ms"
+    check "download adds the streams" has "Download  1600 Mbit/s"
+    check "upload" has "Upload    1600 Mbit/s"
+    check "https to Cloudflare only" sh -c "! grep -v 'https://speed.cloudflare.com/__' '$STATE/curl.log' | grep -q ."
+    run report
+    check "report has the speed" has "Speed:   1600 down / 1600 up Mbit/s, 12 ms, over eth0"
+    run status --json
+    check "status json has the speed" json_ok "$OUT" "d['speed']['downMbps'] == 1600 and d['speed']['interface'] == 'eth0'"
+    run speedtest --json --phase down
+    check "one phase as json" json_ok "$OUT" "d['downMbps'] == 1600 and d['upMbps'] is None and d['pingMs'] is None"
+}
+
+test_speedtest_offline() {
+    add_builtin
+    run speedtest
+    check "exit 1 without a route" rc_is 1
+    check "says why" has "no internet connection"
+    echo "default via 192.168.1.1 dev eth2" > "$STATE/route"
+    touch "$STATE/curl_fail"
+    run speedtest
+    check "exit 1 when unreachable" rc_is 1
+    check "says it couldn't reach it" has "Couldn't reach"
+    run status --json
+    check "no speed in json" json_ok "$OUT" "d['speed'] is None"
+}
+
 test_get_driver_download_fails() {
     add_builtin
     touch "$STATE/curl_fail"
@@ -876,6 +915,8 @@ t status_suggests_driver test_status_suggests_driver
 t autobind_hook_noticed test_autobind_hook_noticed
 t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
+t speedtest test_speedtest
+t speedtest_offline test_speedtest_offline
 t hook_is_link_to_copy test_hook_is_link_to_copy
 t install_keeps_settings test_install_keeps_settings
 t upgrade_from_copied_hook test_upgrade_from_copied_hook
