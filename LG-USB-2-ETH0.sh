@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.2"
+VERSION="2.3"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -34,9 +34,15 @@ HOOK="$INIT_DIR/S01fix-eth"
 DISABLED_HOOK="${LGU2E_ROOT}/var/lib/webosbrew/S01fix-eth.disabled"
 # Where v1 put a disabled hook (inside init.d, so it may have kept running)
 OLD_DISABLED_HOOK="$INIT_DIR/S01fix-eth.disabled"
-LOG_FILE="${LGU2E_ROOT}/tmp/lg-usb-2-eth0.log"
-# The boot hook's background job writes its process ID here
-PID_FILE="${LGU2E_ROOT}/tmp/lg-usb-2-eth0.pid"
+# Settings for the boot hook. The hook itself is a symlink to this script.
+CONF="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.conf"
+# Small log kept with the Homebrew Channel's files, as its guidelines ask
+LOG_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.log"
+# Per-boot state (RAM): background job PID, takeover tries, live-switch output
+RUN_DIR="${LGU2E_ROOT}/tmp"
+PID_FILE="$RUN_DIR/lg-usb-2-eth0.pid"
+# Where a copy of the script lives when it isn't run from the TV app
+SCRIPT_HOME="${LGU2E_ROOT}/home/root/lg-usb-2-eth0"
 OS_INFO="${LGU2E_ROOT}/var/run/nyx/os_info.json"
 HBC_DIR="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service"
 MARKER="Managed by LG-USB-2-ETH0"
@@ -54,6 +60,10 @@ PARK_NAME="eth2"
 MODULE=""
 DRIVER=""
 WATCH=0
+# Which options were given on the command line. Anything not given keeps its
+# current setting when 'install' is run again.
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0
+JSON=0
 
 # === Helper Functions ===
 log() { printf '%b%s%b\n' "$1" "$2" "$NC"; }
@@ -113,6 +123,11 @@ Options:
                      from the generic cdc_ncm driver over to it
   --watch            Keep watching after boot: swap the adapter in when it is
                      plugged in, and give eth0 back when it is unplugged
+  --no-watch, --no-module, --no-mac
+                     Turn that setting off again
+  --json             With status: machine-readable output (used by the TV app)
+
+Running 'install' again keeps every setting you don't change.
   -h, --help         Show this help
 EOF
 }
@@ -358,7 +373,7 @@ disable_sg() {
 # over to $DRIVER. If that doesn't take within a few seconds, give it back to
 # cdc_ncm. Each device gets one try per boot, so a driver that doesn't support
 # it can't cause repeated drops.
-TAKEOVER_STATE=${LOG_FILE%.log}.takeover
+TAKEOVER_STATE=${RUN_DIR:-/tmp}/lg-usb-2-eth0.takeover
 take_over() {
     [ -n "$DRIVER" ] || return 0
     if [ ! -d "$USB_DRIVERS/$DRIVER" ]; then
@@ -532,10 +547,11 @@ resolve_driver() {
 
 # For apply: use the installed hook's module unless one was given
 use_hook_driver() {
-    if [ -z "$MODULE" ] && [ "$(hook_state)" = enabled ]; then
+    if [ "$SET_MODULE" = 0 ] && [ "$(hook_state)" = enabled ]; then
         MODULE=$(hook_setting MODULE)
         DRIVER=$(hook_setting DRIVER)
     fi
+    if [ "$SET_MAC" = 0 ] && [ "$(hook_state)" = enabled ]; then PIN_MAC=$(hook_setting PIN_MAC); fi
     resolve_driver
 }
 
@@ -593,12 +609,18 @@ get_driver() {
 }
 
 # === Hook state ===
+# enabled   the hook runs at boot (a symlink to this script, or a 2.0-2.2 copy)
+# broken    the hook is a symlink to a script that's gone (an app was removed)
+# legacy    a v1 hook, which renames eth0 even with no adapter
+# legacy-disabled, disabled, none
 hook_state() {
-    if [ -f "$HOOK" ]; then
+    if [ -L "$HOOK" ]; then
+        if [ -r "$HOOK" ]; then echo enabled; else echo broken; fi
+    elif [ -f "$HOOK" ]; then
         if grep -q "$MARKER" "$HOOK" 2>/dev/null; then echo enabled; else echo legacy; fi
     elif [ -f "$OLD_DISABLED_HOOK" ]; then
         echo legacy-disabled
-    elif [ -f "$DISABLED_HOOK" ]; then
+    elif [ -e "$DISABLED_HOOK" ] || [ -L "$DISABLED_HOOK" ]; then
         echo disabled
     else
         echo none
@@ -623,38 +645,100 @@ watcher_pid() {
     kill -0 "$_pid" 2>/dev/null && echo "$_pid"
 }
 
+# A saved setting: from the settings file, or from a 2.0-2.2 hook that kept
+# its settings inside itself
 hook_setting() {
-    _f=$HOOK
-    [ -f "$_f" ] || _f=$DISABLED_HOOK
-    sed -n "s/^$1=\"\(.*\)\"$/\1/p" "$_f" 2>/dev/null | head -n 1
+    for _f in "$CONF" "$HOOK" "$DISABLED_HOOK"; do
+        [ -f "$_f" ] && [ ! -L "$_f" ] || continue
+        grep -q "^$1=" "$_f" 2>/dev/null || continue
+        sed -n "s/^$1=\"\(.*\)\"$/\1/p" "$_f" 2>/dev/null | head -n 1
+        return 0
+    done
 }
 
-# shellcheck disable=SC2016 # the hook expands these itself at boot
+# Check settings before they're used as root, wherever they came from
+settings_ok() {
+    case "$WAIT_SECS" in ''|*[!0-9]*) return 1 ;; esac
+    case "$WATCH" in 0|1) ;; *) return 1 ;; esac
+    case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
+    case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
+    case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
+    case "$DRIVER" in *[!A-Za-z0-9_]*) return 1 ;; esac
+    [ -z "$PIN_MAC" ] || echo "$PIN_MAC" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || return 1
+    return 0
+}
+
+# Load saved settings into the variables, except ones given on the command line
+load_settings() {
+    if [ "$SET_MAC" = 0 ]; then PIN_MAC=$(hook_setting PIN_MAC); fi
+    if [ "$SET_WAIT" = 0 ]; then _v=$(hook_setting WAIT_SECS); [ -n "$_v" ] && WAIT_SECS=$_v; fi
+    if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); fi
+    if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
+    _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
+    return 0
+}
+
+# Absolute path of this script
+self_path() {
+    case "$0" in /*) _sp=$0 ;; *) _sp="$(pwd)/$0" ;; esac
+    readlink -f "$_sp" 2>/dev/null || echo "$_sp"
+}
+
+# What the boot hook links to. Inside the TV app, the app's own copy. Otherwise
+# a copy in /home/root/lg-usb-2-eth0, so the hook doesn't point at /tmp.
+hook_target() {
+    _self=$(self_path)
+    case "$_self" in
+        */usr/palm/applications/*)
+            # run-parts skips files that aren't executable. If the app's copy
+            # can't be made executable, fall back to a copy in /home/root.
+            [ -x "$_self" ] || chmod 755 "$_self" 2>/dev/null
+            if [ -x "$_self" ]; then echo "$_self"; return 0; fi ;;
+    esac
+    _dst="$SCRIPT_HOME/LG-USB-2-ETH0.sh"
+    if [ "$_self" != "$(readlink -f "$_dst" 2>/dev/null)" ]; then
+        mkdir -p "$SCRIPT_HOME" || return 1
+        { cp -f "$_self" "$_dst.new" && chmod 755 "$_dst.new" && mv -f "$_dst.new" "$_dst"; } || return 1
+    fi
+    echo "$_dst"
+}
+
+# Save the settings, then point the boot hook at this script. The Homebrew
+# Channel's rules want startup scripts symlinked, not copied, so an updated
+# script (or app) is picked up without reinstalling the hook.
 write_hook() {
-    mkdir -p "$INIT_DIR" || error_exit "Could not create $INIT_DIR."
-    _tmp="$HOOK.new"
+    mkdir -p "$INIT_DIR" "${CONF%/*}" || error_exit "Could not create $INIT_DIR."
     {
-        echo '#!/bin/sh'
-        echo "# $MARKER v$VERSION. Change it with the LG-USB-2-ETH0 script, not by hand."
-        echo "# Waits in the background for a USB Ethernet adapter, then makes it eth0."
+        echo "# $MARKER v$VERSION. Change it with: sh LG-USB-2-ETH0.sh install [options]"
         echo "PIN_MAC=\"$PIN_MAC\""
         echo "WAIT_SECS=\"$WAIT_SECS\""
         echo "PARK_NAME=\"$PARK_NAME\""
         echo "MODULE=\"$MODULE\""
         echo "DRIVER=\"$DRIVER\""
         echo "WATCH=\"$WATCH\""
-        echo "PID_FILE=\"$PID_FILE\""
-        echo "LOG_FILE=\"$LOG_FILE\""
-        echo 'PATH=$PATH:/usr/sbin:/usr/bin:/sbin:/bin'
-        printf '%s\n' "$CORE"
-        echo '# Keep the RAM log small'
-        echo '[ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt 32768 ] && mv -f "$LOG_FILE" "$LOG_FILE.1"'
-        echo '( boot_run ) >> "$LOG_FILE" 2>&1 < /dev/null &'
-        echo 'echo $! > "$PID_FILE"'
-        echo 'exit 0'
-    } > "$_tmp" || error_exit "Could not write $_tmp."
-    { chmod 755 "$_tmp" && mv -f "$_tmp" "$HOOK"; } || error_exit "Could not install $HOOK."
+    } > "$CONF.new" || error_exit "Could not write $CONF."
+    mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
+    _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
+    { ln -sfn "$_target" "$HOOK.new" && mv -f "$HOOK.new" "$HOOK"; } || error_exit "Could not install $HOOK."
     rm -f "$DISABLED_HOOK" "$OLD_DISABLED_HOOK"
+}
+
+# Run by the Homebrew Channel at boot, through the S01fix-eth symlink. Starts
+# the background job and returns at once. Does nothing without valid settings.
+boot_main() {
+    PATH=$PATH:/usr/sbin:/usr/bin:/sbin:/bin
+    [ -f "$CONF" ] || exit 0
+    load_settings
+    mkdir -p "$RUN_DIR" "${LOG_FILE%/*}" 2>/dev/null
+    if ! settings_ok; then
+        echo "=== $(date) boot hook: $CONF has invalid settings, so nothing was changed ===" >> "$LOG_FILE"
+        exit 0
+    fi
+    # Keep the log small
+    [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt 32768 ] && mv -f "$LOG_FILE" "$LOG_FILE.1"
+    ( boot_run ) >> "$LOG_FILE" 2>&1 < /dev/null &
+    echo $! > "$PID_FILE"
+    exit 0
 }
 
 # === Live changes ===
@@ -683,14 +767,16 @@ run_detached() {
         confirm "Go ahead?" || { echo "Cancelled. Nothing changed."; return 1; }
     fi
     _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"
-LOG_FILE=\"$LOG_FILE\"
+LOG_FILE=\"$LOG_FILE\"; RUN_DIR=\"$RUN_DIR\"
 $CORE
 $_what"
-    : > "$LOG_FILE.now"
+    _now="$RUN_DIR/lg-usb-2-eth0.now"
+    mkdir -p "$RUN_DIR" "${LOG_FILE%/*}" 2>/dev/null
+    : > "$_now"
     if command -v setsid >/dev/null 2>&1; then
-        setsid sh -c "$_job" > "$LOG_FILE.now" 2>&1 < /dev/null &
+        setsid sh -c "$_job" > "$_now" 2>&1 < /dev/null &
     else
-        nohup sh -c "$_job" > "$LOG_FILE.now" 2>&1 < /dev/null &
+        nohup sh -c "$_job" > "$_now" 2>&1 < /dev/null &
     fi
     _pid=$!
     _i=0
@@ -698,11 +784,11 @@ $_what"
         sleep 1
         _i=$((_i + 1))
     done
-    cat "$LOG_FILE.now" 2>/dev/null
+    cat "$_now" 2>/dev/null
     if kill -0 "$_pid" 2>/dev/null; then
         warn "Still working in the background. Run 'status' in a minute to see how it went."
     fi
-    { echo "=== $(date) $_what (by hand) ==="; cat "$LOG_FILE.now"; } >> "$LOG_FILE" 2>/dev/null
+    { echo "=== $(date) $_what (by hand) ==="; cat "$_now"; } >> "$LOG_FILE" 2>/dev/null
     return 0
 }
 
@@ -724,6 +810,8 @@ show_plan() {
 install_fix() {
     preflight
     hbc_present || error_exit "Homebrew Channel not found. It runs the boot hook, so install it first."
+    load_settings
+    settings_ok || error_exit "The saved settings in $CONF aren't valid. Run 'uninstall', then 'install' again."
     resolve_driver
     show_plan
     info "At every boot the hook will:"
@@ -732,7 +820,7 @@ install_fix() {
     echo "  2. If one shows up, rename the built-in port to $PARK_NAME and the adapter to eth0"
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
-    echo "It writes $HOOK and nothing else."
+    echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
     esac
@@ -755,11 +843,12 @@ install_fix() {
 uninstall_fix() {
     preflight
     if [ "$(hook_state)" = none ]; then
+        rm -f "$CONF"
         info "No boot hook installed."
     else
         confirm "Remove the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
         stop_watcher
-        rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" || error_exit "Could not remove the hook."
+        rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF" || error_exit "Could not remove the hook."
         success "Boot hook removed."
     fi
     _bi=$(find_builtin_nic)
@@ -772,9 +861,9 @@ uninstall_fix() {
 
 disable_fix() {
     case "$(hook_state)" in
-        enabled|legacy)
+        enabled|legacy|broken)
             stop_watcher
-            { chmod 644 "$HOOK" && mv -f "$HOOK" "$DISABLED_HOOK"; } || error_exit "Could not disable the hook."
+            { { [ -L "$HOOK" ] || chmod 644 "$HOOK"; } && mv -f "$HOOK" "$DISABLED_HOOK"; } || error_exit "Could not disable the hook."
             success "Hook disabled. It won't run at boot until you enable it." ;;
         legacy-disabled)
             { chmod 644 "$OLD_DISABLED_HOOK" && mv -f "$OLD_DISABLED_HOOK" "$DISABLED_HOOK"; } || error_exit "Could not move the old hook."
@@ -789,12 +878,12 @@ enable_fix() {
     case "$(hook_state)" in
         disabled) _from=$DISABLED_HOOK ;;
         legacy-disabled) _from=$OLD_DISABLED_HOOK ;;
-        enabled|legacy) info "The hook is already enabled."; return 0 ;;
+        enabled|legacy|broken) info "The hook is already enabled."; return 0 ;;
         *) warn "No boot hook installed. Use 'install'."; return 0 ;;
     esac
-    { mv -f "$_from" "$HOOK" && chmod 755 "$HOOK"; } || error_exit "Could not enable the hook."
+    { mv -f "$_from" "$HOOK" && { [ -L "$HOOK" ] || chmod 755 "$HOOK"; }; } || error_exit "Could not enable the hook."
     success "Hook enabled. It runs at the next boot."
-    grep -q "$MARKER" "$HOOK" || warn "This is the v1 hook. Run 'install' to upgrade it."
+    [ -L "$HOOK" ] || grep -q "$MARKER" "$HOOK" || warn "This is the v1 hook. Run 'install' to upgrade it."
 }
 
 apply_now() {
@@ -812,7 +901,11 @@ revert_now() { preflight; run_detached swap_out; }
 # Known USB Ethernet chips (vendor:product), to spot an adapter with no driver
 known_nic_id() {
     case "$1" in
-        0bda:8050|0bda:8052|0bda:8053|0bda:8151|0bda:8152|0bda:8153|0bda:8155|0bda:8156|0bda:8157|0bda:815a) echo "Realtek RTL815x" ;;
+        0bda:8152) echo "Realtek RTL8152" ;;
+        0bda:8153) echo "Realtek RTL8153" ;;
+        0bda:8156) echo "Realtek RTL8156" ;;
+        0bda:8157) echo "Realtek RTL8157" ;;
+        0bda:8050|0bda:8052|0bda:8053|0bda:8151|0bda:8155|0bda:815a) echo "Realtek RTL815x" ;;
         0b95:1790|0b95:178a|0b95:1780) echo "ASIX AX88179/178A" ;;
         0b95:7720|0b95:772a|0b95:772b|0b95:7e2b|0b95:1720|05ac:1402) echo "ASIX AX88772/88172" ;;
         0424:7500|0424:7505|0424:9500|0424:ec00) echo "Microchip/SMSC" ;;
@@ -837,6 +930,7 @@ iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}';
 
 show_status() {
     ISSUES=0
+    ISSUE_LIST=""
     NOTES=""
     echo
     log "$CYAN" "=== LG-USB-2-ETH0 v$VERSION status ==="
@@ -846,7 +940,12 @@ show_status() {
     log "$CYAN" "Boot hook"
     case "$(hook_state)" in
         enabled)
-            log "$GREEN" "  Installed and enabled ($HOOK)"
+            if [ -L "$HOOK" ]; then
+                log "$GREEN" "  Installed and enabled ($HOOK -> $(readlink "$HOOK"))"
+            else
+                log "$GREEN" "  Installed and enabled ($HOOK)"
+                status_note "The hook is a copy from an older version. Run 'install' to switch it to a link (your settings are kept)."
+            fi
             _s="  Waits $(hook_setting WAIT_SECS)s"
             [ -n "$(hook_setting PIN_MAC)" ] && _s="$_s, only for MAC $(hook_setting PIN_MAC)"
             [ -n "$(hook_setting MODULE)" ] && _s="$_s, loads $(hook_setting MODULE)"
@@ -861,6 +960,9 @@ show_status() {
             log "$YELLOW" "  Old v1 hook, \"disabled\" inside init.d ($OLD_DISABLED_HOOK)"
             status_issue "Busybox run-parts may still run that file at boot. Run 'disable' to move it out, or 'install' to upgrade." ;;
         disabled) log "$YELLOW" "  Installed but disabled ($DISABLED_HOOK)" ;;
+        broken)
+            log "$YELLOW" "  The hook points at a script that's gone ($(readlink "$HOOK"))"
+            status_issue "The app or script the boot hook used was removed. Run 'install' to relink it, or 'uninstall'." ;;
         none) echo "  Not installed" ;;
     esac
     hbc_present || status_issue "Homebrew Channel not found, so a boot hook would never run."
@@ -976,9 +1078,77 @@ show_status() {
     fi
     return 0
 }
-status_issue() { log "$RED" "  ! $1"; ISSUES=$((ISSUES + 1)); }
+status_issue() { log "$RED" "  ! $1"; ISSUES=$((ISSUES + 1)); ISSUE_LIST="$ISSUE_LIST
+$1"; }
 status_note() { NOTES="$NOTES
   - $1"; }
+
+# === JSON status (for the TV app) ===
+json_esc() { printf '%s' "$1" | tr -d '\000-\011\013-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 {printf "\\n"} {printf "%s", $0}'; }
+js() { printf '"%s"' "$(json_esc "$1")"; }
+jb() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
+# A JSON array from lines, skipping empty ones and the "  - " note prefix
+jarr() {
+    printf '['
+    _first=1
+    printf '%s\n' "$1" | while IFS= read -r _l; do
+        _l=${_l#  - }
+        [ -n "$_l" ] || continue
+        [ "$_first" = 1 ] || printf ','
+        _first=0
+        js "$_l"
+    done
+    printf ']'
+}
+
+# nic_json NAME: one interface as a JSON object, or null
+nic_json() {
+    [ -n "$1" ] && [ -e "$NET/$1" ] || { printf null; return; }
+    _jp="$NET/$1"
+    _jc=$(sysval "$_jp/carrier" 2>/dev/null)
+    _js=$(sysval "$_jp/speed" 2>/dev/null)
+    case "$_js" in ''|-1|*[!0-9]*) _js=0 ;; esac
+    printf '{"name":%s,"driver":%s,"mac":%s,"carrier":%s,"speed":%s,"ip":%s' \
+        "$(js "$1")" "$(js "$(nic_driver "$1")")" "$(js "$(nic_mac "$1")")" \
+        "$(jb "$([ "$_jc" = 1 ] && echo 1)")" "$_js" "$(js "$(iface_ipv4 "$1")")"
+    if is_usb_nic "$1"; then
+        _jid="$(sysval "$_jp/device/../idVendor"):$(sysval "$_jp/device/../idProduct")"
+        printf ',"id":%s,"chip":%s,"bus":%s' "$(js "$_jid")" "$(js "$(known_nic_id "$_jid")")" \
+            "$(js "$(speed_label "$(sysval "$_jp/device/../speed")")")"
+    fi
+    printf '}'
+}
+
+show_json() {
+    # Reuse every check from 'status', with its text thrown away
+    { show_status; } > /dev/null 2>&1
+    tv_info
+    _ju=$(find_usb_nic)
+    _jbi=$(find_builtin_nic)
+    _jw=""
+    for _p in "$NET"/*; do is_wifi "${_p##*/}" && { _jw=${_p##*/}; break; }; done
+    _jpid=$(watcher_pid) || _jpid=""
+    _kd=0; _kf=""
+    if _k=$(known_driver "$(uname -r)"); then
+        _kd=1
+        # shellcheck disable=SC2086 # split the fields on purpose
+        set -- $_k
+        _kf="$DRIVER_DIR/$3"
+    fi
+    _ab=0; { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; } && _ab=1
+    printf '{"version":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
+        "$(js "$VERSION")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"running":%s,"pid":%s},' \
+        "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
+        "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
+        "$(jb "$(hook_setting WATCH)")" "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
+    printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
+        "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
+    printf '"defaultRoute":%s,"knownDriver":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
+        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$_kf")" \
+        "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
+    printf '"issues":%s,"notes":%s,"log":%s}\n' "$(jarr "$ISSUE_LIST")" "$(jarr "$NOTES")" "$(jarr "$(tail -n 8 "$LOG_FILE" 2>/dev/null)")"
+}
 
 # Hide the device-specific half of a MAC address in reports
 mask_mac() { echo "$1" | sed 's/^\(..:..:..\):.*/\1:xx:xx:xx/'; }
@@ -1071,6 +1241,9 @@ main_menu() {
 }
 
 # === Arguments ===
+# Started by the Homebrew Channel at boot, through the hook symlink
+case "${0##*/}" in S01fix-eth) boot_main ;; esac
+
 CMD=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -1078,22 +1251,26 @@ while [ $# -gt 0 ]; do
         --now) APPLY_NOW=1 ;;
         --mac)
             shift
-            PIN_MAC=$(echo "$1" | tr 'A-F' 'a-f')
+            PIN_MAC=$(echo "$1" | tr 'A-F' 'a-f'); SET_MAC=1
             echo "$PIN_MAC" | grep -Eq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' || error_exit "--mac needs a MAC like aa:bb:cc:dd:ee:ff" ;;
         --wait)
             shift
-            WAIT_SECS=$1
+            WAIT_SECS=$1; SET_WAIT=1
             case "$WAIT_SECS" in ''|*[!0-9]*) error_exit "--wait needs a number of seconds" ;; esac ;;
         --module)
             shift
-            MODULE=$1
+            MODULE=$1; SET_MODULE=1
             case "$MODULE" in /*.ko) ;; *) error_exit "--module needs the full path to a .ko file" ;; esac
             # It is written into a root boot script, so only allow plain path characters
             case "$MODULE" in *[!A-Za-z0-9._/-]*) error_exit "--module path may only use letters, digits, '.', '_', '-' and '/'" ;; esac ;;
-        --watch) WATCH=1 ;;
+        --watch) WATCH=1; SET_WATCH=1 ;;
+        --no-watch) WATCH=0; SET_WATCH=1 ;;
+        --no-module) MODULE=""; DRIVER=""; SET_MODULE=1 ;;
+        --no-mac) PIN_MAC=""; SET_MAC=1 ;;
+        --json) JSON=1 ;;
         --driver)
             shift
-            DRIVER=$1
+            DRIVER=$1; SET_MODULE=1
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
@@ -1110,7 +1287,7 @@ case "$CMD" in
     disable) disable_fix ;;
     apply) apply_now ;;
     revert|reset) revert_now ;;
-    status|doctor) show_status ;;
+    status|doctor) if [ "$JSON" = 1 ]; then show_json; else show_status; fi ;;
     report) show_report ;;
     get-driver) get_driver ;;
     "") main_menu ;;

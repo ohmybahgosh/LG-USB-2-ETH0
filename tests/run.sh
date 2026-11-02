@@ -51,7 +51,8 @@ new_sandbox() {
         "$SYS/bus/platform/drivers" "$SYS/module" "$SYS/devices/usb1" "$SYS/devices/platform"
     HOOK=$ROOT/var/lib/webosbrew/init.d/S01fix-eth
     DISABLED=$ROOT/var/lib/webosbrew/S01fix-eth.disabled
-    LOG=$ROOT/tmp/lg-usb-2-eth0.log
+    LOG=$ROOT/var/lib/webosbrew/lg-usb-2-eth0.log
+    CONF=$ROOT/var/lib/webosbrew/lg-usb-2-eth0.conf
 }
 
 # netdev DIR NAME MAC CARRIER: the files every net device has
@@ -157,7 +158,7 @@ run() {
 # Run the installed boot hook the way the Homebrew Channel would
 run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
-    env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
+    env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" \
         $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
@@ -346,7 +347,8 @@ test_install_and_boot() {
     run install -y
     check "install exits 0" rc_is 0
     check "hook written" test -x "$HOOK"
-    check "hook has marker" grep -q "Managed by LG-USB-2-ETH0" "$HOOK"
+    check "hook is a symlink" test -L "$HOOK"
+    check "settings saved" grep -q "Managed by LG-USB-2-ETH0" "$CONF"
     check "not applied yet" is eth1 usb:1-1
     run_hook
     check "hook returns at once" rc_is 0
@@ -377,7 +379,7 @@ test_watch_hotplug() {
     add_builtin
     add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
     run install -y --watch --wait 4
-    check "hook has WATCH" grep -q '^WATCH="1"' "$HOOK"
+    check "settings have WATCH" grep -q '^WATCH="1"' "$CONF"
     run_hook
     check "boot swaps" wait_log "Done: the USB adapter is eth0"
     remove_usb 1-1
@@ -417,7 +419,7 @@ test_upgrade_v1() {
     run status
     check "status flags v1" has "Old v1 hook"
     run install -y
-    check "v1 replaced" grep -q "Managed by LG-USB-2-ETH0" "$HOOK"
+    check "v1 replaced by a link" test -L "$HOOK"
 }
 
 test_v1_disabled_in_initd() {
@@ -531,7 +533,7 @@ test_takeover_apply() {
     fake_ko "$SB/r8152_oot.ko" r8152_oot
     run install -y --module "$SB/r8152_oot.ko"
     check "install exits 0" rc_is 0
-    check "hook has DRIVER" grep -q '^DRIVER="r8152_oot"' "$HOOK"
+    check "settings have DRIVER" grep -q '^DRIVER="r8152_oot"' "$CONF"
     run apply -y
     check "says it moved" has "cdc_ncm -> r8152_oot"
     check "now on the new driver" has "Now on r8152_oot"
@@ -654,6 +656,90 @@ test_default_route_wifi() {
     check "no warning on eth0" lacks "Traffic goes out"
 }
 
+test_hook_is_link_to_copy() {
+    add_builtin
+    run install -y
+    check "copy in /home/root" test -x "$ROOT/home/root/lg-usb-2-eth0/LG-USB-2-ETH0.sh"
+    check "hook links to it" sh -c "[ \"\$(readlink '$HOOK')\" = '$ROOT/home/root/lg-usb-2-eth0/LG-USB-2-ETH0.sh' ]"
+    check "copy is this version" cmp -s "$SCRIPT" "$ROOT/home/root/lg-usb-2-eth0/LG-USB-2-ETH0.sh"
+}
+
+test_install_keeps_settings() {
+    add_builtin
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --watch --wait 30 --module "$SB/r8152_oot.ko"
+    run install -y
+    check "watch kept" grep -q '^WATCH="1"' "$CONF"
+    check "wait kept" grep -q '^WAIT_SECS="30"' "$CONF"
+    check "module kept" grep -q "^MODULE=\"$SB/r8152_oot.ko\"" "$CONF"
+    run install -y --no-watch --no-module
+    check "watch off" grep -q '^WATCH="0"' "$CONF"
+    check "module off" grep -q '^MODULE=""' "$CONF"
+    check "driver off" grep -q '^DRIVER=""' "$CONF"
+    check "wait still kept" grep -q '^WAIT_SECS="30"' "$CONF"
+}
+
+test_upgrade_from_copied_hook() {
+    add_builtin
+    printf '#!/bin/sh\n# Managed by LG-USB-2-ETH0 v2.2. Change it with the LG-USB-2-ETH0 script, not by hand.\nPIN_MAC=""\nWAIT_SECS="45"\nPARK_NAME="eth2"\nMODULE=""\nDRIVER=""\nWATCH="1"\nexit 0\n' > "$HOOK"
+    chmod 755 "$HOOK"
+    run status
+    check "still counts as enabled" has "Installed and enabled"
+    check "suggests relinking" has "copy from an older version"
+    check "reads its settings" has "Waits 45s"
+    run install -y
+    check "now a link" test -L "$HOOK"
+    check "wait carried over" grep -q '^WAIT_SECS="45"' "$CONF"
+    check "watch carried over" grep -q '^WATCH="1"' "$CONF"
+}
+
+test_broken_hook() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    ln -s /nonexistent/app/lg-usb-2-eth0.sh "$HOOK"
+    run status
+    check "flags it" has "points at a script that's gone"
+    run install -y
+    check "relinked" test -r "$HOOK"
+}
+
+test_invalid_settings_do_nothing() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y
+    sed -i 's/^WAIT_SECS=.*/WAIT_SECS="10; reboot"/' "$CONF"
+    run_hook
+    check "logs it" wait_log "invalid settings" 5
+    check "nothing renamed" is eth1 usb:1-1
+    check "built-in untouched" is eth0 builtin
+}
+
+test_no_settings_boot_does_nothing() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y
+    rm -f "$CONF"
+    run_hook
+    sleep 2
+    check "nothing renamed" is eth1 usb:1-1
+}
+
+test_status_json() {
+    add_builtin
+    add_wifi wlan0 1-2
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01" 0bda 8153 480
+    run install -y --watch
+    run apply -y
+    run status --json
+    check "exit 0" rc_is 0
+    printf '%s' "$OUT" > "$SB/status.json"
+    check "valid JSON" python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SB/status.json"
+    check "adapter is eth0" python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['adapterIsEth0'] is True and d['adapter']['name']=='eth0' and d['adapter']['id']=='0bda:8153' and d['adapter']['bus']=='USB 2.0'" "$SB/status.json"
+    check "hook fields" python3 -c "import json,sys; d=json.load(open(sys.argv[1])); h=d['hook']; assert h['state']=='enabled' and h['watch'] is True and h['wait']=='120'" "$SB/status.json"
+    check "wifi and notes" python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['wifi']['driver']=='mt7601u'; assert any('USB 2.0' in n for n in d['notes']), d['notes']" "$SB/status.json"
+    check "no colour codes" lacks "$(printf '\033')"
+}
+
 t report test_report
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
@@ -666,6 +752,13 @@ t status_suggests_driver test_status_suggests_driver
 t autobind_hook_noticed test_autobind_hook_noticed
 t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
+t hook_is_link_to_copy test_hook_is_link_to_copy
+t install_keeps_settings test_install_keeps_settings
+t upgrade_from_copied_hook test_upgrade_from_copied_hook
+t broken_hook test_broken_hook
+t invalid_settings_do_nothing test_invalid_settings_do_nothing
+t no_settings_boot_does_nothing test_no_settings_boot_does_nothing
+t status_json test_status_json
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo
