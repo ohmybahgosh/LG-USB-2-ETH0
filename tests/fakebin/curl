@@ -2,6 +2,7 @@
 # Fake `curl` for the test suite: never touches the network.
 #   Driver downloads: writes $FAKE_STATE/download (or "not the real file")
 #   to the file given with -o.
+#   Releases (https://releases.test/...): serves $FAKE_STATE/rel/NAME.
 #   Speed test (URLs with __down or __up): answers -w with a fixed transfer
 #   of 25 MB in 0.5 s per request (400 Mbit/s per stream), a 12 ms connect,
 #   and a "colo: TST" header for -D -.
@@ -30,4 +31,12 @@ case "$url" in
         exit 0 ;;
 esac
 [ -n "$out" ] || exit 2
+# Releases (LGU2E_RELEASES points here): files from $FAKE_STATE/rel, by name
+case "$url" in
+    https://releases.test/*)
+        f=$FAKE_STATE/rel/${url##*/}
+        [ -f "$f" ] || { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
+        cat "$f" > "$out"
+        exit 0 ;;
+esac
 if [ -f "$FAKE_STATE/download" ]; then cat "$FAKE_STATE/download" > "$out"; else echo "not the real file" > "$out"; fi

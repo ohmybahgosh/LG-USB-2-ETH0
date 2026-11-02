@@ -26,6 +26,7 @@
 
     var state = null;      // last status --json result
     var busy = false;
+    var upd = null;        // last update --check --json result
     var overlayMode = null; // null, 'busy', 'message', 'confirm'
     var onConfirm = null;
 
@@ -224,7 +225,30 @@
         driverBtn.style.display = offer === 'none' ? 'none' : '';
         $('driver-hint').textContent = hints[offer] || '';
         $('tog-driver').className = 'tog' + (offer !== 'none' && offer !== 'available' && bootOn ? ' on' : '');
+        renderUpdate();
         if (current >= buttons().length) { current = buttons().length - 1; }
+    }
+
+    // The update row only shows when a newer release is out.  If the
+    // Homebrew Channel knows this app's repo, updates come from there.
+    function renderUpdate() {
+        var btn = document.querySelector('[data-action="update"]');
+        var show = !!(upd && upd.newer);
+        btn.style.display = show ? '' : 'none';
+        $('actions').className = 'actions' + (show ? ' tight' : '');
+        if (!show) { return; }
+        $('update-title').textContent = 'Update to v' + upd.latest;
+        $('update-hint').textContent = upd.source === 'homebrew' ? 'opens the Homebrew Channel' : 'you have v' + upd.current + ', downloads and installs';
+    }
+
+    function checkUpdate() {
+        runScript('update --check --json', function (ok, out) {
+            var d = null;
+            try { d = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { d = null; }
+            upd = d;
+            if (state) { render(); }
+            if (!overlayMode) { focusCurrent(); }
+        });
     }
 
     // ------------------------------------------------------------------ overlay
@@ -256,7 +280,7 @@
             overlay('message', ok ? title + ': done' : title + ': something went wrong',
                 '<pre>' + esc(lines.join('\n')) + '</pre>', 'Press OK or BACK to close.');
             if (network && ok) { waitForAddress(); } else { refresh(); }
-            if (after) { after(ok); }
+            if (after) { after(ok, text); }
         });
     }
 
@@ -307,6 +331,20 @@
             confirmThen('Switch now?', 'The network drops for a few seconds while the adapter becomes eth0.', function () {
                 act('Switch now', 'apply -y', null, true);
             });
+        },
+        update: function () {
+            if (!upd || !upd.newer) { return; }
+            if (upd.source === 'homebrew') {
+                luna('luna://com.webos.applicationManager/launch', { id: 'org.webosbrew.hbchannel' }, function () {});
+                return;
+            }
+            confirmThen('Update to v' + upd.latest + '?',
+                'Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.',
+                function () {
+                    act('Update', 'update -y', function (ok, text) {
+                        if (/Installing/.test(text || '')) { $('overlay-hint').textContent = 'Installing.  The app closes and opens again in a few seconds.'; }
+                    });
+                });
         },
         speed: function () {
             if (busy) { return; }
@@ -467,4 +505,5 @@
 
     focusCurrent();
     refresh();
+    checkUpdate();
 }());

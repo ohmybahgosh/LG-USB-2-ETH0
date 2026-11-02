@@ -50,6 +50,13 @@ MARKER="Managed by LG-USB-2-ETH0"
 DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
 AUTOBIND_HOOK="$INIT_DIR/90-r8152-oot"
+# Updates: the latest GitHub release, and the Homebrew Channel repo that
+# also serves the TV app.  The Homebrew Channel keeps its settings (the
+# repos you added) in its web storage.
+APP_ID="org.ohmybahgosh.lgusb2eth0"
+RELEASES="${LGU2E_RELEASES:-https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases}"
+REPO_URL="https://ohmybahgosh.dev/repo"
+HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -67,6 +74,7 @@ WATCH=0
 SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0
 JSON=0
 PHASE=""
+CHECK_ONLY=0
 DRIVER_FILE=""
 
 # === Helper Functions ===
@@ -114,6 +122,8 @@ Commands (no command opens the menu):
   status      Show the hook, the network interfaces and any problems
   doctor      Same as status
   report      Print a short report to paste into a GitHub issue
+  update      Check for a newer release and install it.  With --check,
+              only say whether there is one
   speedtest   Measure latency, download and upload speed through the TV's
               current connection, against Cloudflare's nearest server
   get-driver  Download a better driver module known to work on this exact
@@ -135,6 +145,7 @@ Options:
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
   --phase PHASE      With speedtest: run only ping, down or up
+  --check            With update: only check, don't install
 
 Running 'install' again keeps every setting you don't change.
   -h, --help         Show this help
@@ -1427,6 +1438,177 @@ speed_test() {
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
 }
 
+# === Updates ===
+# The script runs either from inside the TV app or on its own (copied to the
+# TV by hand).  The app updates as a whole, by installing the release's IPK
+# the same way the Homebrew Channel does.  The plain script replaces itself
+# with the release's copy.  Either way the download is checked against the
+# release's SHA-256 first.
+
+# app or script
+install_kind() {
+    case "$(self_path)" in */usr/palm/applications/"$APP_ID"/*) echo app ;; *) echo script ;; esac
+}
+
+current_version() {
+    _cv=""
+    if [ "$(install_kind)" = app ]; then
+        _ad=$(self_path); _ad=${_ad%/assets/*}
+        _cv=$(json_get version "$_ad/appinfo.json")
+    fi
+    echo "${_cv:-$VERSION}"
+}
+
+# ver_gt A B: A is newer than B (1.2 and 1.2.0 are the same)
+ver_gt() {
+    awk -v a="$1" -v b="$2" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        for (i = 1; i <= 3; i++) { p = x[i] + 0; q = y[i] + 0; if (p != q) exit !(p > q) }
+        exit 1 }'
+}
+
+# Does the Homebrew Channel know our repo?  Then it offers app updates
+# itself, and that's the normal way to get them.
+from_homebrew() {
+    grep -qF "${REPO_URL#https://}" "$HBC_STORAGE"/*.ldb "$HBC_STORAGE"/*.log 2>/dev/null
+}
+
+# Fetch the latest release's manifest into LATEST_*; fails quietly
+latest_release() {
+    _mf="$RUN_DIR/lg-usb-2-eth0.manifest"
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    fetch "$_mf" "$RELEASES/latest/download/$APP_ID.manifest.json" >/dev/null 2>&1 || { rm -f "$_mf"; return 1; }
+    LATEST_VERSION=$(json_get version "$_mf")
+    LATEST_IPK=$(json_get ipkUrl "$_mf")
+    LATEST_SHA=$(json_get sha256 "$_mf")
+    LATEST_SIZE=$(sed -n 's/.*"ipkSize"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$_mf" | head -n 1)
+    rm -f "$_mf"
+    case "$LATEST_VERSION" in [0-9]*.[0-9]*) ;; *) return 1 ;; esac
+    return 0
+}
+
+file_sha() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
+
+update_check() {
+    _kind=$(install_kind)
+    _cur=$(current_version)
+    _src=sideloaded
+    from_homebrew && _src=homebrew
+    if ! latest_release; then
+        if [ "$JSON" = 1 ]; then
+            printf '{"current":%s,"latest":null,"newer":false,"kind":%s,"source":%s,"error":%s}\n' \
+                "$(js "$_cur")" "$(js "$_kind")" "$(js "$_src")" "$(js "Couldn't check $RELEASES")"
+        else
+            warn "Couldn't check for updates ($RELEASES).  Is the TV online?"
+        fi
+        return 1
+    fi
+    _newer=0
+    ver_gt "$LATEST_VERSION" "$_cur" && _newer=1
+    if [ "$JSON" = 1 ]; then
+        printf '{"current":%s,"latest":%s,"newer":%s,"kind":%s,"source":%s,"notes":%s}\n' \
+            "$(js "$_cur")" "$(js "$LATEST_VERSION")" "$(jb "$_newer")" "$(js "$_kind")" "$(js "$_src")" \
+            "$(js "$RELEASES/tag/v$LATEST_VERSION")"
+        return 0
+    fi
+    if [ "$_newer" = 1 ]; then
+        info "Version $LATEST_VERSION is out (you have $_cur).  What's new: $RELEASES/tag/v$LATEST_VERSION"
+        if [ "$_kind" = app ] && [ "$_src" = homebrew ]; then
+            echo "The Homebrew Channel will offer it, since you added its repo ($REPO_URL)."
+        fi
+    else
+        success "Up to date ($_cur)."
+    fi
+    return 0
+}
+
+update_now() {
+    update_check || return 1
+    ver_gt "$LATEST_VERSION" "$(current_version)" || return 0
+    command -v sha256sum >/dev/null 2>&1 || error_exit "sha256sum is missing, so the download can't be checked.  Nothing changed."
+    confirm "Update to $LATEST_VERSION?" || { echo "Cancelled.  Nothing changed."; return 1; }
+    if [ "$(install_kind)" = app ]; then
+        update_app
+    else
+        update_script
+    fi
+}
+
+# Install the release's IPK.  This replaces the app (and this script inside
+# it) and closes the app, so the install runs from a separate job that
+# waits for the new version and then opens the app again.
+update_app() {
+    case "$LATEST_SHA" in *[!0-9a-f]*|'') error_exit "The release has no checksum for the app.  Nothing changed." ;; esac
+    case "$LATEST_IPK" in https://*.ipk) ;; *) error_exit "Unexpected download link in the release: $LATEST_IPK" ;; esac
+    _ipk="$RUN_DIR/lg-usb-2-eth0-update.ipk"
+    info "Downloading $LATEST_IPK"
+    fetch "$_ipk.part" "$LATEST_IPK" || { rm -f "$_ipk.part"; error_exit "Download failed.  Nothing changed."; }
+    _got=$(file_sha "$_ipk.part")
+    if [ "$_got" != "$LATEST_SHA" ]; then
+        rm -f "$_ipk.part"
+        error_exit "Checksum mismatch (got $_got, expected $LATEST_SHA).  The file was deleted and nothing changed."
+    fi
+    if [ -n "$LATEST_SIZE" ] && [ "$(wc -c < "$_ipk.part" | tr -d ' ')" != "$LATEST_SIZE" ]; then
+        rm -f "$_ipk.part"
+        error_exit "The download is the wrong size.  The file was deleted and nothing changed."
+    fi
+    mv -f "$_ipk.part" "$_ipk"
+    _job="i=0
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{\"id\":\"$APP_ID\",\"ipkUrl\":\"$_ipk\"}'
+while [ \$i -lt 45 ]; do
+    sleep 2
+    luna-send -n 1 luna://com.webos.applicationManager/getAppInfo '{\"id\":\"$APP_ID\"}' | grep -q '\"version\": *\"$LATEST_VERSION\"' && break
+    i=\$((i + 1))
+done
+rm -f '$_ipk'
+if [ \$i -lt 45 ]; then
+    echo 'Updated the app to $LATEST_VERSION.'
+    luna-send -n 1 luna://com.webos.applicationManager/launch '{\"id\":\"$APP_ID\"}' >/dev/null
+else
+    echo 'The app update to $LATEST_VERSION did not finish.  The current version stays installed.'
+fi"
+    {
+        echo "=== $(date) update to $LATEST_VERSION ==="
+    } >> "$LOG_FILE" 2>/dev/null
+    if command -v setsid >/dev/null 2>&1; then
+        setsid sh -c "$_job" >> "$LOG_FILE" 2>&1 < /dev/null &
+    else
+        nohup sh -c "$_job" >> "$LOG_FILE" 2>&1 < /dev/null &
+    fi
+    success "Checked the download.  Installing $LATEST_VERSION now: the app closes and opens again by itself."
+}
+
+# Replace this script (and the boot hook's copy) with the release's copy
+update_script() {
+    _self=$(self_path)
+    _new="$RUN_DIR/lg-usb-2-eth0-update.sh"
+    _sums="$RUN_DIR/lg-usb-2-eth0-update.sums"
+    _url="$RELEASES/download/v$LATEST_VERSION"
+    info "Downloading $_url/LG-USB-2-ETH0.sh"
+    if ! fetch "$_new" "$_url/LG-USB-2-ETH0.sh" || ! fetch "$_sums" "$_url/SHA256SUMS"; then
+        rm -f "$_new" "$_sums"
+        error_exit "Download failed.  Nothing changed."
+    fi
+    _want=$(awk '$2 ~ /LG-USB-2-ETH0\.sh$/ {print $1; exit}' "$_sums")
+    _got=$(file_sha "$_new")
+    rm -f "$_sums"
+    if [ -z "$_want" ] || [ "$_got" != "$_want" ]; then
+        rm -f "$_new"
+        error_exit "Checksum mismatch (got $_got, expected ${_want:-nothing}).  The file was deleted and nothing changed."
+    fi
+    sh -n "$_new" 2>/dev/null || { rm -f "$_new"; error_exit "The download isn't a valid script.  Nothing changed."; }
+    # The boot hook may point at a copy in $SCRIPT_HOME; keep that current too
+    _hooked=$(readlink -f "$HOOK" 2>/dev/null)
+    for _dst in "$_self" "$_hooked"; do
+        if [ -z "$_dst" ] || [ ! -f "$_dst" ]; then continue; fi
+        case "$_dst" in */usr/palm/applications/*) continue ;; esac
+        { cp -f "$_new" "$_dst.new" && chmod 755 "$_dst.new" && mv -f "$_dst.new" "$_dst"; } \
+            || { rm -f "$_new" "$_dst.new"; error_exit "Couldn't write $_dst."; }
+    done
+    rm -f "$_new"
+    success "Updated to $LATEST_VERSION.  Your settings and boot hook are unchanged."
+}
+
 # The last speed test as a line for the report, or nothing
 speed_summary() {
     _d=$(speed_get down); _u=$(speed_get up)
@@ -1506,6 +1688,7 @@ main_menu() {
         echo "7) Enable boot hook"
         echo "8) Report for a GitHub issue"
         echo "s) Speed test"
+        echo "u) Check for updates"
         # Only offered when a driver is known for this exact kernel and adapter
         _offer=$(driver_offer)
         case "$_offer" in available) echo "9) Get the faster Realtek driver for this TV" ;; esac
@@ -1521,6 +1704,7 @@ main_menu() {
             7) enable_fix ;;
             8) show_report ;;
             s|S) speed_test ;;
+            u|U) update_now ;;
             9) if [ "$_offer" = available ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
             *) echo "Pick one of the numbers shown." ;;
@@ -1562,13 +1746,14 @@ while [ $# -gt 0 ]; do
         --no-mac) PIN_MAC=""; SET_MAC=1 ;;
         --json) JSON=1 ;;
         --phase) shift; PHASE=$1 ;;
+        --check) CHECK_ONLY=1 ;;
         --driver)
             shift
             DRIVER=$1; SET_MODULE=1
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|speedtest) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|speedtest|update) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
@@ -1585,5 +1770,6 @@ case "$CMD" in
     report) show_report ;;
     get-driver) get_driver ;;
     speedtest) speed_test ;;
+    update) if [ "$CHECK_ONLY" = 1 ]; then update_check; else update_now; fi ;;
     "") main_menu ;;
 esac

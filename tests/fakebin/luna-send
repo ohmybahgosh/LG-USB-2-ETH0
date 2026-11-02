@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fake `luna-send` for the test suite: logs the call.  getAppInfo answers
+# with the version in $FAKE_STATE/appver (as if an install had finished).
+printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
+case "$*" in
+    *getAppInfo*) printf '{"appInfo":{"version":"%s"},"returnValue":true}\n' "$(cat "$FAKE_STATE/appver" 2>/dev/null)" ;;
+    *) echo '{"returnValue":true}' ;;
+esac

@@ -150,7 +150,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" LGU2E_SPEED_SECS=1 \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -845,6 +845,103 @@ test_speedtest_offline() {
     check "no speed in json" json_ok "$OUT" "d['speed'] is None"
 }
 
+# release VERSION [SCRIPT]: a fake latest release
+release() {
+    mkdir -p "$STATE/rel"
+    printf '{\n  "id": "org.ohmybahgosh.lgusb2eth0",\n  "version": "%s",\n  "ipkUrl": "https://releases.test/download/v%s/app.ipk",\n  "ipkHash": {\n    "sha256": "%s"\n  },\n  "ipkSize": %s\n}\n' \
+        "$1" "$1" "$(sha256sum "$STATE/rel/app.ipk" 2>/dev/null | awk '{print $1}')" "$( { wc -c < "$STATE/rel/app.ipk"; } 2>/dev/null | tr -d ' ')" \
+        > "$STATE/rel/org.ohmybahgosh.lgusb2eth0.manifest.json"
+    if [ -n "${2:-}" ]; then
+        cp "$2" "$STATE/rel/LG-USB-2-ETH0.sh"
+        (cd "$STATE/rel" && sha256sum LG-USB-2-ETH0.sh > SHA256SUMS)
+    fi
+}
+
+test_update_check() {
+    release 2.3.0
+    run update --check --json
+    check "exit 0" rc_is 0
+    check "same version is not newer" json_ok "$OUT" "d['current'] == '2.3' and d['latest'] == '2.3.0' and d['newer'] is False and d['kind'] == 'script' and d['source'] == 'sideloaded'"
+    run update --check
+    check "says up to date" has "Up to date"
+    release 2.10.0
+    run update --check --json
+    check "2.10 is newer than 2.3" json_ok "$OUT" "d['newer'] is True and d['notes'].endswith('/tag/v2.10.0')"
+    mkdir -p "$ROOT/var/lib/wam/Default/Local Storage/leveldb"
+    printf 'xx\001repositoriesConfig\001{"repositories":[{"url":"https://ohmybahgosh.dev/repo"}]}' \
+        > "$ROOT/var/lib/wam/Default/Local Storage/leveldb/000003.log"
+    run update --check --json
+    check "notices the Homebrew Channel repo" json_ok "$OUT" "d['source'] == 'homebrew'"
+    touch "$STATE/curl_fail"
+    run update --check --json
+    check "offline: exit 1" rc_is 1
+    check "offline: says so" json_ok "$OUT" "d['latest'] is None and 'error' in d"
+}
+
+test_update_script() {
+    cp "$SCRIPT" "$SB/copy.sh"
+    sed 's/^VERSION=.*/VERSION="9.9"/' "$SCRIPT" > "$SB/new.sh"
+    release 9.9.0 "$SB/new.sh"
+    local SCRIPT="$SB/copy.sh"
+    run update -y
+    check "exit 0" rc_is 0
+    check "says updated" has "Updated to 9.9.0"
+    check "replaced itself" grep -q '^VERSION="9.9"' "$SB/copy.sh"
+    check "still runs" sh -n "$SB/copy.sh"
+    run update -y
+    check "then up to date" has "Up to date (9.9)"
+}
+
+test_update_script_bad_checksum() {
+    cp "$SCRIPT" "$SB/copy.sh"
+    sed 's/^VERSION=.*/VERSION="9.9"/' "$SCRIPT" > "$SB/new.sh"
+    release 9.9.0 "$SB/new.sh"
+    echo "tampered" >> "$STATE/rel/LG-USB-2-ETH0.sh"
+    local SCRIPT="$SB/copy.sh"
+    run update -y
+    check "exit 1" rc_is 1
+    check "says mismatch" has "Checksum mismatch"
+    check "left itself alone" cmp -s "$SB/copy.sh" "$HERE/../LG-USB-2-ETH0.sh"
+}
+
+test_update_app() {
+    local app="$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0"
+    mkdir -p "$app/assets"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    printf '{\n  "id": "org.ohmybahgosh.lgusb2eth0",\n  "version": "2.3.0"\n}\n' > "$app/appinfo.json"
+    mkdir -p "$STATE/rel"
+    echo "fake ipk" > "$STATE/rel/app.ipk"
+    release 2.4.0
+    echo 2.4.0 > "$STATE/appver"
+    local SCRIPT="$app/assets/lg-usb-2-eth0.sh"
+    run update --check --json
+    check "knows it's the app" json_ok "$OUT" "d['kind'] == 'app' and d['current'] == '2.3.0' and d['newer'] is True"
+    run update -y
+    check "exit 0" rc_is 0
+    check "checked the download" has "Installing 2.4.0 now"
+    local i=0
+    while ! grep -q "Updated the app to 2.4.0" "$LOG" 2>/dev/null && [ $i -lt 30 ]; do sleep 0.2; i=$((i + 1)); done
+    check "installed through the app installer" grep -q "appInstallService/dev/install" "$STATE/luna.log"
+    check "opened the app again" grep -q "applicationManager/launch" "$STATE/luna.log"
+    check "logged it" grep -q "Updated the app to 2.4.0" "$LOG"
+    check "cleaned up the download" sh -c "! ls '$ROOT'/tmp/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
+}
+
+test_update_app_bad_checksum() {
+    local app="$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0"
+    mkdir -p "$app/assets" "$STATE/rel"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    printf '{\n  "version": "2.3.0"\n}\n' > "$app/appinfo.json"
+    echo "fake ipk" > "$STATE/rel/app.ipk"
+    release 2.4.0
+    echo "swapped" > "$STATE/rel/app.ipk"
+    local SCRIPT="$app/assets/lg-usb-2-eth0.sh"
+    run update -y
+    check "exit 1" rc_is 1
+    check "says mismatch" has "Checksum mismatch"
+    check "never called the installer" sh -c "! grep -q dev/install '$STATE/luna.log' 2>/dev/null"
+}
+
 test_get_driver_download_fails() {
     add_builtin
     touch "$STATE/curl_fail"
@@ -917,6 +1014,11 @@ t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
 t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
+t update_check test_update_check
+t update_script test_update_script
+t update_script_bad_checksum test_update_script_bad_checksum
+t update_app test_update_app
+t update_app_bad_checksum test_update_app_bad_checksum
 t hook_is_link_to_copy test_hook_is_link_to_copy
 t install_keeps_settings test_install_keeps_settings
 t upgrade_from_copied_hook test_upgrade_from_copied_hook
