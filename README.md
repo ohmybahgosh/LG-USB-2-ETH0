@@ -21,11 +21,12 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 
 > [!TIP]
 > **Is it safe, and how do I undo it?**
-> It writes one file, `/var/lib/webosbrew/init.d/S01fix-eth`, and only renames network interfaces.  No system files, drivers or network settings are touched, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
-> Undo everything with `sh LG-USB-2-ETH0.sh uninstall --now`.
+> It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files or network settings are touched, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
+> Undo everything with **Turn everything off** in the TV app, or `sh LG-USB-2-ETH0.sh uninstall --now`.
 
 ## Contents
 
+- [The TV app](#the-tv-app)
 - [Quick start](#quick-start)
 - [What it fixes](#what-it-fixes)
 - [Commands and options](#commands-and-options)
@@ -41,7 +42,31 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 - [Contributing](#contributing)
 - [Thanks](#thanks)
 
+## The TV app
+
+The easiest way in.  It runs the same script underneath, as root through the Homebrew Channel, so you don't need SSH at all.
+
+- **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found.
+- **Run at every boot**, **Follow plug and unplug**, and **Switch now**, as on/off switches.
+- **Faster Realtek driver:** only shows up when a driver is known for your TV's exact kernel and a Realtek adapter is plugged in.  It downloads, checks and sets up the driver in one go.
+- **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
+- **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
+- **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo below, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.
+- **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.  Do this before you remove the app.
+
+**Install it from the Homebrew Channel:** open the Homebrew Channel, go to Settings, add the repository `https://ohmybahgosh.dev/repo`, then install **LG-USB-2-ETH0** from the list.  The Homebrew Channel then offers updates like for any other app.
+
+**Or install the IPK yourself:** download `org.ohmybahgosh.lgusb2eth0_*.ipk` from the [latest release](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest) and install it with `ares-install`, or on the TV:
+
+```sh
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.3.0_all.ipk"}'
+```
+
+Already set up with the script over SSH?  Open the app and it picks up your settings.  Its boot hook links to the copy of the script inside the app, so the app and the hook always run the same version.
+
 ## Quick start
+
+Prefer SSH, or want to see every step?  This is the same thing without the app.
 
 You need:
 
@@ -77,13 +102,13 @@ Run `sh LG-USB-2-ETH0.sh` with no arguments for a menu.
 <summary>What <code>status</code> looks like once it's working</summary>
 
 ```
-=== LG-USB-2-ETH0 v2.2 status ===
+=== LG-USB-2-ETH0 v2.3 status ===
 Model:     OLED65C2PUA
 webOS:     webOS 25 (10.x), firmware 33.x
 Kernel:    aarch64, 5.4.x
 
 Boot hook
-  Installed and enabled (/var/lib/webosbrew/init.d/S01fix-eth)
+  Installed and enabled (/var/lib/webosbrew/init.d/S01fix-eth -> /home/root/lg-usb-2-eth0/LG-USB-2-ETH0.sh)
   Waits 120s
 
 Network interfaces
@@ -100,7 +125,7 @@ USB network drivers on this kernel
 
 The USB adapter is eth0 and the built-in port is eth2.
 
-Last log lines (/tmp/lg-usb-2-eth0.log)
+Last log lines (/var/lib/webosbrew/lg-usb-2-eth0.log)
   Built-in eth0 -> eth2
   USB eth1 (r8152) -> eth0
   Done: the USB adapter is eth0, the built-in port is eth2.
@@ -131,7 +156,9 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `disable` / `enable` | Keeps the hook but stops it running at boot, or turns it back on. |
 | `status` / `doctor` | Read-only report and checks.  Safe to run any time. |
 | `report` | Short, paste-ready report for a GitHub issue.  MAC addresses are masked. |
-| `get-driver` | Downloads a better driver module, if one is known to work on your exact kernel, and checks its checksum.  See [A faster driver](#a-faster-driver-for-realtek-adapters). |
+| `get-driver` | Downloads a better driver module, if one is known to work on your exact kernel, and checks its checksum.  With `--file PATH`, checks and uses a copy you downloaded yourself.  See [A faster driver](#a-faster-driver-for-realtek-adapters). |
+| `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
+| `update` | Checks for a newer release and installs it, after checking its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
 
 | Option | What it does |
 |--------|--------------|
@@ -142,12 +169,14 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `--wait 120` | Seconds the boot hook waits for the adapter to appear. |
 | `--module /path/driver.ko` | Load this driver module at boot, and move the adapter from the generic `cdc_ncm` driver over to it.  Refuses a module built for another kernel.  See [A faster driver](#a-faster-driver-for-realtek-adapters). |
 | `--driver NAME` | The driver name the module registers, if it can't be read from the file.  Rarely needed. |
+| `--no-watch`, `--no-module`, `--no-mac` | Turn that setting off again. |
+| `--json` | With `status`, `speedtest` or `update --check`: machine-readable output.  The TV app uses it. |
 
-The options you install with are saved in the hook.  Run `install` again to change them.
+The options you install with are saved in `/var/lib/webosbrew/lg-usb-2-eth0.conf`.  Run `install` again to change any of them; the ones you don't give are kept.
 
 ## How it works
 
-At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  The hook:
+At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  The hook is a link to the script (inside the TV app, or a copy in `/home/root/lg-usb-2-eth0`), and its settings live in their own file, so updating the script never loses them.  At boot it:
 
 1. Starts a background job and returns at once, so other startup hooks and the Homebrew Channel's failsafe timer aren't held up.
 2. Loads your `--module`, if you gave one.
@@ -156,8 +185,9 @@ At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  Th
 5. With `--module`, it moves the adapter from the generic `cdc_ncm` driver to your module's driver.  If the module doesn't take it within a few seconds, it goes back to `cdc_ncm`.  Each adapter gets one try per boot.
 6. It renames the built-in `eth0` to `eth2` and the adapter to `eth0`, then brings both up.  A rename that webOS interrupts is retried, and if a step still fails, the old names are put back.
 7. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
+8. With `--module`, it also keeps the adapter on the faster driver.  Standby resets the TV's USB ports, and the adapter comes back on `cdc_ncm`, so the hook moves it over again.  The check every few seconds only looks at a couple of `/sys` folders, so it costs next to nothing.
 
-It logs to `/tmp/lg-usb-2-eth0.log` (RAM, cleared at reboot), and `status` shows the last lines.  `apply` and `revert` run detached from your SSH session, so they finish even when the session drops, and they warn you first if you're connected through a port that's about to change.
+It logs to `/var/lib/webosbrew/lg-usb-2-eth0.log` (it starts over once it reaches 32 KB), and `status` shows the last lines.  `apply` and `revert` run detached from your SSH session, so they finish even when the session drops, and they warn you first if you're connected through a port that's about to change.
 
 ## Choosing an adapter
 
@@ -212,7 +242,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 ## Real speeds
 
-Don't expect gigabit.  The TV's USB controller and CPU are the limit.  Measured by others:
+Don't expect gigabit.  The TV's USB controller and CPU are the limit.  Measured on real TVs:
 
 | Setup | Speed | Source |
 |-------|-------|--------|
@@ -220,6 +250,7 @@ Don't expect gigabit.  The TV's USB controller and CPU are the limit.  Measured 
 | RTL8153 on a 2024 C4 (webOS 25), generic `cdc_ncm` driver | about 200 to 255 Mbit/s, with drops | [webos-r8152](https://github.com/DonZoomik/webos-r8152) |
 | Same adapter with the community `r8152` module | about 290 to 330 Mbit/s | [webos-r8152](https://github.com/DonZoomik/webos-r8152) |
 | Cable Matters adapter on a 2018 C8 | about 250 Mbit/s | [lgwebos.com thread](https://www.lgwebos.com/topic/3395-gigabit-ethernet-on-smart-tv/page/2/) |
+| RTL8156 on a 2022 C2 (webOS 25, USB 2.0) with `r8152_oot` | 272 Mbit/s down, 287 up, 7 ms | This repo, with `speedtest` |
 
 That's still two to three times the built-in port, which is plenty for 4K remuxes.
 
@@ -272,9 +303,11 @@ tests/run.sh bash
 tests/run.sh busybox watch   # only tests whose name contains "watch"
 ```
 
-It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, and the report.  CI runs ShellCheck and the whole suite under all three shells on every push.
+It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, keeping the faster driver after standby, the speed test, updates (refusing a bad checksum, for the app and the plain script), and the report.  A fake `curl` and `luna-send` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
 
-Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, and publishes the script with a `SHA256SUMS` file.
+The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
+
+Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK and its manifest.
 
 ## Contributing
 

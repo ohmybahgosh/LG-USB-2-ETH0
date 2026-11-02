@@ -2,6 +2,32 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.3.0] - 2026-11-02
+
+### Added
+
+- **The TV app** (`org.ohmybahgosh.lgusb2eth0`): status at a glance and switches for everything, run as root through the Homebrew Channel, so no SSH is needed.  Built with `webos-app/build.sh` and published with each release, with a Homebrew Channel manifest.
+- **Speed test:** `speedtest` (and in the app) measures latency, download and upload against Cloudflare's nearest server.  The last result goes into `report` and the compatibility report.
+- **Updates:** `update` checks the latest release and installs it after checking its SHA-256.  In the app it updates the whole app and reopens it; on its own the script replaces itself.  If the Homebrew Channel already has this project's repo, the app leaves updates to it.
+- **Report QR code** in the app: opens a compatibility report on your phone with the TV, adapter, result, options, speed and report filled in.
+- `status --json`, for the app and for scripts.
+- `get-driver --file PATH`, to use a driver module you downloaded on another computer (when the TV can't download it itself).  It's checked against the same SHA-256.
+- `--no-watch`, `--no-module`, `--no-mac` to turn a setting off again.
+
+### Changed
+
+- The boot hook is now a link to the script, with its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`.  `install` keeps every setting you don't change, and upgrades a 2.0 to 2.2 hook in place.
+- The log moved to `/var/lib/webosbrew/lg-usb-2-eth0.log`, so it survives a reboot.  It starts over at 32 KB.
+- Downloads use HTTPS only, with time limits, and say what to do when they fail (an old certificate store or a wrong clock, mostly).
+- The faster-driver option only shows (in the app and the menu) when it fits this TV.
+
+### Fixed
+
+- After standby, the adapter came back on `cdc_ncm` and stayed there.  The hook now moves it back to the faster driver.
+- A changed or missing module, or one built for a kernel the TV no longer runs (after a firmware update), is skipped at boot instead of loaded.  `status` says why.
+- The background check costs next to nothing now: about 0.07 ms every 5 seconds on a C2.
+- Wi-Fi Direct (`p2p0`) was sometimes shown as the TV's Wi-Fi.
+
 ## [2.2.0] - 2026-11-01
 
 ### Added
