@@ -84,6 +84,25 @@
         });
     }
 
+    // A first guess for the report's Result and Options fields, from what the
+    // TV shows right now.  The text must match the form's choices exactly;
+    // the person can still change them on GitHub.
+    function guessResult(s) {
+        var a = s.adapter;
+        if (!a) { return 'Adapter not detected (no driver)'; }
+        if (!s.adapterIsEth0) { return 'Adapter detected but the swap failed'; }
+        return a.ip ? 'Works, settings show the wired connection and apps play' : 'Works, but with problems (describe below)';
+    }
+    function usedOptions(s) {
+        var h = s.hook || {}, o = [];
+        if (h.state !== 'enabled') { return ''; }
+        if (h.watch) { o.push('--watch'); }
+        if (h.mac) { o.push('--mac'); }
+        if (h.module) { o.push('--module'); }
+        if (h.wait && h.wait !== '120') { o.push('--wait'); }
+        return o.length ? o.join(',') : 'No options (the defaults)';
+    }
+
     // Whichever port is eth0 right now, and its address
     function eth0(s) {
         var n = [s.adapter, s.builtin];
@@ -302,6 +321,8 @@
                     '&model=' + q(s.model || '') +
                     '&webos=' + q((s.webos || '') + ' (' + (s.webosRelease || '') + '), firmware ' + (s.firmware || '')) +
                     '&adapter=' + q(adapter) +
+                    '&result=' + q(guessResult(s)) +
+                    (usedOptions(s) ? '&options=' + q(usedOptions(s)) : '') +
                     '&report=' + q(short);
                 // The GitHub phone apps grab github.com/<owner>/<repo> links and open
                 // a blank issue, dropping the filled-in fields.  They leave /login
@@ -319,7 +340,7 @@
                 }
                 overlay('message', 'Report for GitHub',
                     '<div class="qr">' + svg + '<div>Scan this with your phone to open a compatibility report on GitHub, already filled in.  ' +
-                    'It opens in your browser so the details carry over.  Just pick the result and submit.  MAC addresses are hidden.<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
+                    'It opens in your browser so the details carry over.  Check the result it picked and submit.  MAC addresses are hidden.<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
                     'Press OK or BACK to close.');
             });
         },
