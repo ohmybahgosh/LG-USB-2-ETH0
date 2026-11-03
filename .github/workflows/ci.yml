@@ -14,7 +14,7 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: ShellCheck the script (POSIX sh, like the TV)
         run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh
       - name: ShellCheck the test suite
@@ -30,7 +30,7 @@ jobs:
     name: Issue forms
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check the issue forms are valid (GitHub silently opens a blank issue if not)
         run: python3 tests/check-issue-forms.py
       - name: Build the AI knowledge base (checks it still works)
@@ -44,7 +44,7 @@ jobs:
       matrix:
         shell: [busybox, dash, bash]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install shells
         run: |
           sudo apt-get update -qq
@@ -56,8 +56,8 @@ jobs:
     name: TV app (IPK)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       - name: Check the app's JavaScript parses
@@ -66,7 +66,7 @@ jobs:
         run: |
           npm install -g @webos-tools/cli
           webos-app/build.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ipk
           path: webos-app/out/
