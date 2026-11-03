@@ -6,7 +6,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 
 ### Changed
 
-- The repository is ready for others: questions and ideas go to Discussions (Q&A, Ideas and Show and tell, with forms), blank issues are off, and there's a `SUPPORT.md` and a code of conduct.  `SECURITY.md` lists everything the script does as root again, including updates, the speed test and the Wi-Fi backup.
+- The repository is ready for others: questions and ideas go to Discussions (Q&A, Ideas and Show and tell, with forms), blank issues are off, and there's a `SUPPORT.md` and a code of conduct.  A new README banner matches the one on ohmybahgosh.dev.  `SECURITY.md` lists everything the script does as root again, including updates, the speed test and the Wi-Fi backup.
 
 ## [2.4.0] - 2026-11-02
 

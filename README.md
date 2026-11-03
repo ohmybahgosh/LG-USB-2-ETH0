@@ -11,7 +11,7 @@
 [![Project page](https://img.shields.io/badge/ohmybahgosh.dev-project%20page-3ddc97)](https://ohmybahgosh.dev/lg-usb-2-eth0/)
 [![GitHub stars](https://img.shields.io/github/stars/ohmybahgosh/LG-USB-2-ETH0?style=social)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
 
-<img src="assets/banner.svg" width="100%" alt="LG-USB-2-ETH0: a terminal on the TV runs apply, the built-in port becomes eth2 and the USB adapter becomes eth0" />
+<img src="assets/banner.webp" width="100%" alt="LG-USB-2-ETH0 for rooted LG webOS TVs: make a USB Ethernet adapter the TV's eth0, two to three times the built-in port, from a TV app on the remote.  Homebrew Channel app, faster Realtek driver, Wi-Fi as a backup, undo in one press.  Next to it, the app's status screen on a TV and its icon on the home screen." />
 
 </div>
 
