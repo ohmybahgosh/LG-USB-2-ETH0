@@ -90,7 +90,7 @@ Four parts live in this repository:
 
 The test suite fakes the TV: `LGU2E_ROOT` moves every path under a temporary folder, `LGU2E_SYSFS` points at a fake `/sys`, and `LGU2E_SYSWRITE` routes writes to sysfs files (bind, unbind) through `tests/fakebin/syswrite`, which acts out what the kernel would do.  `LGU2E_SETTLE`, `LGU2E_WATCH_EVERY`, `LGU2E_SPEED_SECS`, `LGU2E_SPEED_URL` and `LGU2E_RELEASES` shorten waits and point downloads at the fake `curl`.  These are for tests only.
 
-To preview the TV app in a desktop browser, open `webos-app/src/index.html` with a `window.LGU2E_DEMO = function (args, cb) { ... }` defined first.  It receives the script arguments and calls `cb(ok, stdout, stderr)` with made-up output.  `scripts/screenshots/demo.js` is a ready one, and `scripts/screenshots/take.js` uses it to take the README screenshots and GIF (`sh webos-app/build.sh && node scripts/screenshots/take.js`, with Playwright and ffmpeg).  If a change shows up on screen, take them again; keep the data made up.
+To preview the TV app in a desktop browser, open `webos-app/src/index.html` with a `window.LGU2E_DEMO = function (args, cb) { ... }` defined first.  It receives the script arguments and calls `cb(ok, stdout, stderr)` with made-up output.  `scripts/screenshots/demo.js` is a ready one, and `scripts/screenshots/take.js` uses it to take the README screenshots (`sh webos-app/build.sh && node scripts/screenshots/take.js`, with Playwright and ffmpeg).  If a change shows up on screen, take them again; keep the data made up.  The README's animation (`assets/app-tv.gif`) is recorded on a real TV with `scripts/screenshots/record-tv.js`, which only opens two read-only boxes and closes them.
 
 ## Things that look like bugs but are on purpose
 

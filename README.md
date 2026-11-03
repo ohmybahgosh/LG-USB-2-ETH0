@@ -58,7 +58,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 The easiest way in.  It runs the same script underneath, as root through the Homebrew Channel, so you don't need SSH at all.  It works with the remote's arrows and OK, or the Magic Remote pointer.
 
 <p align="center">
-  <img src="assets/app-demo.gif" width="100%" alt="The TV app: moving down to Speed test, running it (272 down, 287 up, 7 ms), then opening the GitHub report QR code" />
+  <img src="assets/app-tv.gif" width="100%" alt="The TV app on an LG C2: scrolling the menu, opening the Wi-Fi as a backup confirmation and the Report for GitHub QR code, then back to the top" />
 </p>
 
 <table>
@@ -80,7 +80,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
   </tr>
 </table>
 
-<sub>Screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
+<sub>The recording above is from a real LG C2.  The screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found, like a cable that only connects at 100 Mbit/s.
 - **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup** and **Switch now**, as on/off switches.
@@ -380,7 +380,7 @@ It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinn
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
-The app screenshots and the GIF above come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).
+The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK, its manifest and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`).  Then it tells ohmybahgosh.dev to refresh its Homebrew Channel repository.
 

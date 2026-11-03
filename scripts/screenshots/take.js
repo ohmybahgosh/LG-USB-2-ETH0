@@ -1,10 +1,11 @@
-// Takes the TV app screenshots and the demo GIF in assets/, from the built
-// app (webos-app/dist) with made-up data (demo.js).  Needs Playwright
-// (npm i playwright) and ffmpeg; pngquant is used if it's there.  With
-// --mp4 FILE it also writes the demo as an MP4 (for web pages, where a
-// video is much smaller than the GIF).
+// Takes the TV app screenshots in assets/screenshots/, from the built app
+// (webos-app/dist) with made-up data (demo.js).  Needs Playwright
+// (npm i playwright) and ffmpeg; pngquant is used if it's there.  It also
+// records a demo (moving to Speed test, running it, opening the report):
+// --mp4 FILE writes it as an MP4 for web pages, --gif FILE as a GIF.  The
+// README's animation comes from a real TV instead, see record-tv.js.
 //
-//   sh webos-app/build.sh && node scripts/screenshots/take.js [--mp4 FILE]
+//   sh webos-app/build.sh && node scripts/screenshots/take.js [--mp4 FILE] [--gif FILE]
 'use strict';
 const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
@@ -17,6 +18,8 @@ const DIST = path.join(ROOT, 'webos-app/dist');
 const OUT = path.join(ROOT, 'assets/screenshots');
 const mp4Arg = process.argv.indexOf('--mp4');
 const MP4 = mp4Arg > 0 ? path.resolve(process.argv[mp4Arg + 1]) : '';
+const gifArg = process.argv.indexOf('--gif');
+const GIF = gifArg > 0 ? path.resolve(process.argv[gifArg + 1]) : '';
 const has = (cmd) => { try { execFileSync('sh', ['-c', 'command -v ' + cmd], { stdio: 'ignore' }); return true; } catch (e) { return false; } };
 
 if (!fs.existsSync(path.join(DIST, 'index.html'))) { console.error('Build the app first: sh webos-app/build.sh'); process.exit(1); }
@@ -85,10 +88,12 @@ function savePng(raw, name) {
   const video = await v.video().path();
   await vctx.close();
   await vctx.browser().close();
-  const gif = path.join(ROOT, 'assets/app-demo.gif');
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.6', '-i', video, '-vf',
-    'fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', gif]);
-  console.log('wrote ' + path.relative(ROOT, gif));
+  const gif = GIF;
+  if (gif) {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.6', '-i', video, '-vf',
+      'fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', gif]);
+    console.log('wrote ' + gif);
+  }
   if (MP4) {
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.6', '-i', video, '-vf', 'fps=12,scale=960:-2:flags=lanczos',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '24', '-preset', 'slow', '-movflags', '+faststart', '-an', MP4]);
