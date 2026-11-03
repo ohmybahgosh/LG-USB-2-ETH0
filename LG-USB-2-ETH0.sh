@@ -57,6 +57,9 @@ APP_ID="org.ohmybahgosh.lgusb2eth0"
 RELEASES="${LGU2E_RELEASES:-https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases}"
 REPO_URL="https://ohmybahgosh.dev/repo"
 HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
+# Kept while --wifi-fallback has turned Wi-Fi on, so it's turned off again
+# once the cable works, even after a reboot in between
+WIFI_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wifi"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -69,9 +72,10 @@ DRIVER=""
 # SHA-256 of the module file, saved at install and checked before every load
 MODULE_SHA=""
 WATCH=0
+WIFI_FALLBACK=0
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0
 JSON=0
 PHASE=""
 CHECK_ONLY=0
@@ -140,7 +144,10 @@ Options:
                      from the generic cdc_ncm driver over to it
   --watch            Keep watching after boot: swap the adapter in when it is
                      plugged in, and give eth0 back when it is unplugged
-  --no-watch, --no-module, --no-mac
+  --wifi-fallback    Turn Wi-Fi on if eth0 loses its cable link for a minute,
+                     and off again once the cable works.  Only when Wi-Fi was
+                     off, and only Wi-Fi networks the TV already knows
+  --no-watch, --no-module, --no-mac, --no-wifi-fallback
                      Turn that setting off again
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
@@ -164,6 +171,10 @@ USB_DRIVERS=${LGU2E_SYSFS:-/sys}/bus/usb/drivers
 # Seconds to let a new adapter settle, and between checks in --watch mode
 SETTLE_SECS=${LGU2E_SETTLE:-3}
 WATCH_EVERY=${LGU2E_WATCH_EVERY:-5}
+# --wifi-fallback: seconds without a cable link before Wi-Fi goes on, and
+# seconds of a working link before it goes off again
+WIFI_GRACE=${LGU2E_WIFI_GRACE:-60}
+WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
 
 sysval() { [ -r "$1" ] && IFS= read -r _v < "$1" 2>/dev/null && printf '%s\n' "$_v"; }
 
@@ -505,19 +516,85 @@ takeover_pending() {
     return 1
 }
 
-# Runs after boot when --watch is on, or when a --module driver is in use.
-# With a driver: if the adapter comes back on cdc_ncm (TV standby can reset
-# USB), move it over again. With --watch: also follow plug and unplug.
+# Wi-Fi's switch in webOS, through its own connection manager: the same
+# switch as in the TV's network settings.  Only --wifi-fallback uses these.
+# wifi_status prints enabled, disabled, or nothing when it can't tell.
+wifi_status() {
+    _ws=$(luna-send -n 1 luna://com.webos.service.wifi/getstatus '{}' 2>/dev/null)
+    case "$_ws" in
+        *'"serviceDisabled"'*) echo disabled ;;
+        *'"returnValue":true'*|*'"returnValue": true'*) echo enabled ;;
+    esac
+}
+wifi_set() {
+    case "$(luna-send -n 1 luna://com.webos.service.connectionmanager/setstate "{\"wifi\":\"$1\"}" 2>/dev/null)" in
+        *'"returnValue":true'*|*'"returnValue": true'*) return 0 ;;
+    esac
+    return 1
+}
+
+# eth0 has had no cable link for a while: turn Wi-Fi on, but only if it's
+# off (if it's on, webOS already uses it).  One try per outage.
+wifi_fallback() {
+    _wifi_tried=1
+    [ "$(wifi_status)" = disabled ] || return 0
+    echo "=== $(date) eth0 has had no cable link for ${_down}s: turning Wi-Fi on ==="
+    if wifi_set enabled; then
+        echo on > "$WIFI_MARK"
+        _wifi_on=1
+    else
+        echo "Could not turn Wi-Fi on."
+    fi
+}
+
+# The cable works again: turn off the Wi-Fi the fallback turned on.  While
+# Wi-Fi is connected, webOS sends traffic over it instead of eth0.
+wifi_back() {
+    echo "=== $(date) eth0 has its cable link back: turning Wi-Fi off again ==="
+    wifi_set disabled || echo "Could not turn Wi-Fi off.  Turn it off in the TV's network settings."
+    rm -f "$WIFI_MARK"
+    _wifi_on=""
+}
+
+# Runs after boot when --watch or --wifi-fallback is on, or when a --module
+# driver is in use.  With a driver: if the adapter comes back on cdc_ncm (TV
+# standby can reset USB), move it over again.  With --watch: also follow
+# plug and unplug.  With --wifi-fallback: Wi-Fi as a backup for the cable.
 watch_run() {
     if [ "$WATCH" = 1 ]; then
         echo "Watching for the adapter (every ${WATCH_EVERY}s)."
-    else
+    elif [ -n "$DRIVER" ]; then
         echo "Keeping the adapter on $DRIVER (checking every ${WATCH_EVERY}s)."
+    fi
+    if [ "$WIFI_FALLBACK" = 1 ]; then
+        echo "Turning Wi-Fi on if eth0 has no cable link for ${WIFI_GRACE}s."
     fi
     _skip=""
     _last=""
+    _down=0
+    _up=0
+    _wifi_tried=""
+    _wifi_on=""
+    [ -f "$WIFI_MARK" ] && _wifi_on=1
     while :; do
         sleep "$WATCH_EVERY"
+        # Wi-Fi fallback: the cable link is one sysfs read, no subprocess
+        if [ "$WIFI_FALLBACK" = 1 ]; then
+            _car=""
+            { read -r _car < "$NET/eth0/carrier"; } 2>/dev/null
+            if [ "$_car" = 1 ]; then
+                _down=0
+                _wifi_tried=""
+                if [ -n "$_wifi_on" ]; then
+                    _up=$((_up + WATCH_EVERY))
+                    if [ "$_up" -ge "$WIFI_BACK_SECS" ]; then wifi_back; fi
+                fi
+            else
+                _up=0
+                _down=$((_down + WATCH_EVERY))
+                if [ "$_down" -ge "$WIFI_GRACE" ] && [ -z "$_wifi_tried" ] && [ -z "$_wifi_on" ]; then wifi_fallback; fi
+            fi
+        fi
         # Cheap checks first, with no subprocesses: is anything bound to
         # cdc_ncm or cdc_ether, and did the list of network interfaces change? Only then
         # look closer. This keeps each check to well under a millisecond.
@@ -579,7 +656,7 @@ boot_run() {
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
     fi
-    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ]; then watch_run; fi
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ]; then watch_run; fi
     return 0
 }
 CORE_EOF
@@ -886,6 +963,7 @@ hook_setting() {
 settings_ok() {
     case "$WAIT_SECS" in ''|*[!0-9]*) return 1 ;; esac
     case "$WATCH" in 0|1) ;; *) return 1 ;; esac
+    case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
@@ -901,6 +979,7 @@ load_settings() {
     if [ "$SET_WAIT" = 0 ]; then _v=$(hook_setting WAIT_SECS); [ -n "$_v" ] && WAIT_SECS=$_v; fi
     if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); MODULE_SHA=$(hook_setting MODULE_SHA); fi
     if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
+    if [ "$SET_WIFI" = 0 ]; then _v=$(hook_setting WIFI_FALLBACK); [ -n "$_v" ] && WIFI_FALLBACK=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     return 0
 }
@@ -944,6 +1023,7 @@ write_hook() {
         echo "DRIVER=\"$DRIVER\""
         echo "MODULE_SHA=\"$MODULE_SHA\""
         echo "WATCH=\"$WATCH\""
+        echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
     _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
@@ -1048,6 +1128,7 @@ install_fix() {
     echo "  2. If one shows up, rename the built-in port to $PARK_NAME and the adapter to eth0"
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
+    [ "$WIFI_FALLBACK" = 1 ] && echo "  -  If eth0 loses its cable link for ${WIFI_GRACE}s while Wi-Fi is off, turn Wi-Fi on, and off again once the cable works"
     echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
@@ -1078,6 +1159,10 @@ uninstall_fix() {
         stop_watcher
         rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF" || error_exit "Could not remove the hook."
         success "Boot hook removed."
+    fi
+    if [ -f "$WIFI_MARK" ]; then
+        rm -f "$WIFI_MARK"
+        warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
     fi
     _bi=$(find_builtin_nic)
     if [ "$APPLY_NOW" = 1 ]; then
@@ -1179,6 +1264,7 @@ show_status() {
             [ -n "$(hook_setting MODULE)" ] && _s="$_s, loads $(hook_setting MODULE)"
             [ -n "$(hook_setting DRIVER)" ] && _s="$_s (driver $(hook_setting DRIVER))"
             [ "$(hook_setting WATCH)" = 1 ] && _s="$_s, keeps watching (--watch)"
+            [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _s="$_s, Wi-Fi as a backup (--wifi-fallback)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
@@ -1226,6 +1312,13 @@ show_status() {
             [ "$_bus" = 12 ] && status_issue "$_sn runs at USB 1.1 speed. Try another port or cable."
             [ "$_bus" = 480 ] && status_note "$_sn is on USB 2.0, which tops out around 300 Mbit/s on these TVs."
             [ "$_car" = 1 ] && [ -z "$_ip" ] && status_note "$_sn has a cable but no IPv4 address yet. webOS may still be setting it up."
+            _dup=$(sysval "$_sp/duplex" 2>/dev/null)
+            [ "$_dup" = half ] && _line="$_line, half duplex"
+            if [ "$_car" = 1 ] && [ -n "$_spd" ] && [ "$_spd" -lt 1000 ]; then
+                status_issue "$_sn's cable link is only $_spd Mbit/s, so it's no faster than the built-in port. Usually that's a cable with only two wire pairs (many flat or old cables), a 100 Mbit/s port on the router or switch, or a loose plug. Try a Cat5e or better cable, or another port."
+            elif [ "$_car" = 1 ] && [ "$_dup" = half ]; then
+                status_issue "$_sn's cable link is half duplex, which is slow and loses packets. Try another cable or another port on the router or switch."
+            fi
         fi
         echo "            $_line"
     done
@@ -1307,6 +1400,7 @@ show_status() {
     if [ "$_usb" = eth0 ] && [ "$(sysval "$NET/eth0/carrier" 2>/dev/null)" = 1 ] && [ -n "$_def" ] && [ "$_def" != eth0 ]; then
         status_note "Traffic goes out $_def, not the adapter. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable."
     fi
+    [ -f "$WIFI_MARK" ] && status_note "The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link.  It turns Wi-Fi off again once the cable works for ${WIFI_BACK_SECS}s."
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."
     if [ "$_usb" = eth0 ]; then
         echo
@@ -1356,9 +1450,9 @@ nic_json() {
     _jc=$(sysval "$_jp/carrier" 2>/dev/null)
     _js=$(sysval "$_jp/speed" 2>/dev/null)
     case "$_js" in ''|-1|*[!0-9]*) _js=0 ;; esac
-    printf '{"name":%s,"driver":%s,"mac":%s,"carrier":%s,"speed":%s,"ip":%s' \
+    printf '{"name":%s,"driver":%s,"mac":%s,"carrier":%s,"speed":%s,"duplex":%s,"ip":%s' \
         "$(js "$1")" "$(js "$(nic_driver "$1")")" "$(js "$(nic_mac "$1")")" \
-        "$(jb "$([ "$_jc" = 1 ] && echo 1)")" "$_js" "$(js "$(iface_ipv4 "$1")")"
+        "$(jb "$([ "$_jc" = 1 ] && echo 1)")" "$_js" "$(js "$(sysval "$_jp/duplex" 2>/dev/null)")" "$(js "$(iface_ipv4 "$1")")"
     if is_usb_nic "$1"; then
         _jid="$(sysval "$_jp/device/../idVendor"):$(sysval "$_jp/device/../idProduct")"
         printf ',"id":%s,"chip":%s,"bus":%s' "$(js "$_jid")" "$(js "$(known_nic_id "$_jid")")" \
@@ -1391,10 +1485,11 @@ show_json() {
     _ab=0; { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; } && _ab=1
     printf '{"version":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"running":%s,"pid":%s},' \
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
-        "$(jb "$(hook_setting WATCH)")" "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
+        "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
+        "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
     printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
@@ -1704,6 +1799,7 @@ show_report() {
         [ -n "$(hook_setting PIN_MAC)" ] && _h="$_h, pinned MAC"
         [ -n "$(hook_setting MODULE)" ] && _h="$_h, module $(basename "$(hook_setting MODULE)")"
         [ "$(hook_setting WATCH)" = 1 ] && _h="$_h, watch"
+        [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
     fi
     echo "Hook:    $_h"
     echo "Interfaces:"
@@ -1718,6 +1814,7 @@ show_report() {
         _rl="  $_rn $_rk driver=$(nic_driver "$_rn") mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null || echo down)"
         _rs=$(sysval "$_rp/speed" 2>/dev/null)
         case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
+        [ "$(sysval "$_rp/duplex" 2>/dev/null)" = half ] && _rl="$_rl half-duplex"
         if [ "$_rk" = usb ]; then
             _rl="$_rl id=$(sysval "$_rp/device/../idVendor"):$(sysval "$_rp/device/../idProduct") bus=$(speed_label "$(sysval "$_rp/device/../speed")")"
         fi
@@ -1810,6 +1907,8 @@ while [ $# -gt 0 ]; do
             case "$MODULE" in *[!A-Za-z0-9._/-]*) error_exit "--module path may only use letters, digits, '.', '_', '-' and '/'" ;; esac ;;
         --watch) WATCH=1; SET_WATCH=1 ;;
         --no-watch) WATCH=0; SET_WATCH=1 ;;
+        --wifi-fallback) WIFI_FALLBACK=1; SET_WIFI=1 ;;
+        --no-wifi-fallback) WIFI_FALLBACK=0; SET_WIFI=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
         --file)
             shift

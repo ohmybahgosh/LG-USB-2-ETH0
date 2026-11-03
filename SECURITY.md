@@ -22,7 +22,7 @@ So you can judge it yourself:
 - Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.
 - `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  Nothing else is downloaded.
 
-Apart from `get-driver`, it doesn't download anything.  It never changes system files or network settings, or opens any ports.
+Apart from `get-driver`, it doesn't download anything.  It never changes system files or opens any ports, and it changes network settings only if you turn on `--wifi-fallback`, which flips the Wi-Fi switch when the cable stops working and back when it works.
 
 ## Verifying a download
 

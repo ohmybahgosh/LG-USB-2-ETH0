@@ -171,7 +171,7 @@ run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
         $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -415,6 +415,108 @@ test_watch_hotplug() {
     check "job gone" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.pid' 2>/dev/null || echo 999999) 2>/dev/null"
 }
 
+# link NAME SPEED [DUPLEX]: what the cable negotiated
+link() { echo "$2" > "$SYS/class/net/$1/speed"; echo "${3:-full}" > "$SYS/class/net/$1/duplex"; }
+
+test_link_speed() {
+    add_builtin eth2
+    add_usb eth0 1-1 r8152 1 "00:e0:4c:68:00:01" 0bda 8153 480
+    link eth0 1000
+    run status
+    lacks "cable link is only"
+    lacks "half duplex"
+    link eth0 100
+    run status
+    check "100 Mbit/s link flagged" has "eth0's cable link is only 100 Mbit/s"
+    check "says what to try" has "Cat5e"
+    run status --json
+    check "json has speed and duplex" json_ok "$OUT" "d['adapter']['speed'] == 100 and d['adapter']['duplex'] == 'full' and any('100 Mbit/s' in i for i in d['issues'])"
+    link eth0 1000 half
+    run status
+    check "half duplex flagged" has "half duplex, which is slow"
+    run report
+    check "report shows half duplex" has "half-duplex"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    link eth0 100
+    run status
+    lacks "cable link is only"
+}
+
+lacks_log() { ! grep -q "$1" "$LOG"; }
+wifi_is() { [ "$(cat "$STATE/wifi" 2>/dev/null || echo disabled)" = "$1" ] || { echo "    Wi-Fi is $(cat "$STATE/wifi" 2>/dev/null || echo disabled), wanted $1"; return 1; }; }
+
+test_wifi_fallback() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y --wifi-fallback --wait 4
+    check "setting saved" grep -q '^WIFI_FALLBACK="1"' "$CONF"
+    check "plan mentions Wi-Fi" has "turn Wi-Fi on"
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    check "watching" wait_log "Turning Wi-Fi on if eth0 has no cable link"
+    sleep 2
+    check "Wi-Fi left alone while the cable works" wifi_is disabled
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    check "Wi-Fi turned on" wait_log "turning Wi-Fi on"
+    check "Wi-Fi is on" wifi_is enabled
+    check "marker kept" test -f "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+    run status --json
+    check "json shows it" json_ok "$OUT" "d['hook']['wifiFallback'] is True and d['hook']['wifiFallbackOn'] is True"
+    run status
+    check "status note" has "The Wi-Fi fallback turned Wi-Fi on"
+    check "status hook line" has "Wi-Fi as a backup"
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    check "Wi-Fi turned off again" wait_log "turning Wi-Fi off again"
+    check "Wi-Fi is off" wifi_is disabled
+    check "marker gone" test ! -f "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+    # A second outage works too
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    sleep 6
+    check "second outage" test "$(grep -c 'turning Wi-Fi on' "$LOG")" = 2
+    stop_bg
+}
+
+test_wifi_fallback_leaves_wifi_alone() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    echo enabled > "$STATE/wifi"
+    run install -y --wifi-fallback --wait 4
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    sleep 6
+    check "no setstate when Wi-Fi is already on" sh -c "! grep -q setstate '$STATE/luna.log'"
+    check "nothing logged" lacks_log "turning Wi-Fi"
+    stop_bg
+    # Without the option, nothing happens at all
+    echo disabled > "$STATE/wifi"
+    rm -f "$STATE/luna.log" "$LOG"
+    run install -y --no-wifi-fallback --watch
+    check "setting off" grep -q '^WIFI_FALLBACK="0"' "$CONF"
+    run_hook
+    check "boot runs" wait_log "Watching for the adapter"
+    sleep 5
+    check "Wi-Fi untouched" sh -c "! grep -q 'wifi' '$STATE/luna.log' 2>/dev/null"
+    stop_bg
+}
+
+test_wifi_fallback_settings() {
+    add_builtin
+    run install -y --wifi-fallback
+    run install -y --watch
+    check "kept by a later install" grep -q '^WIFI_FALLBACK="1"' "$CONF"
+    echo on > "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+    run uninstall -y
+    check "uninstall warns" has "turned Wi-Fi on, and it stays on"
+    check "marker removed" test ! -f "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+    run --help
+    check "help lists it" has "--wifi-fallback"
+    run install -y
+    sed -i 's/^WIFI_FALLBACK=.*/WIFI_FALLBACK="yes"/' "$CONF"
+    run_hook
+    check "bad value refused" wait_log "invalid settings"
+}
+
 test_disable_enable() {
     add_builtin
     run install -y
@@ -531,6 +633,10 @@ t install_and_boot test_install_and_boot
 t boot_no_adapter test_boot_no_adapter
 t boot_late_adapter test_boot_late_adapter
 t watch_hotplug test_watch_hotplug
+t link_speed test_link_speed
+t wifi_fallback test_wifi_fallback
+t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
+t wifi_fallback_settings test_wifi_fallback_settings
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd

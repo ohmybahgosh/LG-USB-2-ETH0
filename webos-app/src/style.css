@@ -87,3 +87,5 @@ footer .right { margin: 0 0 0 auto; }
 .btn-update { background: #13261d; box-shadow: inset 0 0 0 2px rgba(34, 229, 132, .35); }
 .btn-update #update-title { color: #22e584; }
 .actions.tight .btn { padding-top: 14px; padding-bottom: 14px; margin-bottom: 11px; }
+.actions.tighter .btn { padding-top: 10px; padding-bottom: 10px; margin-bottom: 9px; font-size: 28px; }
+.actions.tighter .btn small { font-size: 19px; margin-top: 2px; }

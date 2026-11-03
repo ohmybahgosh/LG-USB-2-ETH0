@@ -9,8 +9,8 @@
   var withSpeed = p.get('speed') !== '0';
   var status = {
     version: ver, model: 'OLED65C2PUA', webos: 'webOS 25', webosRelease: '10.3.1', firmware: '33.30.65', kernel: '5.4.268-329.ptl4tv.5',
-    hook: { state: 'enabled', link: '', wait: '120', mac: '', module: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driver: 'r8152_oot', watch: true, running: true, pid: '1234' },
-    adapter: { name: 'eth0', driver: 'r8152_oot', mac: '', carrier: true, speed: 1000, ip: '192.168.1.42/24', id: '0bda:8156', chip: 'Realtek RTL8156', bus: 'USB 2.0' },
+    hook: { state: 'enabled', link: '', wait: '120', mac: '', module: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driver: 'r8152_oot', watch: true, wifiFallback: true, wifiFallbackOn: false, running: true, pid: '1234' },
+    adapter: { name: 'eth0', driver: 'r8152_oot', mac: '', carrier: true, speed: 1000, duplex: 'full', ip: '192.168.1.42/24', id: '0bda:8156', chip: 'Realtek RTL8156', bus: 'USB 2.0' },
     adapterIsEth0: true,
     builtin: { name: 'eth2', driver: 'lg1k_eth', mac: '', carrier: false, speed: 0, ip: '' },
     wifi: { name: 'wlan0', driver: 'mtk', mac: '', carrier: false, speed: 0, ip: '' },
@@ -20,7 +20,7 @@
     log: ['=== boot hook (wait 120s, module /home/root/lg-usb-2-eth0/r8152_oot.ko) ===', 'Done: the USB adapter is eth0, the built-in port is eth2.']
   };
   var report = ['```', 'LG-USB-2-ETH0 v' + ver + ' report', 'Model:   OLED65C2PUA', 'webOS:   webOS 25 (10.3.1), firmware 33.30.65',
-    'Kernel:  5.4.268-329.ptl4tv.5 (armv7l)', 'Hook:    enabled, wait 120s, module r8152_oot.ko, watch', 'Interfaces:',
+    'Kernel:  5.4.268-329.ptl4tv.5 (armv7l)', 'Hook:    enabled, wait 120s, module r8152_oot.ko, watch, wifi-fallback', 'Interfaces:',
     '  eth0 usb driver=r8152_oot mac=00:e0:4c:xx:xx:xx carrier=1 link=1000M id=0bda:8156 bus=USB 2.0',
     '  eth2 builtin driver=lg1k_eth mac=a8:23:fe:xx:xx:xx carrier=0',
     '  wlan0 wifi driver=mtk mac=a8:23:fe:xx:xx:xx carrier=0',

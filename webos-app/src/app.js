@@ -185,11 +185,17 @@
         if (a) {
             html += row('Adapter', esc((a.chip || a.id || 'USB') + ' · ' + a.driver) +
                 (a.driver === h.driver && h.driver ? ' <span class="ok">✔</span>' : ''));
-            html += row('Link', esc((a.speed ? a.speed + ' Mbit/s' : (a.carrier ? 'up' : 'no cable')) + (a.bus ? ' · ' + a.bus : '')));
+            // A gigabit adapter on a 100 Mbit/s link (a two-pair cable, a slow
+            // router port) or a half-duplex one is worth pointing out
+            var slow = a.carrier && ((a.speed && a.speed < 1000) || a.duplex === 'half');
+            html += row('Link', (slow ? '<span class="warn">' : '') +
+                esc((a.speed ? a.speed + ' Mbit/s' : (a.carrier ? 'up' : 'no cable')) + (a.duplex === 'half' ? ', half duplex' : '')) +
+                (slow ? '</span>' : '') + esc(a.bus ? ' · ' + a.bus : ''));
             html += row('Address', esc(a.ip ? a.ip.replace(/\/\d+$/, '') : 'none yet'));
         } else {
             html += row('Adapter', 'none');
         }
+        if (h.wifiFallbackOn) { html += row('Wi-Fi backup', '<span class="warn">on, the cable has no link</span>'); }
         if (s.speed && (s.speed.downMbps || s.speed.upMbps)) {
             html += row('Speed', esc((s.speed.downMbps || '?') + ' down · ' + (s.speed.upMbps || '?') + ' up Mbit/s' +
                 (s.speed.pingMs !== null ? ' · ' + s.speed.pingMs + ' ms' : '')));
@@ -210,6 +216,7 @@
         var bootOn = h.state === 'enabled';
         $('tog-boot').className = 'tog' + (bootOn ? ' on' : '');
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
+        $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         // The faster-driver row only appears when it fits this TV: a driver is
         // known for this exact kernel and the adapter is a Realtek one, or a
         // driver is already set up (so it can be turned off again).
@@ -235,7 +242,9 @@
         var btn = document.querySelector('[data-action="update"]');
         var show = !!(upd && upd.newer);
         btn.style.display = show ? '' : 'none';
-        $('actions').className = 'actions' + (show ? ' tight' : '');
+        // Squeeze the rows a little when there are more of them, so they fit
+        var n = buttons().length;
+        $('actions').className = 'actions' + (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''));
         if (!show) { return; }
         $('update-title').textContent = 'Update to v' + upd.latest;
         $('update-hint').textContent = upd.source === 'homebrew' ? 'opens the Homebrew Channel' : 'you have v' + upd.current + ', downloads and installs';
@@ -326,6 +335,18 @@
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.watch;
             act(on ? 'Stop following plug and unplug' : 'Follow plug and unplug', installArgs(on ? '--no-watch' : '--watch'));
+        },
+        wifi: function () {
+            if (!state) { return; }
+            var on = state.hook.state === 'enabled' && state.hook.wifiFallback;
+            if (on) {
+                act('Wi-Fi backup off', installArgs('--no-wifi-fallback'));
+            } else {
+                confirmThen('Use Wi-Fi as a backup?',
+                    'If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  ' +
+                    'Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.',
+                    function () { act('Wi-Fi backup', installArgs('--wifi-fallback')); });
+            }
         },
         apply: function () {
             confirmThen('Switch now?', 'The network drops for a few seconds while the adapter becomes eth0.', function () {

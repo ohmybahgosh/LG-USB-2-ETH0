@@ -1,8 +1,23 @@
 #!/bin/sh
 # Fake `luna-send` for the test suite: logs the call.  getAppInfo answers
 # with the version in $FAKE_STATE/appver (as if an install had finished).
+# Wi-Fi's switch is $FAKE_STATE/wifi ("enabled" or "disabled", default off);
+# $FAKE_STATE/wifi-broken makes setstate fail.
 printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
 case "$*" in
     *getAppInfo*) printf '{"appInfo":{"version":"%s"},"returnValue":true}\n' "$(cat "$FAKE_STATE/appver" 2>/dev/null)" ;;
+    *wifi/getstatus*)
+        if [ "$(cat "$FAKE_STATE/wifi" 2>/dev/null)" = enabled ]; then
+            echo '{"subscribed":false,"returnValue":true,"status":"connectionStateChanged","wakeOnWlan":"disabled"}'
+        else
+            echo '{"subscribed":false,"returnValue":true,"status":"serviceDisabled","wakeOnWlan":"disabled"}'
+        fi ;;
+    *connectionmanager/setstate*)
+        if [ -e "$FAKE_STATE/wifi-broken" ]; then echo '{"returnValue":false,"errorText":"denied"}'; exit 0; fi
+        case "$*" in
+            *'"wifi":"enabled"'*) echo enabled > "$FAKE_STATE/wifi" ;;
+            *'"wifi":"disabled"'*) echo disabled > "$FAKE_STATE/wifi" ;;
+        esac
+        echo '{"returnValue":true}' ;;
     *) echo '{"returnValue":true}' ;;
 esac

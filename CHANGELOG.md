@@ -4,6 +4,11 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 
 ## Unreleased
 
+### Added
+
+- **Wi-Fi as a backup** (`--wifi-fallback`, and a switch in the TV app).  If `eth0` loses its cable link for a minute while Wi-Fi is off, the boot hook turns Wi-Fi on, so the TV joins a network it already knows.  Once the cable has worked for 30 seconds, it turns Wi-Fi off again, so traffic goes back to the adapter.  It only turns Wi-Fi off if it turned it on, even across a reboot, and does nothing when Wi-Fi is already on.  Off by default.
+- `status`, the app and the report flag an adapter whose cable link is only 100 Mbit/s (or 10), or half duplex.  That's usually a cable with only two wire pairs, and it makes the adapter no faster than the built-in port.
+
 ### Changed
 
 - The README shows the TV app: screenshots of the status screen, speed test, GitHub report and updates, a short GIF, a before-and-after picture, and a chart of measured speeds.  `scripts/screenshots/take.js` takes the app screenshots again from the built app with made-up data.

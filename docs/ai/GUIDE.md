@@ -25,7 +25,7 @@ Four parts live in this repository:
 
 ## Rules that are not optional
 
-**It runs as root on someone's TV.**  A TV is expensive, and a boot hook runs again on every boot, including the bad ones.  Never write to the system partitions (signed squashfs; a failed write bricks the TV).  Never change webOS network settings: the script only renames interfaces and, with a driver module, moves an adapter between drivers.  Every change needs a way back (renames are rolled back on failure, a driver that doesn't take the adapter gives it back), and a reboot without the hook must always start clean.
+**It runs as root on someone's TV.**  A TV is expensive, and a boot hook runs again on every boot, including the bad ones.  Never write to the system partitions (signed squashfs; a failed write bricks the TV).  Never change webOS network settings: the script only renames interfaces and, with a driver module, moves an adapter between drivers.  The one exception is `--wifi-fallback`, which the user turns on: it flips webOS's own Wi-Fi switch (`wifi_set`) when `eth0` has had no cable link for a minute, only if Wi-Fi was off, and turns it off again (only if it turned it on, tracked in `WIFI_MARK`) once the cable works.  Every change needs a way back (renames are rolled back on failure, a driver that doesn't take the adapter gives it back), and a reboot without the hook must always start clean.
 
 **POSIX `sh` under busybox.**  The TV's shell is busybox `sh`.  No bashisms: no `[[ ]]`, arrays, `local` (the tests may use it, the script doesn't), `$(< file)`, `echo -e`, `${var,,}`, process substitution or `function` keyword.  Use only common busybox applets (`sed`, `awk`, `tr`, `grep`, `sort`, `head`, `wc`, `readlink -f`, `sha256sum`).  ShellCheck runs as `shellcheck -s sh`, and CI uses ShellCheck 0.9.0, which flags `A && B || C` (SC2015): write an `if` instead.
 
@@ -37,7 +37,9 @@ Four parts live in this repository:
 
 **The background check must stay cheap.**  `watch_run` wakes every few seconds for as long as the TV is on.  Its first checks are shell globs with no subprocesses; only when something changed does it look closer.  Keep it that way: no `$(...)`, pipes or external commands in the fast path.
 
-**Wi-Fi, tethering and other USB devices are left alone.**  `is_usb_nic` skips Wi-Fi (even when it sits on USB), `rndis_host`, `ipheth`, `cdc_mbim` and `qmi_wwan`.
+**Wi-Fi, tethering and other USB devices are left alone.**  `is_usb_nic` skips Wi-Fi (even when it sits on USB), `rndis_host`, `ipheth`, `cdc_mbim` and `qmi_wwan`.  They're never renamed or moved.
+
+**Performance tweaks need a measurement.**  On a C2 the USB 2.0 port is the limit, not the CPU (about a third busy at full speed), USB power saving is already off, and TCP buffers already grow to 6 MB.  Don't add sysctl, RPS or IRQ tweaks without numbers from a real TV showing they help.
 
 **Settings survive.**  `install` keeps every setting not given on the command line (`SET_*` flags and `load_settings`).  An update replaces the script, never the settings file.
 
