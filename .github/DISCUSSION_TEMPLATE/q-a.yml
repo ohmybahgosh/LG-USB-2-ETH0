@@ -1,0 +1,32 @@
+title: "[Question]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions and setup help live here.  Something broken goes to a [bug report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=bug-report.yml), and a result from your TV (working or not) to a [compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml).
+
+        The [README](https://github.com/ohmybahgosh/LG-USB-2-ETH0#readme) has a troubleshooting section and an FAQ, and may already answer it.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What you're trying to do, and what you've tried so far.
+    validations:
+      required: true
+  - type: input
+    id: tv
+    attributes:
+      label: TV model and webOS version
+      description: For example "OLED65C2PUA, webOS 25".  Skip it if you haven't bought the TV or adapter yet.
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter
+      description: Brand, model or chip, if you know it.  For example "UGREEN, Realtek RTL8156".
+  - type: textarea
+    id: report
+    attributes:
+      label: Report (optional)
+      description: |
+        On the TV, run `sh LG-USB-2-ETH0.sh report` and paste the output, or use Report for GitHub in the app.  MAC addresses are hidden.  Never post logins or passwords.
+      render: text

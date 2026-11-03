@@ -1,5 +1,14 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
+  - name: Question or setup help
+    url: https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/new?category=q-a
+    about: Will my adapter work, how do I set this up, what does this status mean?  Ask in Discussions > Q&A.
+  - name: Idea or feature request
+    url: https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/new?category=ideas
+    about: Ideas go to Discussions > Ideas, where they're collected until work on one starts.
+  - name: Security problem
+    url: https://github.com/ohmybahgosh/LG-USB-2-ETH0/security/advisories/new
+    about: Please report security problems privately, not as a public issue.
   - name: Rooting help
     url: https://cani.rootmy.tv/
     about: Check whether your TV can be rooted.  Rooting itself isn't covered here.

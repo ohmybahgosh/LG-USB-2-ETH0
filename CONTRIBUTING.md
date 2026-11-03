@@ -6,7 +6,9 @@ Thanks for helping.  Reports from real TVs, fixes, docs and code are all welcome
 
 Compatibility reports are what help most, whether it worked or not.  The easiest way: open the TV app, choose **Report for GitHub**, and scan the QR code with your phone.  It opens the form with your TV, adapter, result and the full report already filled in, MAC addresses hidden.
 
-Without the app, run `sh LG-USB-2-ETH0.sh report` and paste the output into the [compatibility report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml).  Something broken?  Use the [bug report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=bug-report.yml).  Security problems go privately, see [SECURITY.md](SECURITY.md).
+Without the app, run `sh LG-USB-2-ETH0.sh report` and paste the output into the [compatibility report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml).  Something broken?  Use the [bug report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=bug-report.yml).  Security problems go privately, see [SECURITY.md](SECURITY.md).  Questions and ideas go to [Discussions](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions) (Q&A and Ideas), not issues.
+
+Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Working on the code
 

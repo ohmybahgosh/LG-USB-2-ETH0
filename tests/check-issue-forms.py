@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Catch issue form mistakes GitHub doesn't report.  An invalid form isn't
-shown as an error anywhere: GitHub quietly opens a blank issue instead, and
-links that fill in the form's fields stop working."""
+"""Catch issue and discussion form mistakes GitHub doesn't report.  An
+invalid form isn't shown as an error anywhere: GitHub quietly opens a blank
+issue instead, and links that fill in the form's fields stop working."""
 import glob, sys
 import yaml
 
 bad = []
-for path in sorted(glob.glob('.github/ISSUE_TEMPLATE/*.yml')):
+for path in sorted(glob.glob('.github/ISSUE_TEMPLATE/*.yml') + glob.glob('.github/DISCUSSION_TEMPLATE/*.yml')):
     if path.endswith('config.yml'):
         continue
     form = yaml.safe_load(open(path))
-    for key in ('name', 'description', 'body'):
+    # Discussion forms are named after their category and need only a body
+    need = ('body',) if 'DISCUSSION_TEMPLATE' in path else ('name', 'description', 'body')
+    for key in need:
         if key not in form:
             bad.append(f'{path}: missing {key}')
     ids = []
@@ -30,5 +32,5 @@ for path in sorted(glob.glob('.github/ISSUE_TEMPLATE/*.yml')):
     if len(set(ids)) != len(ids):
         bad.append(f'{path}: ids must be unique')
 
-print('\n'.join(bad) or 'Issue forms look valid.')
+print('\n'.join(bad) or 'Issue and discussion forms look valid.')
 sys.exit(1 if bad else 0)

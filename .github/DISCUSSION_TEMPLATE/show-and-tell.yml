@@ -1,0 +1,32 @@
+title: "[Setup]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Show off a working setup: your TV, adapter, speeds, and anything that helped.  It helps others pick an adapter.
+
+        Please also send a [compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app's Report for GitHub makes one for you), so your TV can be added to the README's table.
+  - type: input
+    id: tv
+    attributes:
+      label: TV model and webOS version
+      description: For example "OLED65C2PUA, webOS 25".
+    validations:
+      required: true
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter and driver
+      description: For example "UGREEN RTL8156, r8152_oot from get-driver".
+    validations:
+      required: true
+  - type: input
+    id: speed
+    attributes:
+      label: Speed
+      description: From the app's Speed test or `sh LG-USB-2-ETH0.sh speedtest`.  For example "272 down, 287 up, 7 ms".
+  - type: textarea
+    id: story
+    attributes:
+      label: Your setup
+      description: Anything worth knowing, like the port you used, the cable, options like --watch or --wifi-fallback, or photos.

@@ -1,0 +1,47 @@
+title: "[Idea]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas and feature requests live here in Discussions, where they're collected and discussed until work on one starts (then it becomes an issue).  Bugs still go to [Issues](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new/choose).
+
+        Check the [changelog](https://github.com/ohmybahgosh/LG-USB-2-ETH0/blob/main/CHANGELOG.md) first: it may already be done.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, not the solution yet.  "My TV loses the adapter after standby and I have to reboot."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you'd like it to work, in the TV app or the script.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - TV app
+        - Script and boot hook
+        - Drivers and adapters
+        - Speed test or report
+        - Installing and updates
+        - Website or docs
+        - Something else
+  - type: input
+    id: tv
+    attributes:
+      label: Your TV, if it matters
+      description: Model and webOS version, for example "OLED65C2PUA, webOS 25".
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I searched the open issues and discussions and this isn't one of them.
+          required: true
