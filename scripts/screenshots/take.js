@@ -1,8 +1,10 @@
 // Takes the TV app screenshots and the demo GIF in assets/, from the built
 // app (webos-app/dist) with made-up data (demo.js).  Needs Playwright
-// (npm i playwright) and ffmpeg; pngquant is used if it's there.
+// (npm i playwright) and ffmpeg; pngquant is used if it's there.  With
+// --mp4 FILE it also writes the demo as an MP4 (for web pages, where a
+// video is much smaller than the GIF).
 //
-//   sh webos-app/build.sh && node scripts/screenshots/take.js
+//   sh webos-app/build.sh && node scripts/screenshots/take.js [--mp4 FILE]
 'use strict';
 const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
@@ -13,6 +15,8 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '../..');
 const DIST = path.join(ROOT, 'webos-app/dist');
 const OUT = path.join(ROOT, 'assets/screenshots');
+const mp4Arg = process.argv.indexOf('--mp4');
+const MP4 = mp4Arg > 0 ? path.resolve(process.argv[mp4Arg + 1]) : '';
 const has = (cmd) => { try { execFileSync('sh', ['-c', 'command -v ' + cmd], { stdio: 'ignore' }); return true; } catch (e) { return false; } };
 
 if (!fs.existsSync(path.join(DIST, 'index.html'))) { console.error('Build the app first: sh webos-app/build.sh'); process.exit(1); }
@@ -55,7 +59,7 @@ function savePng(raw, name) {
     await page.waitForTimeout(wait);
   };
   await shot('?x=1', 'app-home.png');
-  await shot('?ver=2.3.1', 'app-update.png', async () => {
+  await shot('?ver=2.3.2', 'app-update.png', async () => {
     await page.evaluate(() => document.querySelector('[data-action="update"]').focus());
   });
   await shot('?sd=50', 'app-speed.png', click('speed', 800));
@@ -85,5 +89,10 @@ function savePng(raw, name) {
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.6', '-i', video, '-vf',
     'fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', gif]);
   console.log('wrote ' + path.relative(ROOT, gif));
+  if (MP4) {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.6', '-i', video, '-vf', 'fps=12,scale=960:-2:flags=lanczos',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '24', '-preset', 'slow', '-movflags', '+faststart', '-an', MP4]);
+    console.log('wrote ' + MP4);
+  }
   fs.rmSync(work, { recursive: true, force: true });
 })().catch((e) => { console.error(e); process.exit(1); });

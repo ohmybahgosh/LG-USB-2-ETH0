@@ -1,11 +1,13 @@
 // Made-up answers from the script, so the TV app runs in a desktop browser
 // for the README screenshots (see take.js).  No real addresses: the IP is a
 // documentation-style private one and the MACs are masked like 'report' does.
-// URL options: ?ver=2.3.1 shows the update row, ?speed=0 hides the last
+// URL options: ?ver=OLDER (like 2.3.2) shows the update row, ?speed=0 hides the last
 // speed test, ?sd=MS sets how long each speed test phase takes.
 (function () {
   var p = new URLSearchParams(location.search);
-  var ver = p.get('ver') || '2.3.2';
+  // The newest release, and the version the screenshots run
+  var LATEST = '2.4.0';
+  var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
     version: ver, model: 'OLED65C2PUA', webos: 'webOS 25', webosRelease: '10.3.1', firmware: '33.30.65', kernel: '5.4.268-329.ptl4tv.5',
@@ -30,8 +32,7 @@
     var out = '', d = 120;
     if (/^status/.test(args)) { out = JSON.stringify(status); }
     else if (/^update --check/.test(args)) {
-      out = JSON.stringify(ver === '2.3.2' ? { current: ver, latest: '2.3.2', newer: false, kind: 'app', source: 'github' }
-                                            : { current: ver, latest: '2.3.2', newer: true, kind: 'app', source: 'github' });
+      out = JSON.stringify({ current: ver, latest: LATEST, newer: ver !== LATEST, kind: 'app', source: 'github' });
     }
     else if (/--phase ping/.test(args)) { out = JSON.stringify({ interface: 'eth0', server: 'DTW', pingMs: 7 }); d = speedDelay * 0.6; }
     else if (/--phase down/.test(args)) { out = JSON.stringify({ downMbps: 272 }); d = speedDelay; }

@@ -63,7 +63,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshots/app-home.png" alt="Status screen: USB adapter is eth0, Realtek RTL8156 on r8152_oot, 1000 Mbit/s link over USB 2.0, with switches for Run at every boot, Faster Realtek driver and Follow plug and unplug" /></td>
+    <td width="50%"><img src="assets/screenshots/app-home.png" alt="Status screen: USB adapter is eth0, Realtek RTL8156 on r8152_oot, 1000 Mbit/s link over USB 2.0, with switches for Run at every boot, Faster Realtek driver, Follow plug and unplug, and Wi-Fi as a backup" /></td>
     <td width="50%"><img src="assets/screenshots/app-speed.png" alt="Speed test result: 272 Mbit/s download, 287 Mbit/s upload, 7 ms latency, over eth0 to Cloudflare" /></td>
   </tr>
   <tr>
@@ -72,7 +72,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
-    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.3.2, you have v2.3.1, downloads and installs" /></td>
+    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.4.0, you have v2.3.2, downloads and installs" /></td>
   </tr>
   <tr>
     <td align="center"><b>Report for GitHub</b></td>
@@ -95,7 +95,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 **Or install the IPK yourself:** download `org.ohmybahgosh.lgusb2eth0_*.ipk` from the [latest release](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest) and install it with `ares-install`, or on the TV:
 
 ```sh
-luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.3.0_all.ipk"}'
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.0_all.ipk"}'
 ```
 
 Already set up with the script over SSH?  Open the app and it picks up your settings.  Its boot hook links to the copy of the script inside the app, so the app and the hook always run the same version.
@@ -382,7 +382,7 @@ The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Home
 
 The app screenshots and the GIF above come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).
 
-Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK and its manifest.
+Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK, its manifest and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`).  Then it tells ohmybahgosh.dev to refresh its Homebrew Channel repository.
 
 ## Contributing
 
