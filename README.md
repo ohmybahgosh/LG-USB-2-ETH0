@@ -363,7 +363,9 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 ## Upgrading from v1
 
-Run `sh LG-USB-2-ETH0.sh install`.  It replaces the v1 hook in place (same file name).  If you had "disabled" v1, `status` flags it: on TVs where `run-parts` is busybox's, the `.disabled` file kept running at boot.  `disable` moves it out of `init.d`, or `install` replaces it.  See the [changelog](CHANGELOG.md) for everything that changed.
+**With the TV app, no SSH needed:** in the Homebrew Channel, add the repository `https://ohmybahgosh.dev/repo` (gear icon, then **Add repository**), install **LG-USB-2-ETH0** and open it.  The status screen shows your old v1 hook.  Turn on **Run at every boot**, which replaces it in place, then choose **Switch now** or reboot.  The adapter stays `eth0` the whole time, and updates then come through the Homebrew Channel.
+
+**Over SSH:** run `sh LG-USB-2-ETH0.sh install`.  It replaces the v1 hook in place (same file name).  Either way, if you had "disabled" v1, `status` and the app flag it: on TVs where `run-parts` is busybox's, the `.disabled` file kept running at boot.  `disable` moves it out of `init.d`, or `install` replaces it.  See the [changelog](CHANGELOG.md) for everything that changed.
 
 ## Development and tests
 
