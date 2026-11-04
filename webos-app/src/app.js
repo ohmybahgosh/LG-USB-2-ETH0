@@ -101,6 +101,7 @@
         if (h.mac) { o.push('--mac'); }
         if (h.module) { o.push('--module'); }
         if (h.wait && h.wait !== '120') { o.push('--wait'); }
+        if (h.wifiFallback) { o.push('--wifi-fallback'); }
         return o.length ? o.join(' ') : 'None, the defaults';
     }
 

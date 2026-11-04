@@ -2,11 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## [2.4.3] - 2026-11-04
+
+### Fixed
+
+- **The report's "Drivers loaded" line missed drivers built into the kernel.**  It only looked in `/sys/module`, and a built-in driver can have no folder there, like `ax88179_178a` on a 2024 G4.  It now also lists the driver each USB adapter is using.
+- **The TV app's compatibility report left out the Wi-Fi backup.**  The "Options used" field now includes `--wifi-fallback` when it's on.
 
 ### Changed
 
 - The README shows all three steps of the Upgrade from v1 walk-through.
+- The first ASIX report: an AX88179 adapter works out of the box on a 2024 G4 with webOS 25 ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)).  It's in the Tested adapters and webOS compatibility tables.
 
 ## [2.4.2] - 2026-11-04
 

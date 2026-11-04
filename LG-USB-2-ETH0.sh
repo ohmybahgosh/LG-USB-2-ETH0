@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.2"
+VERSION="2.4.3"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1880,6 +1880,15 @@ show_report() {
     for _m in r8152 r8152_oot $(hook_setting DRIVER) ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
         case " $_list " in *" $_m "*) continue ;; esac
         [ -d "$SYS_MODULES/$_m" ] && _list="$_list $_m"
+    done
+    # A driver built into the kernel may have no /sys/module folder, so also
+    # list the ones the USB adapters are using right now.
+    for _rp in "$NET"/*; do
+        _rn=${_rp##*/}
+        is_usb_nic "$_rn" || continue
+        _m=$(nic_driver "$_rn")
+        [ -n "$_m" ] || continue
+        case " $_list " in *" $_m "*) ;; *) _list="$_list $_m" ;; esac
     done
     echo "Drivers loaded:${_list:- none}"
     echo "Default route: $(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')"

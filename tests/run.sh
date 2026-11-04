@@ -686,6 +686,16 @@ test_report() {
     check "full MAC hidden" lacks "00:e0:4c:68:00:01"
     check "lists adapter id" has "id=0bda:8153"
     check "lists driverless adapter" has "no driver: 0b95:1790"
+    check "lists the adapter's driver" has "Drivers loaded: r8152"
+}
+
+# A driver built into the kernel has no /sys/module folder, like ASIX on a G4
+test_report_builtin_driver() {
+    add_builtin
+    add_usb eth1 1-1 ax88179_178a 1 "c8:a3:62:00:00:01" 0b95 1790 480
+    run report
+    check "exit 0" rc_is 0
+    check "lists the built-in driver" has "Drivers loaded: ax88179_178a"
 }
 
 t help test_help
@@ -1244,6 +1254,7 @@ test_driver_offer_states() {
 }
 
 t report test_report
+t report_builtin_driver test_report_builtin_driver
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
 t takeover_fallback test_takeover_fallback
