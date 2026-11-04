@@ -29,6 +29,8 @@ case "$1" in
                 case "$5" in
                     up|down)
                         echo "$5" > "$_dir/operstate"
+                        # $FAKE_STATE/dhcp_on_up: webOS reconnects once the link goes up again
+                        [ "$5" = up ] && [ -e "$FAKE_STATE/dhcp_on_up" ] && echo "2: $_if inet 192.168.1.42/24" > "$FAKE_STATE/addr"
                         exit 0 ;;
                     name)
                         _new=$6

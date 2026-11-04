@@ -62,7 +62,7 @@ function savePng(raw, name) {
     await page.waitForTimeout(wait);
   };
   await shot('?x=1', 'app-home.png');
-  await shot('?ver=2.4.0', 'app-update.png', async () => {
+  await shot('?ver=2.4.1', 'app-update.png', async () => {
     await page.evaluate(() => document.querySelector('[data-action="update"]').focus());
   });
   await shot('?sd=50', 'app-speed.png', click('speed', 800));

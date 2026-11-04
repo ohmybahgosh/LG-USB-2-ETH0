@@ -172,6 +172,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 \
         $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -213,6 +214,8 @@ json_ok() {
     printf '%s' "$1" | python3 -c 'import json, sys; d = json.loads(sys.stdin.read()); sys.exit(0 if eval(sys.argv[1]) else 1)' "$2" \
         || { echo "    json check failed: $2"; return 1; }
 }
+drv() { kind_ok=$(nic_drv "$1"); [ "$kind_ok" = "$2" ] || { echo "    $1 driver is $kind_ok, wanted $2"; return 1; }; }
+nic_drv() { local l; l=$(readlink "$SYS/class/net/$1/device/driver") && echo "${l##*/}"; }
 rc_is() { [ "$RC" = "$1" ] || { echo "    exit code $RC, wanted $1"; return 1; }; }
 
 t() {
@@ -564,6 +567,52 @@ test_upgrade_v1_app() {
     check "new hook is a link" test -L "$HOOK"
 }
 
+# After standby, webOS had the network up on cdc_ncm.  After the move to
+# the faster driver it never reconnected (seen on a C2).  The hook takes the
+# link down and up, and if that doesn't help, gives the adapter back.
+standby_with_address() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot
+    run install -y --module "$SB/r8152_oot.ko"
+    run_hook
+    check "boot swaps" wait_log "Keeping the adapter on r8152_oot"
+    remove_usb 1-1
+    add_usb eth0 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    echo 9 > "$SYS/devices/usb1/1-1/devnum"
+    echo "2: eth0 inet 192.168.1.42/24" > "$STATE/addr"
+}
+
+test_standby_reconnects() {
+    standby_with_address
+    check "moves it" wait_log "Now on r8152_oot" 15
+    sleep 5
+    lacks_log "Taking the link down"
+    check "on the new driver" drv eth0 r8152_oot
+    stop_bg
+}
+
+test_standby_link_bounce() {
+    touch "$STATE/no_dhcp_after_move" "$STATE/dhcp_on_up"
+    standby_with_address
+    check "bounces the link" wait_log "Taking the link down and up" 20
+    check "reconnects" wait_log "eth0 is connected again." 10
+    check "stays on the new driver" drv eth0 r8152_oot
+    stop_bg
+}
+
+test_standby_gives_back() {
+    touch "$STATE/no_dhcp_after_move" "$STATE/dhcp_on_generic"
+    standby_with_address
+    check "gives it back" wait_log "Giving the adapter back to cdc_ncm" 25
+    check "reconnects on cdc_ncm" wait_log "eth0 is connected again, on cdc_ncm." 15
+    check "on cdc_ncm" drv eth0 cdc_ncm
+    check "still eth0" is eth0 usb:1-1
+    sleep 6
+    check "not moved again" test "$(grep -c 'generic driver again' "$LOG")" = 1
+    stop_bg
+}
+
 test_v1_disabled_in_initd() {
     add_builtin
     printf '#!/bin/sh\nip link set eth0 down\n' > "$HOOK.disabled"
@@ -665,14 +714,15 @@ t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd
 t upgrade_v1_app test_upgrade_v1_app
+t standby_reconnects test_standby_reconnects
+t standby_link_bounce test_standby_link_bounce
+t standby_gives_back test_standby_gives_back
 t uninstall_now test_uninstall_now
 t module_rejects_bad_path test_module_rejects_bad_path
 t module_missing test_module_missing
 t module_loaded_at_boot test_module_loaded_at_boot
 t unclaimed_adapter test_unclaimed_adapter
 t usb2_note test_usb2_note
-drv() { kind_ok=$(nic_drv "$1"); [ "$kind_ok" = "$2" ] || { echo "    $1 driver is $kind_ok, wanted $2"; return 1; }; }
-nic_drv() { local l; l=$(readlink "$SYS/class/net/$1/device/driver") && echo "${l##*/}"; }
 
 test_takeover_apply() {
     add_builtin

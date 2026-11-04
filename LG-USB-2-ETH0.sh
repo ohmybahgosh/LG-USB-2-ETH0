@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.1"
+VERSION="2.4.2"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -175,6 +175,10 @@ WATCH_EVERY=${LGU2E_WATCH_EVERY:-5}
 # seconds of a working link before it goes off again
 WIFI_GRACE=${LGU2E_WIFI_GRACE:-60}
 WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
+# After standby: seconds to let webOS bring the network back up before the
+# adapter moves to the faster driver, and to wait for it to reconnect after
+NET_SETTLE=${LGU2E_NET_SETTLE:-30}
+NET_CHECK=${LGU2E_NET_CHECK:-30}
 
 sysval() { [ -r "$1" ] && IFS= read -r _v < "$1" 2>/dev/null && printf '%s\n' "$_v"; }
 
@@ -516,6 +520,55 @@ takeover_pending() {
     return 1
 }
 
+iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
+
+# wait_ipv4 SECONDS: wait for eth0 to have an IPv4 address (webOS's DHCP)
+wait_ipv4() {
+    _w=0
+    while [ "$_w" -lt "$1" ]; do
+        [ -n "$(iface_ipv4 eth0)" ] && return 0
+        sleep 2
+        _w=$((_w + 2))
+    done
+    [ -n "$(iface_ipv4 eth0)" ]
+}
+
+# After standby the adapter comes back on the generic driver, and webOS
+# connects it again.  Moving it to the faster driver while webOS is still
+# doing that left a C2 showing "no connection" until a reboot.  So: let
+# webOS finish first, move the adapter, then make sure webOS reconnected
+# it.  If not, take the link down and up so webOS notices it, and if that
+# doesn't help either, give the adapter back to the generic driver, which
+# was working.  Only checked when eth0 had an address before the move.
+takeover_after_standby() {
+    _hadip=""
+    wait_ipv4 "$NET_SETTLE" && _hadip=1
+    take_over
+    _sdev=$_dev _sgd=$_gd
+    wait_for_nic
+    _u=$(find_usb_nic)
+    [ -n "$_u" ] && [ "$_u" != eth0 ] && swap_in
+    [ -n "$_hadip" ] || return 0
+    on_driver "$_sdev" || return 0
+    wait_ipv4 "$NET_CHECK" && return 0
+    echo "eth0 has no address ${NET_CHECK}s after the move.  Taking the link down and up so webOS sees it again."
+    ip link set dev eth0 down
+    sleep 2
+    ip link set dev eth0 up
+    if wait_ipv4 "$NET_CHECK"; then echo "eth0 is connected again."; return 0; fi
+    echo "Still no address.  Giving the adapter back to $_sgd, which was working, until the next boot."
+    # Re-plugging it in software lets the kernel pick the generic driver,
+    # as after standby.  It counts as tried, so it isn't moved again.
+    sys_write "$USB_DEVS/$_sdev/authorized" 0
+    sleep 2
+    sys_write "$USB_DEVS/$_sdev/authorized" 1
+    wait_for_nic
+    _u=$(find_usb_nic)
+    [ -n "$_u" ] && [ "$_u" != eth0 ] && swap_in
+    if wait_ipv4 "$NET_CHECK"; then echo "eth0 is connected again, on $_sgd."; else echo "eth0 still has no address.  Rebooting the TV fixes it."; fi
+    return 0
+}
+
 # Wi-Fi's switch in webOS, through its own connection manager: the same
 # switch as in the TV's network settings.  Only --wifi-fallback uses these.
 # wifi_status prints enabled, disabled, or nothing when it can't tell.
@@ -607,10 +660,7 @@ watch_run() {
         _last=$_now
         if [ -n "$DRIVER" ] && [ "$_cdc" = 1 ] && takeover_pending; then
             echo "=== $(date) adapter is on a generic driver again ==="
-            take_over
-            wait_for_nic
-            _u=$(find_usb_nic)
-            [ -n "$_u" ] && [ "$_u" != eth0 ] && swap_in
+            takeover_after_standby
             continue
         fi
         [ "$WATCH" = 1 ] || continue
@@ -1238,8 +1288,6 @@ speed_label() {
         *) echo "USB ${1:-?}" ;;
     esac
 }
-
-iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
 
 show_status() {
     ISSUES=0

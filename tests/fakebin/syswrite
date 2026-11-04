@@ -6,8 +6,14 @@
 #                                      switches to USB configuration 1 and makes
 #                                      a new network device with the lowest free ethN
 #   .../drivers/cdc_ncm/bind IFACE     cdc_ncm (or cdc_ether) takes it back
+#   .../usb/devices/DEV/authorized 0|1 the adapter is unplugged and plugged
+#                                      back in software: it comes back on
+#                                      cdc_ncm, with the same device number
 #   anything else                      written as a plain file
 # $FAKE_STATE/bind_fail makes binds to drivers other than cdc_ncm fail.
+# $FAKE_STATE/no_dhcp_after_move: after a bind to another driver, webOS
+# never gives eth0 its address back (its IPv4 line in $FAKE_STATE/addr goes).
+# $FAKE_STATE/dhcp_on_generic: after authorized 1, eth0 gets an address.
 
 SYS=$LGU2E_SYSFS
 NET=$SYS/class/net
@@ -44,6 +50,23 @@ make_netdev() {
 }
 
 case "$1" in
+    */authorized)
+        _dev=${1%/authorized}; _dev=${_dev##*/}
+        _u=$SYS/devices/usb1/$_dev
+        if [ "$2" = 0 ]; then
+            for _l in "$NET"/*; do
+                case "$(readlink "$_l")" in "$_u"/*)
+                    cat "$_l/address" > "$FAKE_STATE/mac_$_dev"
+                    rm -f "$_l" ;;
+                esac
+            done
+            rm -rf "$_u/$_dev":*
+            rm -f "$SYS/bus/usb/drivers"/*/"$_dev":*
+        else
+            make_netdev "$_dev" 1.0 cdc_ncm
+            [ -e "$FAKE_STATE/dhcp_on_generic" ] && echo "2: eth0 inet 192.168.1.42/24" > "$FAKE_STATE/addr"
+        fi
+        exit 0 ;;
     */drivers/cdc_ncm/unbind|*/drivers/cdc_ether/unbind)
         _g=${1%/unbind}; _g=${_g##*/}
         _dev=${2%%:*}
@@ -71,6 +94,7 @@ case "$1" in
         rm -rf "$SYS/devices/usb1/$_dev/$_dev":*
         rm -f "$SYS/bus/usb/drivers"/*/"$_dev":*
         make_netdev "$_dev" 1.0 "$_drv"
+        [ -e "$FAKE_STATE/no_dhcp_after_move" ] && rm -f "$FAKE_STATE/addr"
         # Like r8152 after a configuration switch: the bind call reports ENODEV
         echo "No such device" >&2
         exit 1 ;;

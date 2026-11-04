@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.4.2] - 2026-11-04
+
+### Fixed
+
+- **No connection after waking from standby**, with the faster driver (`--module`).  Standby resets the TV's USB ports and the adapter comes back on `cdc_ncm`.  The boot hook moved it back to the faster driver within seconds, while webOS was still reconnecting, and on a C2 webOS then showed no connection until a reboot.  Now the hook waits for webOS to reconnect first (up to 30 seconds), moves the adapter, and checks that webOS reconnects it.  If not, it takes the link down and up, and if that doesn't help either, it gives the adapter back to `cdc_ncm` until the next boot.  Each step is logged.
+
 ## [2.4.1] - 2026-11-04
 
 ### Added

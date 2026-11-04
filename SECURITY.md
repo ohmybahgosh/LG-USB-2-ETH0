@@ -19,7 +19,7 @@ So you can judge it yourself:
 - Adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth` (or moves it to `/var/lib/webosbrew/S01fix-eth.disabled`), and keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf` and its log in `/var/lib/webosbrew/lg-usb-2-eth0.log`.  Without the TV app, it keeps a copy of itself in `/home/root/lg-usb-2-eth0/`.
 - Renames network interfaces with `ip link`, and brings them up and down.
 - Writes its process ID and per-boot state to `/tmp` (RAM).
-- Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.
+- Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.  After standby, if webOS doesn't reconnect the adapter on that driver, it takes the link down and up, or re-plugs the adapter in software (`/sys/bus/usb/devices/*/authorized`) so it goes back to the generic driver.
 - `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  Nothing else is downloaded.
 - `update` downloads the newest release from GitHub, and installs it only if its SHA-256 matches (and its size, for the app).
 - `speedtest` talks to Cloudflare's public speed test, only when you run it.

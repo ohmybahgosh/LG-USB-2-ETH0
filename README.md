@@ -72,7 +72,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
-    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.4.1, you have v2.4.0, downloads and installs" /></td>
+    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.4.2, you have v2.4.1, downloads and installs" /></td>
   </tr>
   <tr>
     <td align="center"><b>Report for GitHub</b></td>
@@ -95,7 +95,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 **Or install the IPK yourself:** download `org.ohmybahgosh.lgusb2eth0_*.ipk` from the [latest release](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest) and install it with `ares-install`, or on the TV:
 
 ```sh
-luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.1_all.ipk"}'
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.2_all.ipk"}'
 ```
 
 Already set up with the script over SSH?  Open the app and it picks up your settings.  Its boot hook links to the copy of the script inside the app, so the app and the hook always run the same version.
@@ -224,7 +224,7 @@ At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  Th
 5. With `--module`, it moves the adapter from the generic `cdc_ncm` driver to your module's driver.  If the module doesn't take it within a few seconds, it goes back to `cdc_ncm`.  Each adapter gets one try per boot.
 6. It renames the built-in `eth0` to `eth2` and the adapter to `eth0`, then brings both up.  A rename that webOS interrupts is retried, and if a step still fails, the old names are put back.
 7. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
-8. With `--module`, it also keeps the adapter on the faster driver.  Standby resets the TV's USB ports, and the adapter comes back on `cdc_ncm`, so the hook moves it over again.  The check every few seconds only looks at a couple of `/sys` folders, so it costs next to nothing.
+8. With `--module`, it also keeps the adapter on the faster driver.  Standby resets the TV's USB ports, and the adapter comes back on `cdc_ncm`, so the hook moves it over again.  It first lets webOS reconnect the network, then checks webOS reconnects it after the move.  If not, it takes the link down and up, and if that doesn't help, gives the adapter back to `cdc_ncm` until the next boot, so you're never left without a connection.  The check every few seconds only looks at a couple of `/sys` folders, so it costs next to nothing.
 9. With `--wifi-fallback`, it checks whether `eth0` still has a cable link (one `/sys` file).  After a minute without one, if Wi-Fi is off, it turns Wi-Fi on through webOS's own connection manager, the same switch as in the TV's settings, and turns it off again once the cable has worked for 30 seconds.  It remembers turning Wi-Fi on in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`, so that still happens after a reboot in between.
 
 It logs to `/var/lib/webosbrew/lg-usb-2-eth0.log` (it starts over once it reaches 32 KB), and `status` shows the last lines.  `apply` and `revert` run detached from your SSH session, so they finish even when the session drops, and they warn you first if you're connected through a port that's about to change.
@@ -342,6 +342,8 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 <a id="adapter-not-detected"></a>**Adapter not detected?**  `status` lists adapters the kernel sees but has no driver for.  Try an adapter with a different chip, another USB port, or a powered hub.  Run `get-driver` to see if a better driver is known for your kernel.  If someone has built a driver module for your exact kernel (`uname -r`), install with `--module /full/path/driver.ko`.  The script refuses a module built for another kernel.
 
 **Adapter plugged in after boot, or unplugged and back?**  Without `--watch`, run `apply`, or reboot.  With `--watch`, it's handled for you.
+
+**No connection after waking from standby?**  Fixed in 2.4.2.  Before that, with `--module` (the faster driver), the adapter could be moved back to it while webOS was still reconnecting, and webOS then showed no connection until a reboot.  Update, and the log in `/var/lib/webosbrew/lg-usb-2-eth0.log` shows what happened after each standby.
 
 **Something went wrong at boot?**  The hook only renames interfaces (and loads your `--module`, if you gave one), so a reboot without it always starts clean.  If the Homebrew Channel drops into failsafe mode, telnet in, run `uninstall`, and reboot.
 

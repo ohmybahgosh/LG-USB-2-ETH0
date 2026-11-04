@@ -98,6 +98,7 @@ To preview the TV app in a desktop browser, open `webos-app/src/index.html` with
 - The report QR code opens `github.com/login?return_to=...`: the GitHub phone apps take over plain repository links and drop the form fields.
 - "Options used" in the compatibility form is a text box: GitHub won't fill a multiple-choice dropdown from a link.  A dropdown option can't be called "None" either (GitHub reserves it and silently opens a blank issue instead); `tests/check-issue-forms.py` catches that.
 - `status --json` picks `wlan*` for Wi-Fi, never `p2p*` (Wi-Fi Direct).
+- After standby, `watch_run` waits up to 30 seconds before moving the adapter back to the faster driver (`takeover_after_standby`).  Moving it while webOS was still reconnecting left a C2 with no connection until a reboot.  After the move it checks that eth0 gets its address back, bounces the link if not, and as a last resort re-plugs the adapter in software (`authorized` 0 then 1) so it comes back on the generic driver.
 - The app decides whether updates come from the Homebrew Channel by looking for `ohmybahgosh.dev/repo` in the Homebrew Channel's saved settings (`from_homebrew`).  If it's there, the app leaves updates to the Homebrew Channel.
 - The script reports `VERSION` (for example `2.3.1`); the app's version comes from the release tag.
 
