@@ -67,10 +67,11 @@ function savePng(raw, name) {
   });
   await shot('?sd=50', 'app-speed.png', click('speed', 800));
   await shot('?x=1', 'app-report.png', click('report', 500));
-  // Upgrade from v1: the walk-through's second step, and its result
+  // Upgrade from v1: the walk-through's three steps
   const enter = (n, wait) => async () => { for (let i = 0; i < n; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(i === n - 1 ? wait : 400); } };
-  await shot('?v1=1', 'app-upgrade.png', enter(2, 500));
-  await shot('?v1=1', 'app-upgrade-done.png', enter(3, 2500));
+  await shot('?v1=1', 'app-upgrade-1.png', enter(1, 500));
+  await shot('?v1=1', 'app-upgrade-2.png', enter(2, 500));
+  await shot('?v1=1', 'app-upgrade-3.png', enter(3, 2500));
   await browser.close();
 
   // The GIF: move down to Speed test, run it, close it, open the report

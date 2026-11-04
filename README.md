@@ -369,8 +369,14 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshots/app-upgrade.png" alt="Upgrade from v1, step 2 of 3, what changes: the v1 hook is replaced in place by a link to the script inside the app, nothing switches now, and the new hook only acts when an adapter is plugged in" /></td>
-    <td width="50%"><img src="assets/screenshots/app-upgrade-done.png" alt="Upgrade from v1, done: the boot hook is this version's, the old v1 file is gone, the USB adapter is still eth0, and Run at every boot is on" /></td>
+    <td width="33%"><img src="assets/screenshots/app-upgrade-1.png" alt="Upgrade from v1, step 1 of 3, what's there now: the v1 boot hook is installed and renames eth0 at every boot, the USB adapter is eth0 right now, and the upgrade doesn't touch the network" /></td>
+    <td width="33%"><img src="assets/screenshots/app-upgrade-2.png" alt="Upgrade from v1, step 2 of 3, what changes: the v1 hook is replaced in place by a link to the script inside the app, nothing switches now, and the new hook only acts when an adapter is plugged in" /></td>
+    <td width="33%"><img src="assets/screenshots/app-upgrade-3.png" alt="Upgrade from v1, step 3 of 3, done: the boot hook is this version's, the old v1 file is gone, the USB adapter is still eth0, and Run at every boot is on" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>1.</b> What's there now</td>
+    <td align="center"><b>2.</b> What changes</td>
+    <td align="center"><b>3.</b> Upgraded and checked</td>
   </tr>
 </table>
 
