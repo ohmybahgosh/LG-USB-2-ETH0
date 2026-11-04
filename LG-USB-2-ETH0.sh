@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.3"
+VERSION="2.4.4"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1531,8 +1531,11 @@ show_json() {
         _kf="$DRIVER_DIR/$3"
     fi
     _ab=0; { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; } && _ab=1
-    printf '{"version":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
-        "$(js "$VERSION")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
+    # The version the last in-app update installed, so the app can show
+    # what's new once it opens again
+    _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
+    printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
+        "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
     printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \

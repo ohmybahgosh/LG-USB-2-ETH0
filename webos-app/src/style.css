@@ -89,6 +89,8 @@ footer .right { margin: 0 0 0 auto; }
 
 /* Upgrade from v1 walk-through */
 .walk { list-style: none; padding: 0; margin: 4px 0 0; }
+.walk-h { margin: 14px 0 0; font-size: 19px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #22e584; }
+.walk-h:first-child { margin-top: 0; }
 .walk li { position: relative; padding: 10px 0 10px 46px; font-size: 25px; line-height: 1.4; color: #c9d4cf; }
 .walk li:before { content: "•"; position: absolute; left: 12px; top: 8px; color: #6f7f78; font-weight: 800; }
 .walk li.ok:before { content: "✔"; color: #22e584; }

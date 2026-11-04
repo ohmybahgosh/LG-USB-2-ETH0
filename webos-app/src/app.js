@@ -310,6 +310,40 @@
     }
     function li(cls, html) { return '<li class="' + cls + '">' + html + '</li>'; }
 
+    // CHANGELOG markdown, short: the bold lead if there is one, else the
+    // first sentence.  Links become plain text, since there's no browser.
+    function mdShort(s) {
+        var b = s.match(/^\*\*(.+?)\*\*/);
+        var t = b ? b[1] : s.replace(/^(.+?\.)\s.*$/, '$1');
+        return esc(t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
+    // After an update, the first time the new version opens, show what
+    // changed.  The last version seen is kept in the app's own storage.
+    var whatsNewChecked = false;
+    function whatsNew(s) {
+        if (whatsNewChecked || !s) { return; }
+        whatsNewChecked = true;
+        var wn = window.LGU2E_WHATSNEW, v = s.version, seen = null;
+        try {
+            seen = window.localStorage.getItem('lgu2e.seenVersion');
+            window.localStorage.setItem('lgu2e.seenVersion', v);
+        } catch (e) { return; }
+        // Updated in the app (the script logs it), or through the Homebrew Channel
+        var updated = s.updatedTo === v || (seen && seen !== v);
+        if (!updated || seen === v || !wn || wn.version !== v || overlayMode) { return; }
+        var html = '', n = 0;
+        wn.sections.forEach(function (sec) {
+            if (n >= 7 || !sec.items.length) { return; }
+            html += '<div class="walk-h">' + esc(sec.title) + '</div><ul class="walk">';
+            sec.items.forEach(function (it) { if (n < 7) { html += li(sec.title === 'Fixed' ? 'ok' : '', mdShort(it)); n++; } });
+            html += '</ul>';
+        });
+        overlay('message', 'Updated to v' + v + ': what\'s new', html,
+            'Press OK or BACK to close.  Full notes: github.com/ohmybahgosh/LG-USB-2-ETH0/releases');
+    }
+
     // Step 3 of the walk-through: upgrade, then check the result
     function upgradeNow() {
         busy = true;
@@ -429,7 +463,11 @@
                 'Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.',
                 function () {
                     act('Update', 'update -y', function (ok, text) {
-                        if (/Installing/.test(text || '')) { $('overlay-hint').textContent = 'Installing.  The app closes and opens again in a few seconds.'; }
+                        // What's new shows once the new version opens, not here
+                        if (ok && /Installing/.test(text || '')) {
+                            overlay('message', 'Updating to v' + upd.latest,
+                                '<span class="spinner"></span>Checked the download and installing it now.  The app closes and opens again by itself in a few seconds, then shows what\'s new.', '');
+                        }
                     });
                 });
         },
@@ -591,6 +629,6 @@
     setInterval(function () { if (!document.hidden && !busy && !waitTimer) { refresh(); } }, 30000);
 
     focusCurrent();
-    refresh();
+    refresh(whatsNew);
     checkUpdate();
 }());

@@ -689,6 +689,20 @@ test_report() {
     check "lists the adapter's driver" has "Drivers loaded: r8152"
 }
 
+# The TV app shows what's new after an update: status --json says which
+# version the last in-app update installed
+test_status_updated_to() {
+    add_builtin
+    run status --json
+    check "no update yet" has '"updatedTo":""'
+    printf '%s\n' '=== update to 2.4.2 ===' 'Updated the app to 2.4.2.' '=== update to 2.4.3 ===' 'Updated the app to 2.4.3.' > "$LOG"
+    run status --json
+    check "the last update" has '"updatedTo":"2.4.3"'
+    echo 'The app update to 2.4.4 did not finish.  The current version stays installed.' >> "$LOG"
+    run status --json
+    check "a failed update doesn't count" has '"updatedTo":"2.4.3"'
+}
+
 # A driver built into the kernel has no /sys/module folder, like ASIX on a G4
 test_report_builtin_driver() {
     add_builtin
@@ -1255,6 +1269,7 @@ test_driver_offer_states() {
 
 t report test_report
 t report_builtin_driver test_report_builtin_driver
+t status_updated_to test_status_updated_to
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot
 t takeover_fallback test_takeover_fallback

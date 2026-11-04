@@ -87,7 +87,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 - **Faster Realtek driver:** only shows up when a driver is known for your TV's exact kernel and a Realtek adapter is plugged in.  It downloads, checks and sets up the driver in one go.
 - **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
-- **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo below, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.
+- **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo below, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.  Either way, the new version opens with a short list of what's new.
 - **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.  Do this before you remove the app.
 
 **Install it from the Homebrew Channel:** open the Homebrew Channel, go to Settings, add the repository `https://ohmybahgosh.dev/repo`, then install **LG-USB-2-ETH0** from the list.  The Homebrew Channel then offers updates like for any other app.

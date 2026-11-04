@@ -61,7 +61,7 @@ jobs:
         with:
           node-version: 20
       - name: Check the app's JavaScript parses
-        run: node --check webos-app/src/app.js && node --check webos-app/gen-manifest.js
+        run: node --check webos-app/src/app.js && node --check webos-app/gen-manifest.js && node --check webos-app/gen-whatsnew.js
       - name: Build the IPK and manifest
         run: |
           npm install -g @webos-tools/cli

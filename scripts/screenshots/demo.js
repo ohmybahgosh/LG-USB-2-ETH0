@@ -3,11 +3,12 @@
 // documentation-style private one and the MACs are masked like 'report' does.
 // URL options: ?ver=OLDER (like 2.3.2) shows the update row, ?speed=0 hides the last
 // speed test, ?sd=MS sets how long each speed test phase takes, ?v1=1 (or
-// ?v1=off for a "disabled" one) starts with a v1 boot hook to upgrade.
+// ?v1=off for a "disabled" one) starts with a v1 boot hook to upgrade,
+// ?whatsnew=1 opens as if the app was just updated.
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.4.3';
+  var LATEST = '2.4.4';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
@@ -19,6 +20,7 @@
     wifi: { name: 'wlan0', driver: 'mtk', mac: '', carrier: false, speed: 0, ip: '' },
     defaultRoute: 'eth0', knownDriver: true, driverOffer: 'active', driverFile: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driverDownloaded: true, autobindHook: false,
     speed: withSpeed ? { interface: 'eth0', server: 'DTW', pingMs: 7, downMbps: 272, upMbps: 287, at: 0 } : null,
+    updatedTo: p.get('whatsnew') ? ver : '',
     issues: [], notes: [],
     log: ['=== boot hook (wait 120s, module /home/root/lg-usb-2-eth0/r8152_oot.ko) ===', 'Done: the USB adapter is eth0, the built-in port is eth2.']
   };

@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.4.4] - 2026-11-04
+
+### Changed
+
+- **What's new shows after an update, once the app opens again.**  Before, the update screen showed the release link just before the app closed.  Now it says it's installing, and the new version opens with a short list of what changed in it.  It shows once, after an update in the app or through the Homebrew Channel.
+
 ## [2.4.3] - 2026-11-04
 
 ### Fixed
