@@ -365,20 +365,25 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 ## Upgrading from v1
 
-**With the TV app, no SSH needed:** in the Homebrew Channel, add the repository `https://ohmybahgosh.dev/repo` (gear icon, then **Add repository**), install **LG-USB-2-ETH0** and open it.  It finds your v1 hook and shows **Upgrade from v1** at the top.  Press OK and it walks you through it: what's there now, what changes, then the upgrade and a check that it worked.  The adapter stays `eth0` the whole time, nothing switches until the next boot, and updates then come through the Homebrew Channel.
+**With the TV app, no SSH needed.**  Install the app, open it, and it walks you through the upgrade in three steps.
 
-<table>
-  <tr>
-    <td width="33%"><img src="assets/screenshots/app-upgrade-1.png" alt="Upgrade from v1, step 1 of 3, what's there now: the v1 boot hook is installed and renames eth0 at every boot, the USB adapter is eth0 right now, and the upgrade doesn't touch the network" /></td>
-    <td width="33%"><img src="assets/screenshots/app-upgrade-2.png" alt="Upgrade from v1, step 2 of 3, what changes: the v1 hook is replaced in place by a link to the script inside the app, nothing switches now, and the new hook only acts when an adapter is plugged in" /></td>
-    <td width="33%"><img src="assets/screenshots/app-upgrade-3.png" alt="Upgrade from v1, step 3 of 3, done: the boot hook is this version's, the old v1 file is gone, the USB adapter is still eth0, and Run at every boot is on" /></td>
-  </tr>
-  <tr>
-    <td align="center"><b>1.</b> What's there now</td>
-    <td align="center"><b>2.</b> What changes</td>
-    <td align="center"><b>3.</b> Upgraded and checked</td>
-  </tr>
-</table>
+1. In the Homebrew Channel, add the repository `https://ohmybahgosh.dev/repo` (gear icon, then **Add repository**), and install **LG-USB-2-ETH0**.
+2. Open it.  It finds your v1 hook and shows **Upgrade from v1** at the top of the menu.  Press OK.
+3. Follow the three steps.  Press OK to go on at each one, or BACK to cancel.
+
+**Step 1: what's there now.**  Where the v1 hook is and what it does at every boot, whether your adapter is `eth0` right now, and that the upgrade doesn't touch the network.
+
+<img src="assets/screenshots/app-upgrade-1.png" width="100%" alt="Upgrade from v1, step 1 of 3, what's there now: the v1 boot hook is installed and renames eth0 at every boot, the USB adapter is eth0 right now, and the upgrade doesn't touch the network" />
+
+**Step 2: what changes.**  The v1 hook is replaced in place by this version's, which follows the app's updates.  Nothing switches now, the new hook only acts when an adapter is plugged in, and Turn everything off undoes it all.
+
+<img src="assets/screenshots/app-upgrade-2.png" width="100%" alt="Upgrade from v1, step 2 of 3, what changes: the v1 hook is replaced in place by a link to the script inside the app, nothing switches now, and the new hook only acts when an adapter is plugged in" />
+
+**Step 3: upgraded and checked.**  The app upgrades, then checks the new hook is in place, the old v1 file is gone, and the adapter is still `eth0`.  If anything didn't work, it shows what went wrong and points you to Report for GitHub.
+
+<img src="assets/screenshots/app-upgrade-3.png" width="100%" alt="Upgrade from v1, step 3 of 3, done: the boot hook is this version's, the old v1 file is gone, the USB adapter is still eth0, and Run at every boot is on" />
+
+The adapter stays `eth0` the whole time, nothing switches until the next boot, and from then on updates come through the Homebrew Channel.
 
 **Over SSH:** run `sh LG-USB-2-ETH0.sh install`.  It replaces the v1 hook in place (same file name).  Either way, if you had "disabled" v1, `status` and the app flag it: on TVs where `run-parts` is busybox's, the `.disabled` file kept running at boot.  `disable` moves it out of `init.d`, or `install` replaces it.  See the [changelog](CHANGELOG.md) for everything that changed.
 
