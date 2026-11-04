@@ -72,7 +72,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
-    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.4.0, you have v2.3.2, downloads and installs" /></td>
+    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to v2.4.1, you have v2.4.0, downloads and installs" /></td>
   </tr>
   <tr>
     <td align="center"><b>Report for GitHub</b></td>
@@ -95,7 +95,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 **Or install the IPK yourself:** download `org.ohmybahgosh.lgusb2eth0_*.ipk` from the [latest release](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest) and install it with `ares-install`, or on the TV:
 
 ```sh
-luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.0_all.ipk"}'
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.1_all.ipk"}'
 ```
 
 Already set up with the script over SSH?  Open the app and it picks up your settings.  Its boot hook links to the copy of the script inside the app, so the app and the hook always run the same version.
@@ -363,7 +363,14 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 ## Upgrading from v1
 
-**With the TV app, no SSH needed:** in the Homebrew Channel, add the repository `https://ohmybahgosh.dev/repo` (gear icon, then **Add repository**), install **LG-USB-2-ETH0** and open it.  The status screen shows your old v1 hook.  Turn on **Run at every boot**, which replaces it in place, then choose **Switch now** or reboot.  The adapter stays `eth0` the whole time, and updates then come through the Homebrew Channel.
+**With the TV app, no SSH needed:** in the Homebrew Channel, add the repository `https://ohmybahgosh.dev/repo` (gear icon, then **Add repository**), install **LG-USB-2-ETH0** and open it.  It finds your v1 hook and shows **Upgrade from v1** at the top.  Press OK and it walks you through it: what's there now, what changes, then the upgrade and a check that it worked.  The adapter stays `eth0` the whole time, nothing switches until the next boot, and updates then come through the Homebrew Channel.
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-upgrade.png" alt="Upgrade from v1, step 2 of 3, what changes: the v1 hook is replaced in place by a link to the script inside the app, nothing switches now, and the new hook only acts when an adapter is plugged in" /></td>
+    <td width="50%"><img src="assets/screenshots/app-upgrade-done.png" alt="Upgrade from v1, done: the boot hook is this version's, the old v1 file is gone, the USB adapter is still eth0, and Run at every boot is on" /></td>
+  </tr>
+</table>
 
 **Over SSH:** run `sh LG-USB-2-ETH0.sh install`.  It replaces the v1 hook in place (same file name).  Either way, if you had "disabled" v1, `status` and the app flag it: on TVs where `run-parts` is busybox's, the `.disabled` file kept running at boot.  `disable` moves it out of `init.d`, or `install` replaces it.  See the [changelog](CHANGELOG.md) for everything that changed.
 

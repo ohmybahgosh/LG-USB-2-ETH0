@@ -62,11 +62,15 @@ function savePng(raw, name) {
     await page.waitForTimeout(wait);
   };
   await shot('?x=1', 'app-home.png');
-  await shot('?ver=2.3.2', 'app-update.png', async () => {
+  await shot('?ver=2.4.0', 'app-update.png', async () => {
     await page.evaluate(() => document.querySelector('[data-action="update"]').focus());
   });
   await shot('?sd=50', 'app-speed.png', click('speed', 800));
   await shot('?x=1', 'app-report.png', click('report', 500));
+  // Upgrade from v1: the walk-through's second step, and its result
+  const enter = (n, wait) => async () => { for (let i = 0; i < n; i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(i === n - 1 ? wait : 400); } };
+  await shot('?v1=1', 'app-upgrade.png', enter(2, 500));
+  await shot('?v1=1', 'app-upgrade-done.png', enter(3, 2500));
   await browser.close();
 
   // The GIF: move down to Speed test, run it, close it, open the report

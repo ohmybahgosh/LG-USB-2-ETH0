@@ -540,6 +540,30 @@ test_upgrade_v1() {
     check "v1 replaced by a link" test -L "$HOOK"
 }
 
+# What the TV app's Upgrade from v1 walk-through relies on: status --json
+# reports the v1 hook, and install -y replaces it (a running one, or one
+# "disabled" inside init.d) with a link, without touching the network
+test_upgrade_v1_app() {
+    add_builtin eth2
+    add_usb eth0 1-1 r8152 1 "00:e0:4c:68:00:01"
+    printf '#!/bin/sh\nip link set eth0 down\nip link set eth0 name eth2\n' > "$HOOK"
+    chmod 755 "$HOOK"
+    run status --json
+    check "json says legacy" json_ok "$OUT" "d['hook']['state'] == 'legacy' and any('install' in i for i in d['issues'])"
+    run install -y
+    check "replaced by a link" test -L "$HOOK"
+    run status --json
+    check "json says enabled" json_ok "$OUT" "d['hook']['state'] == 'enabled' and d['hook']['link'] != '' and d['adapterIsEth0'] and not any('v1' in i for i in d['issues'])"
+    check "adapter untouched" is eth0 usb:1-1
+    rm -f "$HOOK" "$CONF"
+    printf '#!/bin/sh\nip link set eth0 down\n' > "$HOOK.disabled"
+    run status --json
+    check "json says legacy-disabled" json_ok "$OUT" "d['hook']['state'] == 'legacy-disabled'"
+    run install -y
+    check "old disabled file gone" test ! -e "$HOOK.disabled"
+    check "new hook is a link" test -L "$HOOK"
+}
+
 test_v1_disabled_in_initd() {
     add_builtin
     printf '#!/bin/sh\nip link set eth0 down\n' > "$HOOK.disabled"
@@ -640,6 +664,7 @@ t wifi_fallback_settings test_wifi_fallback_settings
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd
+t upgrade_v1_app test_upgrade_v1_app
 t uninstall_now test_uninstall_now
 t module_rejects_bad_path test_module_rejects_bad_path
 t module_missing test_module_missing

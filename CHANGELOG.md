@@ -2,7 +2,11 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## [2.4.1] - 2026-11-04
+
+### Added
+
+- **Upgrade from v1, step by step, in the TV app.**  When the app finds a v1 boot hook (running, or "disabled" inside `init.d`), an Upgrade from v1 row shows at the top.  It walks through what's there now, what changes, then upgrades and checks the result: the new hook is in place, the old file is gone, and the adapter is still `eth0`.  No SSH needed, and nothing switches until the next boot.  The status line no longer tells app users to "Run 'install'".
 
 ### Changed
 

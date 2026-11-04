@@ -174,7 +174,13 @@
             sub = 'Plug in a USB Ethernet adapter.  The built-in port keeps working meanwhile.';
             dot = 'dot-warn';
         }
-        if (s.issues.length) { dot = 'dot-bad'; sub = s.issues[0]; }
+        // The script's v1 advice is for SSH ("Run 'install'").  In the app,
+        // point at the Upgrade from v1 row instead.
+        var v1 = h.state === 'legacy' || h.state === 'legacy-disabled';
+        var issues = s.issues.map(function (i) {
+            return v1 && /'install'/.test(i) ? 'An old v1 boot hook is installed.  Choose Upgrade from v1 to replace it, step by step.' : i;
+        });
+        if (issues.length) { dot = 'dot-bad'; sub = issues[0]; }
         else if (dot === 'dot-ok') { sub += '  No problems found.'; }
         $('dot').className = 'dot ' + dot;
         $('headline').textContent = head;
@@ -209,7 +215,7 @@
         $('facts').innerHTML = html;
 
         // Notes (skip the first issue, already in the subline)
-        var notes = s.issues.slice(1).concat(s.notes).slice(0, 4);
+        var notes = issues.slice(1).concat(s.notes).slice(0, 4);
         $('notes').innerHTML = notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
 
         // Toggles
@@ -239,6 +245,9 @@
     // The update row only shows when a newer release is out.  If the
     // Homebrew Channel knows this app's repo, updates come from there.
     function renderUpdate() {
+        var h = state ? state.hook : {};
+        document.querySelector('[data-action="upgrade"]').style.display =
+            h.state === 'legacy' || h.state === 'legacy-disabled' ? '' : 'none';
         var btn = document.querySelector('[data-action="update"]');
         var show = !!(upd && upd.newer);
         btn.style.display = show ? '' : 'none';
@@ -290,6 +299,38 @@
                 '<pre>' + esc(lines.join('\n')) + '</pre>', 'Press OK or BACK to close.');
             if (network && ok) { waitForAddress(); } else { refresh(); }
             if (after) { after(ok, text); }
+        });
+    }
+
+    // A step of a walk-through: an HTML list, OK goes on, BACK cancels
+    function stepThen(title, html, hint, fn) {
+        onConfirm = fn;
+        overlay('confirm', title, html, hint);
+    }
+    function li(cls, html) { return '<li class="' + cls + '">' + html + '</li>'; }
+
+    // Step 3 of the walk-through: upgrade, then check the result
+    function upgradeNow() {
+        busy = true;
+        overlay('busy', 'Upgrade from v1', '<span class="step-of">Step 3 of 3 · upgrading</span><span class="spinner"></span>Replacing the boot hook…', '');
+        runScript('install -y', function (ok, out, err) {
+            refresh(function (s) {
+                busy = false;
+                var h = s ? s.hook : {};
+                var done = ok && s && h.state === 'enabled' && !!h.link;
+                var checks = '';
+                if (s) {
+                    checks += h.state === 'enabled' && h.link ? li('ok', 'The boot hook is this version\'s now: <code>' + esc(h.link) + '</code>') : li('warn', 'The boot hook isn\'t this version\'s yet.');
+                    checks += h.state !== 'legacy' && h.state !== 'legacy-disabled' ? li('ok', 'The old v1 file is gone.') : li('warn', 'The old v1 file is still there.');
+                    checks += s.adapter && s.adapterIsEth0 ? li('ok', 'Your USB adapter is still <code>eth0</code>.') : li('', 'The adapter becomes <code>eth0</code> at the next boot, or choose Switch now.');
+                    checks += li('ok', 'Run at every boot is on.  Your settings are in <code>/var/lib/webosbrew/lg-usb-2-eth0.conf</code>.');
+                }
+                var text = (out || err || '').replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').slice(-8).join('\n');
+                overlay('message', done ? 'Upgrade from v1: done' : 'Upgrade from v1: something went wrong',
+                    '<span class="step-of">Step 3 of 3 · ' + (done ? 'all done' : 'check this') + '</span><ul class="walk">' + checks + '</ul>' +
+                    (done ? '' : '<pre>' + esc(text) + '</pre>'),
+                    done ? 'Press OK or BACK to close.  Nothing else to do.' : 'Press OK or BACK to close.  Report for GitHub makes a report you can send.');
+            });
         });
     }
 
@@ -352,6 +393,30 @@
             confirmThen('Switch now?', 'The network drops for a few seconds while the adapter becomes eth0.', function () {
                 act('Switch now', 'apply -y', null, true);
             });
+        },
+        // Upgrade from v1, as a walk-through: what's there, what changes,
+        // then the upgrade and a check that it worked.  It runs the same
+        // 'install' as the script, which replaces the v1 hook in place.
+        upgrade: function () {
+            if (!state || busy) { return; }
+            var s = state, h = s.hook, wasOff = h.state === 'legacy-disabled';
+            var hookDir = '/var/lib/webosbrew/init.d/';
+            var found = wasOff ?
+                li('warn', 'A v1 boot hook you turned off is still in the boot folder, as <code>' + hookDir + 'S01fix-eth.disabled</code>.  On many TVs that file still runs at every boot.') :
+                li('warn', 'The v1 boot hook is installed, at <code>' + hookDir + 'S01fix-eth</code>.  It runs at every boot and renames <code>eth0</code> even when no adapter is plugged in.');
+            var adapter = s.adapter && s.adapterIsEth0 ? li('ok', 'Your USB adapter is <code>eth0</code> right now.') :
+                (s.adapter ? li('', 'Your USB adapter is plugged in, as <code>' + esc(s.adapter.name) + '</code>.') : li('', 'No USB adapter is plugged in right now.'));
+            stepThen('Upgrade from v1', '<span class="step-of">Step 1 of 3 · what\'s there now</span><ul class="walk">' + found + adapter +
+                li('', 'The upgrade takes a few seconds and doesn\'t touch the network.') + '</ul>',
+                'Press OK to see what changes, or BACK to cancel.', function () {
+                    stepThen('Upgrade from v1', '<span class="step-of">Step 2 of 3 · what changes</span><ul class="walk">' +
+                        li('ok', 'The v1 hook is replaced, in place, by this version\'s: a link to the script inside this app, so updating the app updates the hook too.') +
+                        li('ok', 'Nothing switches now.  The adapter stays as it is until the next boot.') +
+                        li('ok', 'At boot, the new hook only changes anything when an adapter is plugged in, and puts the old names back if a step fails.') +
+                        li('', 'It starts with the defaults.  Turn on Faster Realtek driver, Follow plug and unplug or Wi-Fi as a backup afterwards if you want them.') +
+                        li('', wasOff ? 'This turns the boot hook on.  Prefer it off?  Turn off Run at every boot afterwards.' : 'To undo everything later, use Turn everything off.') + '</ul>',
+                        'Press OK to upgrade, or BACK to cancel.', upgradeNow);
+                });
         },
         update: function () {
             if (!upd || !upd.newer) { return; }
