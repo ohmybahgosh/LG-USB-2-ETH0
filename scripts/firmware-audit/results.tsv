@@ -1,0 +1,14 @@
+model	firmware	chip	platform	kernel	built_in	modules	source
+55UN7300PUF-04.64.00	04.64.00	k6lp	-	4.4.84-612.40.jimna.1	asix usbnet	none	modules.builtin
+65NANO75UQA-04.60.92	04.60.92	k8lp	mole	5.4.96-115.30.mole.2	asix usbnet	none	modules.builtin
+65UR9000PUA-33.31.75	33.31.75	m23	papikonda	5.4.268-329.ptl4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65B4PUA-33.31.75	33.31.75	k24	papikonda	5.4.268-294.24.papikonda.2	asix usbnet	none	config
+OLED65B5PUA-33.31.75	33.31.75	k24n	papikonda	5.4.268-294.24.papikonda.2	r8152 asix usbnet	none	config
+OLED65C1PUB-03.53.45	03.53.45	o20n	koli	4.4.84-229.kcl4tv.6	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65C2PUA-33.31.68	33.31.68	o22	papikonda	5.4.268-329.ptl4tv.5	asix ax88179_178a cdc_ether cdc_ncm r8152 rtl8150 usbnet	none	modules.builtin
+OLED65C2PUA-43.21.94	43.21.94	o22	qilian	6.12.44-352	asix ax88179_178a cdc_ether cdc_ncm r8152 r8153_ecm rtl8150 usbnet	none	modules.builtin
+OLED65C3PUA-33.31.68	33.31.68	o22n	papikonda	5.4.268-329.ptl4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65C4PUA-33.31.69	33.31.69	o22n2	papikonda	5.4.268-329.ptl4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65C4PUA-43.21.96	43.21.96	o22n2	qilian	6.12.44-352	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65C9PUA-05.50.00	05.50.00	o18	grampians	4.4.84-169.gld4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED65CXPUA-04.64.00	04.64.00	o20	-	4.4.84-219.jcl4tvmr.6	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config

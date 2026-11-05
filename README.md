@@ -24,6 +24,16 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 > It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files are touched, and network settings only if you turn on the Wi-Fi backup, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
 > Undo everything with **Turn everything off** in the TV app, or `sh LG-USB-2-ETH0.sh uninstall --now`.
 
+> [!WARNING]
+> **Keep firmware updates off on a rooted TV.**  LG's current firmware patches the known ways to root a TV, and that includes webOS 26, which LG has started rolling out to 2022 to 2025 models (version 43.21.94 for the C2, 43.21.96 for the C3, C4 and C5, as of early November 2026).  An update may remove root, and once a TV is on patched firmware it can't be rooted again, so this script and its app would stop working.
+>
+> - Turn off **Automatic software updates** in the TV's settings (on recent models it's under Support, Software Update).
+> - In the Homebrew Channel, open Settings and turn on **Block system updates**.
+> - Some TVs still show the update prompt anyway.  Blocking LG's update servers on your router or Pi-hole stops it: see the list in [Homebrew Channel issue #96](https://github.com/webosbrew/webos-homebrew-channel/issues/96#issuecomment-2119483327).
+> - Not sure about your firmware?  Check it at [CanI.RootMy.TV](https://cani.rootmy.tv/).
+>
+> People keep looking for new ways in.  RootMyTV, crashd, WTA, DejaVuln and faultmanager each came along after the one before it was patched, so a root method for newer firmware may well turn up, but there's no telling when.  The [webOS Homebrew rooting page](https://www.webosbrew.org/rooting/) is the place to watch.
+
 > [!NOTE]
 > **How this is built.**  I, [OhMyBahGosh](https://github.com/ohmybahgosh), wrote v1 by hand.  From v2.0 on, it's written with AI coding agents (Claude), directed, reviewed and tested by me.  I've been building software for over 17 years.  My day job is data engineering, and network security and pentesting are what I do for fun.  AI writes a lot of the code here; I decide what it does, check how it does it, and nothing ships until it's run on a real TV (an LG C2 on webOS 25).
 >
@@ -195,7 +205,7 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `revert` | Gives `eth0` back to the built-in port now.  (`reset` works too.) |
 | `disable` / `enable` | Keeps the hook but stops it running at boot, or turns it back on. |
 | `status` / `doctor` | Read-only report and checks.  Safe to run any time. |
-| `report` | Short, paste-ready report for a GitHub issue.  MAC addresses are masked. |
+| `report` | Short, paste-ready report for a GitHub issue: TV, chip, kernel, the USB network drivers built into it, interfaces and settings.  MAC addresses are masked. |
 | `get-driver` | Downloads a better driver module, if one is known to work on your exact kernel, and checks its checksum.  With `--file PATH`, checks and uses a copy you downloaded yourself.  See [A faster driver](#a-faster-driver). |
 | `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
 | `update` | Checks for a newer release and installs it, after checking its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
@@ -296,7 +306,7 @@ sh LG-USB-2-ETH0.sh get-driver
 sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/ax88179_178a.ko
 ```
 
-**2025 TVs on webOS 25 (B5) with an ASIX adapter:** [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) built the ASIX driver from LG's own kernel source for kernel `5.4.268-294.24.papikonda.2`, tested on an OLED55B56LA with a UGREEN AX88179 adapter.  Its source is published too.  It's the same `ax88179_178a.ko` file name, so the same two commands set it up.
+**2024 and 2025 TVs with LG's K24 chips (B4, QNED85, B5) and an ASIX adapter:** [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) built the ASIX driver from LG's own kernel source for kernel `5.4.268-294.24.papikonda.2`, tested on a 2025 OLED55B56LA (B5) with a UGREEN AX88179 adapter.  The [firmware audit](docs/firmware-audit.md) shows the 2024 B4 and QNED85 run the same kernel on current firmware, with no ASIX AX88179 driver either.  Its source is published too.  It's the same `ax88179_178a.ko` file name, so the same two commands set it up.
 
 **TVs with the Realtek K5Lp chip, kernel 4.4.84:** [throwaway96](https://github.com/throwaway96/webos-kernel-drivers), who builds kernel modules for many webOS chips, built the kernel's own `r8152` (gigabit RTL8152 and RTL8153) and `ax88179_178a` for it.  These are built per chip, so `get-driver` also checks the chip name (`nyx-cmd DeviceInfo query device_name`) and offers the one for your adapter.  Not yet tested with LG-USB-2-ETH0, so a report helps.
 
@@ -325,9 +335,11 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 24 | Where this script was first written. | |
 | webOS 25 on a 2024 C4 (same kernel as the C2 below) | RTL8153 and RTL8156 adapters come up through the generic `cdc_ncm` driver.  They work, but slower and with drops.  DonZoomik's `r8152_oot`, which `get-driver` offers, fixes that. | [DonZoomik/webos-r8152](https://github.com/DonZoomik/webos-r8152) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2022 C2 (OLED65C2PUA), kernel `5.4.268-329.ptl4tv.5` | Tested by the author.  An RTL8156 adapter (`0bda:8156`) comes up on `cdc_ncm`, and LG-USB-2-ETH0 makes it `eth0`.  With `r8152_oot` from `get-driver` and `install --module`, it's confirmed through a full reboot: at startup the hook loads the driver, moves the adapter over on the first try, turns scatter-gather off and makes it `eth0`, with traffic going out the adapter.  The C2's USB port runs at USB 2.0 speed. | This repo |
-| webOS 25 on 2024 QNED and OLED (Paparoa), kernel `5.4.268-294.17.paparoa.pine.2` | The Realtek driver was removed.  A gigabit RTL8153 adapter works with mbenitez343's `r8152` build (stable on a QNED86, per its author), which `get-driver` now offers.  Not yet tested with LG-USB-2-ETH0 on one of these TVs, so a report helps. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
+| webOS 25 on 2024 QNED and OLED (Paparoa), kernel `5.4.268-294.17.paparoa.pine.2` | The Realtek driver was removed.  Current firmware (33.31.75) moves these TVs to kernel `5.4.268-294.24.papikonda.2`, still with no Realtek or AX88179 driver, so this build isn't offered there: see the [firmware audit](docs/firmware-audit.md).  A gigabit RTL8153 adapter works with mbenitez343's `r8152` build (stable on a QNED86, per its author), which `get-driver` now offers.  Not yet tested with LG-USB-2-ETH0 on one of these TVs, so a report helps. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2024 G4 (OLED65G48LW), kernel `5.4.268-329.ptl4tv.5` | An ASIX AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  Settings show the wired connection and apps play.  292 Mbit/s down over USB 2.0. | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
 | webOS 25 on a 2025 B5 (OLED55B56LA), kernel `5.4.268-294.24.papikonda.2` | No ASIX driver: an AX88179A wasn't detected at all.  dd3git's `ax88179_178a` build fixes that, and `get-driver` offers it.  Not yet tested with LG-USB-2-ETH0, so a report helps. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185), [dd3git/lg-webos-ax88179-driver](https://github.com/dd3git/lg-webos-ax88179-driver) |
+
+**Which drivers does your TV's kernel have?**  The [firmware audit](docs/firmware-audit.md) reads them straight from LG's firmware for 13 models from 2019 to 2025, webOS 26 included.
 
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
 
@@ -375,7 +387,7 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 ## FAQ
 
-**Does it survive a firmware update?**  The hook lives in the Homebrew Channel's folder, so it stays as long as root does.  If an update removes root, the hook stops running and the TV just goes back to using the built-in port.
+**Does it survive a firmware update?**  The hook lives in the Homebrew Channel's folder, so it stays as long as root does.  If an update removes root, the hook stops running and the TV just goes back to using the built-in port.  Current firmware, webOS 26 included, can't be rooted again, so keep updates off: see the warning at the top.
 
 **Does it change my network settings?**  No.  webOS still sets up the wired connection itself.  The script only changes which device is called `eth0`.  The one exception is `--wifi-fallback`, if you turn it on: it flips the Wi-Fi switch on when the cable stops working, and back off when it works again.
 
@@ -426,7 +438,7 @@ It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinn
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
-The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.  The banner at the top is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
+The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.  `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has, for the [firmware audit](docs/firmware-audit.md).  The banner at the top is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK, its manifest and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`).  Then it tells ohmybahgosh.dev to refresh its Homebrew Channel repository.
 

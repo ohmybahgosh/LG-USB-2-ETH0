@@ -687,6 +687,13 @@ test_report() {
     check "lists adapter id" has "id=0bda:8153"
     check "lists driverless adapter" has "no driver: 0b95:1790"
     check "lists the adapter's driver" has "Drivers loaded: r8152"
+    check "no modules.builtin: unknown" has "Built in: unknown"
+    local k=$ROOT/lib/modules/$(uname -r)
+    mkdir -p "$k"
+    printf '%s\n' kernel/drivers/net/usb/r8152.ko kernel/drivers/net/usb/cdc_ncm.ko kernel/drivers/usb/core/usbcore.ko > "$k/modules.builtin"
+    FAKE_SOC=o22 run report
+    check "names the chip" has "Chip:    o22"
+    check "lists built-in drivers" has "Built in: r8152 cdc_ncm"
 }
 
 # The TV app shows what's new after an update: status --json says which

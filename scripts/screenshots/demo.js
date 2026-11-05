@@ -8,7 +8,7 @@
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.4.6';
+  var LATEST = '2.4.7';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
@@ -25,7 +25,7 @@
     log: ['=== boot hook (wait 120s, module /home/root/lg-usb-2-eth0/r8152_oot.ko) ===', 'Done: the USB adapter is eth0, the built-in port is eth2.']
   };
   var report = ['```', 'LG-USB-2-ETH0 v' + ver + ' report', 'Model:   OLED65C2PUA', 'webOS:   webOS 25 (10.3.1), firmware 33.30.65',
-    'Kernel:  5.4.268-329.ptl4tv.5 (armv7l)', 'Hook:    enabled, wait 120s, module r8152_oot.ko, watch, wifi-fallback', 'Interfaces:',
+    'Kernel:  5.4.268-329.ptl4tv.5 (aarch64)', 'Chip:    o22', 'Built in: rtl8150 r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet', 'Hook:    enabled, wait 120s, module r8152_oot.ko, watch, wifi-fallback', 'Interfaces:',
     '  eth0 usb driver=r8152_oot mac=00:e0:4c:xx:xx:xx carrier=1 link=1000M id=0bda:8156 bus=USB 2.0',
     '  eth2 builtin driver=lg1k_eth mac=a8:23:fe:xx:xx:xx carrier=0',
     '  wlan0 wifi driver=mtk mac=a8:23:fe:xx:xx:xx carrier=0',

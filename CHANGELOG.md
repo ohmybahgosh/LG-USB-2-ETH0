@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.4.7] - 2026-11-05
+
+### Added
+
+- **A firmware audit.**  `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has.  [docs/firmware-audit.md](docs/firmware-audit.md) has the results for 13 models from 2019 to 2025, webOS 26 included.  Among other things, it shows the C2, C3, C4 and UR9000 share one kernel, and that the 2024 B4 and QNED85 share the 2025 B5's, so dd3git's ASIX driver fits them too.
+- **`report` names the chip and the built-in USB network drivers**, from `/lib/modules/<kernel>/modules.builtin`.  Compatibility reports now show which drivers a TV has without anyone needing to look.
+
+### Changed
+
+- **A warning in the README to keep firmware updates off on rooted TVs.**  LG's current firmware, webOS 26 included (43.21.94 for the C2, 43.21.96 for the C3, C4 and C5), patches the known root methods.  It explains how to turn updates off and block them, and where to watch for new root methods.
+
 ## [2.4.6] - 2026-11-04
 
 ### Added

@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.6"
+VERSION="2.4.7"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1922,6 +1922,12 @@ show_report() {
     echo "Model:   ${TV_MODEL:-unknown}"
     echo "webOS:   $WEBOS_NAME (${WEBOS_RELEASE:-unknown}), firmware ${FIRMWARE:-unknown}"
     echo "Kernel:  $(uname -r) ($(uname -m))"
+    # The chip, and the USB network drivers built into the kernel (they have
+    # no .ko file, so they only show up in modules.builtin)
+    _soc=$(tv_soc)
+    [ -n "$_soc" ] && echo "Chip:    $_soc"
+    _bi=$(grep -E '/net/usb/' "${LGU2E_ROOT}/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null | sed 's#.*/##; s#\.ko$##' | tr '\n' ' ')
+    echo "Built in: ${_bi:-unknown}"
     _h=$(hook_state)
     if [ "$_h" = enabled ]; then
         _h="$_h, wait $(hook_setting WAIT_SECS)s"
