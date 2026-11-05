@@ -1209,6 +1209,31 @@ test_driver_offer_2024() {
     check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152.ko"
 }
 
+# webOS 5 (2020 UN7300): no ASIX driver in the kernel, OCT0PUSCRIME's build
+test_driver_offer_webos5_asix() {
+    add_builtin
+    local k=4.4.84-612.jcl4tv.40
+    add_unclaimed 1-1 0b95 1790
+    FAKE_KERNEL=$k run status --json
+    check "unclaimed AX88179: available" offer_is available
+    check "names who built it" has '"driverPage":"https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver"'
+    remove_usb 1-1
+    add_unclaimed 1-1 0bda 8153
+    FAKE_KERNEL=$k run status --json
+    check "a Realtek adapter: none" offer_is none
+    remove_usb 1-1
+    add_unclaimed 1-1 0b95 1790
+    printf 'not the module' > "$SB/ax88179_178a.ko"
+    FAKE_KERNEL=$k run get-driver -y --file "$SB/ax88179_178a.ko"
+    check "names the ASIX build" has "OCT0PUSCRIME/lg-webos-ax88179-driver"
+    check "says it fits the adapter" has "It supports your adapter (0b95:1790)"
+    check "still refuses a wrong file" has "Checksum mismatch"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/ax88179_178a.ko"
+    rm -f "$STATE/curl.log"
+    FAKE_KERNEL=$k run get-driver -y
+    check "pinned download" grep -q "raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c" "$STATE/curl.log"
+}
+
 test_get_driver_download_fails() {
     add_builtin
     touch "$STATE/curl_fail"
@@ -1302,6 +1327,7 @@ t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
 t json_skips_p2p test_json_skips_p2p
 t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t boot_skips_changed_module test_boot_skips_changed_module
+t driver_offer_webos5_asix test_driver_offer_webos5_asix
 t get_driver_download_fails test_get_driver_download_fails
 t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer

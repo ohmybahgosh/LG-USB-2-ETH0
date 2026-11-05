@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.4"
+VERSION="2.4.5"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -823,6 +823,10 @@ known_driver() {
             # QNED and OLED (K25lp / Paparoa) on webOS 25, where LG removed
             # it.  Gigabit RTL8152/RTL8153 adapters only, not 2.5G ones.
             echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601" ;;
+        4.4.84-612.jcl4tv.40)
+            # OCT0PUSCRIME's build of ASIX's own AX88179/178A driver (v1.19.0),
+            # for webOS 5 (2020 UN7300), whose kernel has no ASIX driver
+            echo "https://raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c9489034886382a23625b753aab9e661de/ax88179_178a.ko c9aefe84ee61d7021d739af37d70214a4b82f4b449a5eaf3501cec1f21af1831 ax88179_178a.ko https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver 04e8:a100,0711:0179,0930:0a13,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00" ;;
         *) return 1 ;;
     esac
 }
@@ -941,7 +945,7 @@ get_driver() {
 #   changed      set up, but the file changed since install
 #   missing      set up, but the file is gone
 #   available    not set up; a driver is known for this exact kernel and the
-#                adapter plugged in now is a Realtek one it can run
+#                adapter plugged in now is one it can run
 #   none         nothing to offer: no known driver for this kernel, or no
 #                adapter, or an adapter the driver isn't for
 driver_offer() {
@@ -1523,12 +1527,13 @@ show_json() {
         [ -e "$_p" ] && is_wifi "$_n" && { _jw=$_n; break; }
     done
     _jpid=$(watcher_pid) || _jpid=""
-    _kd=0; _kf=""
+    _kd=0; _kf=""; _kp=""
     if _k=$(known_driver "$(uname -r)"); then
         _kd=1
         # shellcheck disable=SC2086 # split the fields on purpose
         set -- $_k
         _kf="$DRIVER_DIR/$3"
+        _kp=$4
     fi
     _ab=0; { [ -e "$AUTOBIND_HOOK" ] || [ -L "$AUTOBIND_HOOK" ]; } && _ab=1
     # The version the last in-app update installed, so the app can show
@@ -1543,8 +1548,8 @@ show_json() {
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
-    printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverDownloaded":%s,"autobindHook":%s,' \
-        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" \
+    printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverPage":%s,"driverDownloaded":%s,"autobindHook":%s,' \
+        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" "$(js "$_kp")" \
         "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
     if [ -n "$(speed_get down)$(speed_get up)" ]; then
         printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"at":%s},' \
@@ -1920,7 +1925,7 @@ main_menu() {
         echo "u) Check for updates"
         # Only offered when a driver is known for this exact kernel and adapter
         _offer=$(driver_offer)
-        case "$_offer" in available) echo "9) Get the faster Realtek driver for this TV" ;; esac
+        case "$_offer" in available) echo "9) Get the faster driver for this TV" ;; esac
         echo "0) Exit"
         read_answer "Choose an option: " || exit 1
         case "$ANSWER" in

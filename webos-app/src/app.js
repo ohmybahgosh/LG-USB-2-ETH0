@@ -225,7 +225,7 @@
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         // The faster-driver row only appears when it fits this TV: a driver is
-        // known for this exact kernel and the adapter is a Realtek one, or a
+        // known for this exact kernel and the adapter is one it supports, or a
         // driver is already set up (so it can be turned off again).
         var offer = s.driverOffer || 'none';
         var driverBtn = document.querySelector('[data-action="driver"]');
@@ -398,8 +398,9 @@
                     act('Faster driver off', installArgs('--no-module'));
                 });
             } else if (state.driverOffer === 'available') {
-                confirmThen('Use the faster Realtek driver?',
-                    'This downloads a driver module built for this exact TV kernel by DonZoomik (github.com/DonZoomik/webos-r8152), checks its checksum, and loads it at every boot.  ' +
+                var page = (state.driverPage || '').replace(/^https:\/\//, '');
+                confirmThen('Use the faster driver?',
+                    'This downloads a driver module built for this exact TV kernel' + (page ? ' by ' + page.split('/')[1] + ' (' + page + ')' : '') + ', checks its checksum, and loads it at every boot.  ' +
                     'Moving the adapter to it takes the network down for a moment.  Wi-Fi is a good way back in if anything goes wrong.',
                     function () {
                         act('Faster driver', 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
@@ -448,7 +449,7 @@
                         li('ok', 'The v1 hook is replaced, in place, by this version\'s: a link to the script inside this app, so updating the app updates the hook too.') +
                         li('ok', 'Nothing switches now.  The adapter stays as it is until the next boot.') +
                         li('ok', 'At boot, the new hook only changes anything when an adapter is plugged in, and puts the old names back if a step fails.') +
-                        li('', 'It starts with the defaults.  Turn on Faster Realtek driver, Follow plug and unplug or Wi-Fi as a backup afterwards if you want them.') +
+                        li('', 'It starts with the defaults.  Turn on Faster driver, Follow plug and unplug or Wi-Fi as a backup afterwards if you want them.') +
                         li('', wasOff ? 'This turns the boot hook on.  Prefer it off?  Turn off Run at every boot afterwards.' : 'To undo everything later, use Turn everything off.') + '</ul>',
                         'Press OK to upgrade, or BACK to cancel.', upgradeNow);
                 });

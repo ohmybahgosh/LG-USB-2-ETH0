@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.4.5] - 2026-11-04
+
+### Added
+
+- **A faster driver for ASIX adapters on webOS 5.**  `get-driver` (and the app's Faster driver switch) now offers [OCT0PUSCRIME's](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) build of ASIX's AX88179/178A driver for kernel `4.4.84-612.jcl4tv.40` (2020 UN7300), whose kernel has no ASIX driver.  Like the others, it's pinned to a fixed commit and kept only if its SHA-256 matches, and only offered when an adapter it supports is plugged in.  Tested on a 55UN7300PUF with a TP-Link UE306 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)).
+
+### Changed
+
+- "Faster Realtek driver" is now just "Faster driver", in the app and the menu, since it's not only for Realtek adapters anymore.  The app's confirm screen names whoever built the driver for that TV.
+
 ## [2.4.4] - 2026-11-04
 
 ### Changed
