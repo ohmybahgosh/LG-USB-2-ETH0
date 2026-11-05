@@ -352,7 +352,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 ### More drivers on the way
 
-We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
+We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all, and Realtek and ASIX drivers for 2020 TVs with the K6Lp chip (like the UN7300), which have neither.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
 
 **Help test one.**  If your TV runs one of those kernels, the app shows a **Test a new driver** row, or run:
 
@@ -360,7 +360,7 @@ We now build drivers from LG's own kernel source too, the same way DonZoomik bui
 sh LG-USB-2-ETH0.sh test-driver
 ```
 
-It does the whole test: downloads the driver and checks its SHA-256, loads it until the next restart only, moves a Realtek adapter to it, checks it gets online, and shows a report to send (a QR code in the app).  If the TV freezes or restarts, restart it and open the app (or run `test-driver --last`) to send that result too.  Nothing loads the driver again by itself.
+It does the whole test: picks the driver for your kernel, chip and adapter, downloads it and checks its SHA-256, loads it until the next restart only, moves the adapter to it, checks it gets online, and shows a report to send (a QR code in the app).  If the TV freezes or restarts, restart it and open the app (or run `test-driver --last`) to send that result too.  Nothing loads the driver again by itself.
 
 ## Real speeds
 

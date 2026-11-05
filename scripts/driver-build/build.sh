@@ -99,7 +99,7 @@ case "$DRIVER" in
     *) echo "unknown driver $DRIVER" >&2; exit 1 ;;
 esac
 
-WORK=$OUT/$LABEL
+WORK=$OUT/$LABEL/$DRIVER
 B=$WORK/kbuild
 M=$WORK/$DRIVER
 rm -rf "$B" "$M"

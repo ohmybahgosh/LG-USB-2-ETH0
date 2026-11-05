@@ -34,7 +34,7 @@ webOS 5 and 6 TVs often run a 32-bit (ARMv7) kernel.  `build.sh` reads that from
 - `HOSTCFLAGS=-fcommon` for their host tools,
 - `cc-no-werror`, a compiler wrapper that drops `-Werror`, since parts of LG's and Realtek's code turn warnings a new GCC added into errors.
 
-Their firmware often has no kernel image with its config, so the config comes from LG's source (for the UN7300's K6Lp chip, `make ARCH=arm realtek/config.develop.rtd288o.tv006.emmc.old_defconfig`, as its `README_HowToMake.txt` says).  These kernels set `CONFIG_IKCONFIG_PROC`, so a TV's own config is in `/proc/config.gz` too.  To check exports without the TV's kernel image, build the whole kernel once and give `build.sh` its `Module.symvers` and a `release` file with the kernel name.  A full build of a 4.4 kernel also needs the old `#alloc` section flags in `arch/arm` assembly changed to `"a"` (and `#alloc, #execinstr` to `"ax"`), as upstream Linux later did.
+Their firmware carries the kernel as a U-Boot image around a self-unpacking zImage, which `kernel-info.py` unpacks to get the TV's own config and kernel.  Where a firmware doesn't have it, the config can come from LG's source (for the UN7300's K6Lp chip, `make ARCH=arm realtek/config.develop.rtd288o.tv006.emmc.old_defconfig`, as its `README_HowToMake.txt` says).  These kernels set `CONFIG_IKCONFIG_PROC`, so a TV's own config is in `/proc/config.gz` too.  To check exports without the TV's kernel image, build the whole kernel once and give `build.sh` its `Module.symvers` and a `release` file with the kernel name.  A full build of a 4.4 kernel also needs the old `#alloc` section flags in `arch/arm` assembly changed to `"a"` (and `#alloc, #execinstr` to `"ax"`), as upstream Linux later did.
 
 **Checked against OCT0PUSCRIME's module:** LG's webOS 5 K6Lp source (`kernel-1.0.0-612.21`, from the "webOS 5.0 JKHP 2.0" package) built with its own config and his version suffix exports all 60 symbols his working `ax88179_178a.ko` imports.  Built from that tree, the kernel's own `ax88179_178a` and `r8152` come out with the same `vermagic` as his (`4.4.84-612.jcl4tv.40 SMP preempt mod_unload ARMv7`), and every symbol they import is exported.  DonZoomik's newer r8152 doesn't build on these kernels: LG backported newer kernel functions into 4.4, which confuses its compatibility checks.
 
@@ -42,7 +42,7 @@ Their firmware often has no kernel image with its config, so the config comes fr
 
 ## Built so far
 
-All are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it can sit next to an old built-in `r8152`.  It covers RTL8152, RTL8153 (gigabit) and RTL8156 (2.5 gigabit) adapters.
+The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it can sit next to an old built-in `r8152`.  It covers RTL8152, RTL8153 (gigabit) and RTL8156 (2.5 gigabit) adapters.  The 32-bit ones are the kernel's own `r8152` (RTL8152 and RTL8153) and `ax88179_178a` (ASIX AX88179), which LG leaves out of those kernels.
 
 | Kernel | TVs (from the firmware archive) | LG source used | Struct offsets |
 | --- | --- | --- | --- |
@@ -51,7 +51,12 @@ All are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it
 | `5.4.96-307` | 2022 and 2023 OLEDs on firmware 03.31, 03.33 and 13.30, 19 files | webOS 23 O ReNew (C2), `linux-5.4-lg115x` | unchecked |
 | `5.4.268-294.24.papikonda.2`, K24 chip only | 2024 and 2025 TVs with the K24 chip on firmware 33.31, 17 files | webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2` | unchecked |
 
-The K24 one matters most: those kernels have no Realtek driver built in at all, not even an old one, so a Realtek adapter doesn't work on them today.
+| `4.4.84-612.40.jimna.1`, K6Lp chip only | 2020 TVs with the K6Lp chip (like the UN7300) on current firmware 04.64, 22 files | webOS 5.0 JKHP 2.0 (UN7310), `kernel-1.0.0-612.21` | unchecked |
+| `4.4.84-612.21.6.jardine.2`, K6Lp chip only | 2020 TVs with the K6Lp chip on firmware 03.21, 21 files | the same, which is `612.21.6.jardine.3`, one step from this kernel | unchecked |
+
+The K24 and K6Lp ones matter most: those kernels have no Realtek driver built in at all, not even an old one (the K6Lp ones have no `cdc_ncm` either), so a Realtek adapter doesn't work on them today.  The K6Lp kernels have no AX88179 driver either.
+
+**How the K6Lp builds were checked without a tester:** their firmware does carry the kernel, as a U-Boot image around a self-unpacking ARM zImage, with the config built in.  `kernel-info.py` unpacks that now, so each was built with the TV's own config and checked against the TV's own kernel: every option in the config exists in LG's source, the module's `vermagic` flags are the same as LG's own modules for that kernel (`SMP preempt mod_unload ARMv7`), and every symbol it imports is in the TV's kernel.  For jimna.1, whose source LG hasn't published (it's revision 612.40, the source 612.21), a full build of the 612.21 source with jimna.1's config exports 8,447 symbols, and all but 98 are in the real kernel.  The 98 are LG's TV tuner code (`KHAL_DEMOD_*`), which a network driver doesn't use.
 
 ## What we learned
 
@@ -65,7 +70,7 @@ The K24 one matters most: those kernels have no Realtek driver built in at all, 
 - Testers for each driver above.
 - The other six papikonda.2 chips, which need LG's source for a model with that chip.
 - `ax88179_178a` for kernels that lack it (K24 already has dd3git's).
-- 2020 TVs with the K6Lp chip, like the UN7300.  The config in LG's source has no Realtek driver and no `cdc_ncm`, so a Realtek adapter doesn't work on them at all today.  The kernel's own `r8152` (gigabit RTL8152 and RTL8153) and `ax88179_178a` build for them (see [32-bit kernels](#32-bit-kernels-2020-and-2021-tvs)).  Their current firmware runs `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2`, whose firmware files carry no config, so these need a tester's `/proc/config.gz` before they can be offered.
+- The K6Hp chip, which runs the same 2020 kernel names as K6Lp with its own config, and K6Lp's older kernels (`4.4.84-612.35.jasper.2`, `4.4.84-611.japoon.14`).
 - Other 2020 and 2021 kernels (`4.4.84-219.jcl4tvmr.6` on CX OLEDs, `4.4.84-229.kcl4tv.6`), which need their own LG source.
 
 ## Testing one

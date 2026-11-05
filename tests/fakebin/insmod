@@ -1,8 +1,21 @@
 #!/bin/sh
 # Fake `insmod` for the test suite: records the call, then marks the module
 # loaded and registers its USB driver, under the name the .ko file declares.
+# Like the kernel, the new driver then takes any adapter that no driver has
+# yet, if its USB ID is one the module lists.
 echo "insmod $*" >> "$FAKE_STATE/insmod.log"
 [ -e "$FAKE_STATE/insmod_fail" ] && { echo "insmod: can't insert '$1': invalid module format" >&2; exit 1; }
 _m=$(tr -c '[:alnum:]_=.-' '\n' < "$1" | sed -n 's/^name=//p' | head -n 1)
 [ -n "$_m" ] || { _m=${1##*/}; _m=${_m%.ko}; }
 mkdir -p "$LGU2E_SYSFS/module/$_m" "$LGU2E_SYSFS/bus/usb/drivers/$_m"
+_ids=$(tr -c '[:alnum:]_=:*' '\n' < "$1" | sed -n 's/^alias=usb:v\([0-9A-Fa-f]\{4\}\)p\([0-9A-Fa-f]\{4\}\).*/\1:\2/p' | tr 'A-F' 'a-f')
+for _u in "$LGU2E_SYSFS"/bus/usb/devices/*; do
+    [ -r "$_u/idVendor" ] || continue
+    _d=${_u##*/}
+    _i=$(readlink -f "$_u")/$_d:1.0
+    [ -d "$_i" ] && [ ! -e "$_i/driver" ] || continue
+    _id="$(cat "$_u/idVendor"):$(cat "$_u/idProduct")"
+    echo "$_ids" | grep -qx "$_id" || continue
+    [ -n "$LGU2E_SYSWRITE" ] && "$LGU2E_SYSWRITE" "$LGU2E_SYSFS/bus/usb/drivers/$_m/bind" "$_d:1.0" 2>/dev/null
+done
+exit 0

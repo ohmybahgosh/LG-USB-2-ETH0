@@ -31,7 +31,7 @@ Last run: November 5, 2026, on the latest US firmware for each model.  The raw d
   - dd3git's `ax88179_178a` is built for exactly this kernel, so `get-driver` already offers it on the B4 and QNED85 as well as the B5.
   - mbenitez343's `r8152` is for `5.4.268-294.17.paparoa.pine.2`, an older kernel for these TVs.  On current firmware they report `294.24.papikonda.2` instead, so it's no longer offered there.  **An `r8152` for `5.4.268-294.24.papikonda.2` is the most useful driver still missing.**
 - **Older Realtek-chip LCD TVs have only the ASIX AX8817x driver.**  The 2020 UN7300 (K6LP) and 2022 NANO75 (K8LP) have no `r8152`, no `ax88179_178a` and no `cdc_ncm`.  An adapter needs a module built for them.
-  - The UN7300's current firmware reports `4.4.84-612.40.jimna.1`, not the `4.4.84-612.jcl4tv.40` that OCT0PUSCRIME's driver was built for.  That kernel name may come from older firmware, so his module may not load after an update.  A report from a UN7300 on 04.64.00 would settle it.
+  - The UN7300's current firmware reports `4.4.84-612.40.jimna.1`, not the `4.4.84-612.jcl4tv.40` that OCT0PUSCRIME's driver was built for.  That kernel name may come from older firmware, so his module may not load after an update.  A report from a UN7300 on 04.64.00 would settle it.  For that kernel, and K6Lp's `4.4.84-612.21.6.jardine.2`, there are now Realtek and ASIX drivers to test, built with the TV's own config: see [driver-build.md](driver-build.md).
 - **LG's own OLED chips (O18 to O22N2) have everything built in** on webOS 4.5 to 25.  Adapters work out of the box there.  Only the driver version decides how fast.
 - **webOS 26 moves to kernel 6.12** (`6.12.44-352`), whose built-in `r8152` handles RTL8153 and RTL8156 properly.  Root is patched there though, so it doesn't help rooted TVs: see the warning in the README.
 
@@ -40,7 +40,7 @@ Last run: November 5, 2026, on the latest US firmware for each model.  The raw d
 [`scripts/firmware-audit/audit.sh`](../scripts/firmware-audit/audit.sh) takes one firmware `.zip` (or `.epk`) from LG's support site:
 
 1. Unpacks it with [epk2extract](https://github.com/openlgtv/epk2extract) from openlgtv, which has the decryption keys for most LG chips.
-2. If the firmware has a kernel image, `kernel-info.py` reads its version string and the config built into it, which says driver by driver whether it's built in, a module, or missing.  Newer firmware keeps the kernel inside the root filesystem, as `boot/Image.lz4-<kernel>` in LG's LZ4P format, and it reads that one too.
+2. If the firmware has a kernel image, `kernel-info.py` reads its version string and the config built into it, which says driver by driver whether it's built in, a module, or missing.  Newer firmware keeps the kernel inside the root filesystem, as `boot/Image.lz4-<kernel>` in LG's LZ4P format, and 2020 Realtek-chip TVs ship a U-Boot image around a self-unpacking ARM zImage.  It reads both.
 3. Some updates have neither.  Then it reads `lib/modules/<kernel>/modules.builtin` from the root filesystem instead (`usr/lib/modules` on webOS 26).
 4. It prints one line for `results.tsv`, and deletes the firmware and everything it unpacked.
 

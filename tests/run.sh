@@ -1527,11 +1527,11 @@ test_test_driver_checks() {
     FAKE_SOC=k8hpp FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "other chip: nothing" has "No new driver to test"
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "no adapter: refused" has "Plug in a Realtek USB adapter"
+    check "no adapter: refused" has "Plug in a USB adapter with a chip the new driver is for"
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/97df868.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/2b6a738.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
@@ -1540,6 +1540,49 @@ test_test_driver_checks() {
     add_unclaimed 1-1 0b95 1790
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "ASIX: use the tested one" has "has a tested driver for your adapter"
+}
+
+# 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
+test_test_driver_k6lp() {
+    add_builtin
+    drvtest_file
+    FAKE_SOC=k6hp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    check "K6Hp: nothing" has "No new driver to test"
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    check "no adapter: names both" has "Realtek RTL8152 or RTL8153, or ASIX AX88179"
+    add_unclaimed 1-1 0b95 1790
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run status --json
+    check "offered with the adapter" has '"driverTest":{"available":true,"adapterOk":true,"folder":"4.4.84-612.40.jimna.1-k6lp"'
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    check "ASIX: the ASIX build" grep -q "2b6a738.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
+    check "checksummed" has "Checksum mismatch"
+    remove_usb 1-1
+    add_unclaimed 1-1 0bda 8153
+    : > "$STATE/curl.log"
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
+    check "Realtek: the r8152 build" grep -q "2b6a738.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    remove_usb 1-1
+    add_unclaimed 1-1 0bda 8156
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    check "RTL8156: not supported by these" has "Plug in a USB adapter with a chip"
+}
+
+# An adapter no driver has: the new one takes it as it loads (no cdc_ncm
+# to move it from), and the driver name comes from the module
+test_test_driver_unclaimed() {
+    add_builtin
+    add_unclaimed 1-1 0b95 1790
+    echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
+    fake_ko "$STATE/download" ax88179_178a 4.4.84-612.40.jimna.1 0b95:1790
+    drvtest_file
+    echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/ax88179_178a.ko $(sha256sum "$STATE/download" | awk '{print $1}') ax88179_178a.ko 4.4.84-612.40.jimna.1-k6lp 0b95:1790" \
+        FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    check "exit 0" rc_is 0
+    check "names the driver" has "new driver to test for kernel 4.4.84-612.40.jimna.1: ax88179_178a"
+    check "adapter on it" drv eth1 ax88179_178a
+    check "result works" dt_is "result=works"
+    check "report names the file" has "experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko"
 }
 
 offer_is() {
@@ -1629,6 +1672,8 @@ t test_driver_eth0_kept test_test_driver_eth0_kept
 t test_driver_no_load test_test_driver_no_load
 t test_driver_crashed test_test_driver_crashed
 t test_driver_checks test_test_driver_checks
+t test_driver_k6lp test_test_driver_k6lp
+t test_driver_unclaimed test_test_driver_unclaimed
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

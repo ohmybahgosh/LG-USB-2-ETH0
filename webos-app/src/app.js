@@ -250,7 +250,7 @@
         document.querySelector('[data-action="drvtest"]').style.display = dt.available || dt.result ? '' : 'none';
         $('drvtest-hint').textContent = dt.state === 'running' ? 'testing now' :
             (dt.result ? 'last test: ' + (DT_SAYS[dt.result] || dt.result) :
-                (dt.adapterOk ? 'built for this TV\'s kernel, helps add support' : 'plug in a Realtek adapter to try it'));
+                (dt.adapterOk ? 'built for this TV\'s kernel, helps add support' : 'plug in an adapter it supports to try it'));
         renderUpdate();
         if (current >= buttons().length) { current = buttons().length - 1; }
     }
@@ -451,7 +451,7 @@
     function drvtestStart() {
         var dt = (state && state.driverTest) || {};
         if (!dt.adapterOk) {
-            overlay('message', 'Test a new driver', 'Plug in a USB adapter with a Realtek chip (RTL8152, RTL8153 or RTL8156) first: the new driver is for those.', 'Press OK or BACK to close.');
+            overlay('message', 'Test a new driver', 'Plug in a USB adapter with a chip the new driver is for first: Realtek (RTL8152, RTL8153, and on newer TVs RTL8156), or ASIX AX88179 on 2020 TVs with the K6Lp chip.', 'Press OK or BACK to close.');
             return;
         }
         confirmThen('Test a new driver?',

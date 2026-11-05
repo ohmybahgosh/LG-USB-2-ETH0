@@ -3,7 +3,8 @@
 which USB network drivers its built-in config (CONFIG_IKCONFIG) has.
 
 Usage: kernel-info.py KERNEL_IMAGE [SAVE_DIR]
-Prints kernel=, config=yes|, builtin= and modules= lines.  With SAVE_DIR,
+Reads a raw, gzip, lz4 or LZ4P image, or a 32-bit ARM zImage (also inside
+a U-Boot uImage).  Prints kernel=, config=yes|, builtin= and modules= lines.  With SAVE_DIR,
 also writes the decompressed image (Image) and its config (config) there,
 for building a driver against that kernel.
 """
@@ -101,6 +102,20 @@ def unlz4p(data):
     return bytes(out[:size])
 
 
+def from_zimage(data):
+    """A 32-bit ARM zImage (often in a U-Boot uImage, as on 2020 Realtek-chip
+    TVs) decompresses itself at boot, so the kernel is a gzip stream inside
+    it.  Try each gzip header until one holds the kernel."""
+    for m in re.finditer(b'\x1f\x8b\x08', data):
+        try:
+            out = zlib.decompressobj(31).decompress(data[m.start():])
+        except zlib.error:
+            continue
+        if re.search(rb'Linux version \S+ \(', out):
+            return out
+    return data
+
+
 def main(path, save=None):
     data = open(path, 'rb').read()
     if data[:4] == b'LZ4P':
@@ -110,6 +125,8 @@ def main(path, save=None):
     elif data[:2] == b'\x1f\x8b':
         # Only the first gzip member: the image can have padding after it
         data = zlib.decompressobj(31).decompress(data)
+    if not re.search(rb'Linux version \S+ \(', data):
+        data = from_zimage(data)
     if save:
         os.makedirs(save, exist_ok=True)
         open(os.path.join(save, 'Image'), 'wb').write(data)

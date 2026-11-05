@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/97df8687acead285d864dcb49b5a45c84d5622f3/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/2b6a738600596003ef270827e81c0c86168bcfc3/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -666,7 +666,7 @@ drv_try() {
     else _dtr=no-link
     fi
     {
-        grep -E '^(kernel|chip|adapter|folder|sha|boot|started)=' "$DRVTEST_FILE" 2>/dev/null
+        grep -E '^(kernel|chip|adapter|folder|file|sha|boot|started)=' "$DRVTEST_FILE" 2>/dev/null
         echo "state=done"
         echo "result=$_dtr"
         echo "loaded=$_dtd"
@@ -1220,12 +1220,15 @@ driver_offer() {
 }
 
 # === Testing new drivers ===
-# All the experimental drivers are Realtek's r8152 v2.22.1 as DonZoomik
-# patched it, so they support the same adapters as his (from their aliases)
+# The adapters each kind of experimental driver supports (from their
+# aliases): Realtek's r8152 v2.22.1 as DonZoomik patched it (r8152_oot, the
+# same as his), and the kernel's own r8152 and ax88179_178a of 4.4 kernels
+R8152_IDS="045e:07ab,045e:07c6,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,2357:0601"
+AX88179_IDS="04e8:a100,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00"
 R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012"
 
-# experimental_driver KERNEL: "url sha256 file folder ids" for an untested
-# driver built for exactly that kernel (and chip), if there is one
+# experimental_driver KERNEL: "url sha256 file folder ids" lines for the
+# untested drivers built for exactly that kernel (and chip), if there are any
 experimental_driver() {
     if [ -n "${LGU2E_TEST_EXPERIMENTAL:-}" ]; then
         echo "$LGU2E_TEST_EXPERIMENTAL"
@@ -1240,9 +1243,47 @@ experimental_driver() {
             # This build is K24's.
             [ "$(tv_soc)" = k24 ] || return 1
             _xf=$1-k24 _xs=cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6 ;;
+        4.4.84-612.40.jimna.1|4.4.84-612.21.6.jardine.2)
+            # 2020 TVs with the K6Lp chip, which have no Realtek driver (nor
+            # cdc_ncm) and no AX88179 one.  K6Hp TVs run the same kernel
+            # names with their own config.
+            [ "$(tv_soc)" = k6lp ] || return 1
+            _xf=$1-k6lp
+            case "$1" in
+                *jimna*) _xr=388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e _xa=0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22 ;;
+                *) _xr=f4c84da8cf2cf24ec50daede4ff82f36112d745e59a3d3eef65de9a5edbc7c87 _xa=727f2f59e7ab271b88febbde1c9fca5492d0e2c6b106723563daff6ecb2397f3 ;;
+            esac
+            echo "$EXPERIMENTAL_URL/$_xf/r8152.ko $_xr r8152.ko $_xf $R8152_IDS"
+            echo "$EXPERIMENTAL_URL/$_xf/ax88179_178a.ko $_xa ax88179_178a.ko $_xf $AX88179_IDS"
+            return 0 ;;
         *) return 1 ;;
     esac
     echo "$EXPERIMENTAL_URL/$_xf/r8152_oot.ko $_xs r8152_oot.ko $_xf $R8152_OOT_IDS"
+}
+
+# pick_experimental KERNEL: of its experimental drivers, the one for the
+# adapter plugged in (nothing, and false, if none supports it)
+pick_experimental() {
+    _pel=$(experimental_driver "$1") || return 1
+    while IFS= read -r _pe; do
+        [ -n "$_pe" ] || continue
+        # shellcheck disable=SC2086 # split the fields on purpose
+        set -- $_pe
+        if supported_adapter "$5" > /dev/null; then echo "$_pe"; return 0; fi
+    done <<EOF
+$_pel
+EOF
+    return 1
+}
+
+# The adapters a driver file is for, in words
+drv_adapters() {
+    case "$1" in
+        r8152_oot.ko) echo "Realtek RTL8152, RTL8153 or RTL8156" ;;
+        r8152.ko) echo "Realtek RTL8152 or RTL8153" ;;
+        ax88179_178a.ko) echo "ASIX AX88179" ;;
+        *) echo "${1%.ko}" ;;
+    esac
 }
 
 boot_id() {
@@ -1255,7 +1296,7 @@ drvtest_get() { sed -n "s/^$1=//p" "$DRVTEST_FILE" 2>/dev/null | head -n 1; }
 drvtest_settle() {
     [ "$(drvtest_get state)" = running ] || return 0
     [ "$(drvtest_get boot)" != "$(boot_id)" ] || return 0
-    { grep -E '^(kernel|chip|adapter|folder|sha|boot|started)=' "$DRVTEST_FILE"; echo "state=done"; echo "result=crashed"; } \
+    { grep -E '^(kernel|chip|adapter|folder|file|sha|boot|started)=' "$DRVTEST_FILE"; echo "state=done"; echo "result=crashed"; } \
         > "$DRVTEST_FILE.new" && mv -f "$DRVTEST_FILE.new" "$DRVTEST_FILE"
 }
 
@@ -1281,7 +1322,7 @@ drvtest_report() {
     echo "Firmware: ${FIRMWARE:-unknown} ($WEBOS_NAME)"
     echo "Kernel:   $(drvtest_get kernel)"
     echo "Chip:     $(drvtest_get chip)"
-    echo "Driver:   experimental/$(drvtest_get folder) ($(drvtest_get sha | cut -c1-16))"
+    echo "Driver:   experimental/$(drvtest_get folder)/$(drvtest_get file) ($(drvtest_get sha | cut -c1-16))"
     echo "Adapter:  $(drvtest_get adapter)"
     echo "Result:   $_r"
     if [ "$_r" != crashed ]; then
@@ -1333,12 +1374,24 @@ test_driver() {
         return 0
     fi
     [ -z "$(hook_setting MODULE)" ] || error_exit "A driver module is already set up ($(hook_setting MODULE)).  Turn it off first (install --no-module), restart the TV, then test."
+    _xp=$(pick_experimental "$_k") || {
+        _xfor=""
+        while IFS= read -r _xl; do
+            [ -n "$_xl" ] || continue
+            # shellcheck disable=SC2086 # split the fields on purpose
+            set -- $_xl
+            _xfor="${_xfor:+$_xfor, or }$(drv_adapters "$3")"
+        done <<EOF
+$_x
+EOF
+        error_exit "Plug in a USB adapter with a chip the new driver is for first: $_xfor."
+    }
     # shellcheck disable=SC2086 # split the fields on purpose
-    set -- $_x
+    set -- $_xp
     _xurl=$1 _xsum=$2 _xfile=$3 _xfold=$4 _xids=$5
-    _xid=$(supported_adapter "$_xids") || error_exit "Plug in a Realtek USB adapter first (an RTL8152, RTL8153 or RTL8156 chip): the driver is for those."
+    _xid=$(supported_adapter "$_xids")
     _xchip=$(known_nic_id "$_xid") || _xchip=""
-    info "There's a new driver to test for kernel $_k: r8152_oot, built from LG's own kernel source."
+    info "There's a new driver to test for kernel $_k: ${_xfile%.ko}, built from LG's own kernel source."
     echo "It hasn't run on a TV with this kernel yet.  The test:"
     echo "  1. downloads it and checks its SHA-256, and that it's built for exactly this kernel"
     echo "  2. loads it until the next restart only: nothing loads it at boot"
@@ -1367,9 +1420,11 @@ test_driver() {
     mv -f "$_xko.part" "$_xko" || error_exit "Could not save $_xko."
     success "Downloaded and verified."
     { echo "state=running"; echo "boot=$(boot_id)"; echo "kernel=$_k"; echo "chip=${_soc:-unknown}"
-      echo "adapter=$_xid${_xchip:+ ($_xchip)}"; echo "folder=$_xfold"; echo "sha=$_xsum"; echo "started=$(date)"; } > "$DRVTEST_FILE"
+      echo "adapter=$_xid${_xchip:+ ($_xchip)}"; echo "folder=$_xfold"; echo "file=$_xfile"; echo "sha=$_xsum"; echo "started=$(date)"; } > "$DRVTEST_FILE"
     sync
-    MODULE=$_xko DRIVER=r8152_oot MODULE_SHA=$_xsum
+    # The driver name the module registers, like r8152_oot
+    _xname=$(module_name "$_xko")
+    MODULE=$_xko DRIVER=${_xname:-${_xfile%.ko}} MODULE_SHA=$_xsum
     # If the adapter is eth0 now, make it eth0 again after the move
     _xswap=0
     [ "$(find_usb_nic)" = eth0 ] && _xswap=1
@@ -2005,7 +2060,7 @@ show_json() {
         # shellcheck disable=SC2086 # split the fields on purpose
         set -- $_x
         _xfo=$4
-        supported_adapter "$5" > /dev/null && _xok=1
+        pick_experimental "$(uname -r)" > /dev/null && _xok=1
     fi
     printf '"driverTest":{"available":%s,"adapterOk":%s,"folder":%s,"state":%s,"result":%s},' \
         "$(jb "$_xa")" "$(jb "$_xok")" "$(js "$_xfo")" "$(js "$(drvtest_get state)")" "$(js "$(drvtest_get result)")"

@@ -7,6 +7,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Added
 
 - **32-bit driver builds.**  `scripts/driver-build/build.sh` now builds for the 32-bit (ARMv7) 4.4 kernels of 2020 and 2021 TVs too, and can build a driver from LG's own kernel tree (`intree:ax88179_178a`, `intree:r8152`) for kernels that leave it out.  Checked against OCT0PUSCRIME's webOS 5 ASIX driver: LG's source, built his way, exports every symbol his module uses, and the drivers built from it match its `vermagic`.  Thanks to OCT0PUSCRIME for sharing his build steps.
+- **Drivers to test for 2020 TVs with the K6Lp chip** (like the UN7300), which have no Realtek driver, no `cdc_ncm` and no AX88179 driver: the kernel's own `r8152` (RTL8152, RTL8153) and `ax88179_178a`, for kernels `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2`.  `test-driver` and Test a new driver pick the one for the adapter plugged in.  Built with each TV's own config, which the firmware audit now reads from the U-Boot and zImage kernel these TVs use.
 
 ## [2.4.8] - 2026-11-05
 
