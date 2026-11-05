@@ -1,0 +1,16 @@
+#!/bin/sh
+# A compiler wrapper for building old LG kernels (4.4) with a new GCC:
+# runs ${REAL_CC} without -Werror, since parts of LG's tree turn warnings
+# that newer GCC added into errors.  The code it produces is the same.
+_cc=${REAL_CC:?set REAL_CC to the real compiler}
+_n=$#
+while [ "$_n" -gt 0 ]; do
+    _a=$1
+    shift
+    _n=$((_n - 1))
+    case "$_a" in
+        -Werror|-Werror=*) ;;
+        *) set -- "$@" "$_a" ;;
+    esac
+done
+exec "$_cc" "$@"

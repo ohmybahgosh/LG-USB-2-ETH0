@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **32-bit driver builds.**  `scripts/driver-build/build.sh` now builds for the 32-bit (ARMv7) 4.4 kernels of 2020 and 2021 TVs too, and can build a driver from LG's own kernel tree (`intree:ax88179_178a`, `intree:r8152`) for kernels that leave it out.  Checked against OCT0PUSCRIME's webOS 5 ASIX driver: LG's source, built his way, exports every symbol his module uses, and the drivers built from it match its `vermagic`.  Thanks to OCT0PUSCRIME for sharing his build steps.
+
 ## [2.4.8] - 2026-11-05
 
 ### Added
