@@ -13,7 +13,7 @@ for _u in "$LGU2E_SYSFS"/bus/usb/devices/*; do
     [ -r "$_u/idVendor" ] || continue
     _d=${_u##*/}
     _i=$(readlink -f "$_u")/$_d:1.0
-    [ -d "$_i" ] && [ ! -e "$_i/driver" ] || continue
+    if [ ! -d "$_i" ] || [ -e "$_i/driver" ]; then continue; fi
     _id="$(cat "$_u/idVendor"):$(cat "$_u/idProduct")"
     echo "$_ids" | grep -qx "$_id" || continue
     [ -n "$LGU2E_SYSWRITE" ] && "$LGU2E_SYSWRITE" "$LGU2E_SYSFS/bus/usb/drivers/$_m/bind" "$_d:1.0" 2>/dev/null
