@@ -446,6 +446,29 @@
         });
     }
 
+    // The first time the app opens on a TV with a driver to test, say so,
+    // once.  Remembered per driver folder in the app's own storage, so a
+    // newer build for this kernel is mentioned again.  Skipped when What's
+    // new is on screen; it shows the next time the app opens instead.
+    function drvtestOffer(s) {
+        var dt = (s && s.driverTest) || {};
+        if (!dt.available || dt.result || dt.state === 'running' || !dt.folder || overlayMode) { return; }
+        try {
+            if (window.localStorage.getItem('lgu2e.drvtestOffered') === dt.folder) { return; }
+            window.localStorage.setItem('lgu2e.drvtestOffered', dt.folder);
+        } catch (e) { return; }
+        var html = '<ul class="walk">' +
+            li('ok', 'There\'s a driver built for this TV\'s kernel from LG\'s own source' + (s.adapter && s.adapter.driver ? '' : ', so your adapter could work') + ', and nobody with this kernel has tried it yet.') +
+            li('', 'Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.') +
+            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153, and on newer TVs RTL8156), or ASIX AX88179 on 2020 TVs with the K6Lp chip.') +
+            li('', 'It stays in the menu as Test a new driver, so you can do it any time.') + '</ul>';
+        if (dt.adapterOk) {
+            stepThen('A new driver to test', html, 'Press OK to test it now, or BACK for later.', drvtestStart);
+        } else {
+            overlay('message', 'A new driver to test', html, 'Press OK or BACK to close.');
+        }
+    }
+
     // Start a test, then follow it until it's done (it runs detached, since
     // moving the adapter takes the network down for a moment)
     function drvtestStart() {
@@ -760,6 +783,6 @@
     setInterval(function () { if (!document.hidden && !busy && !waitTimer) { refresh(); } }, 30000);
 
     focusCurrent();
-    refresh(whatsNew);
+    refresh(function (s) { whatsNew(s); drvtestOffer(s); });
     checkUpdate();
 }());
