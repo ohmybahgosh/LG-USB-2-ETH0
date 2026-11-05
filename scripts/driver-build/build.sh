@@ -134,7 +134,7 @@ case "$BASE" in
         set -- "$@" CC="$HERE/cc-no-werror" HOSTCFLAGS=-fcommon ;;
 esac
 LOG=$WORK/build.log
-make "$@" olddefconfig > "$LOG" 2>&1
+make "$@" olddefconfig > "$LOG" 2>&1 || { tail -n 5 "$LOG" >&2; exit 1; }
 python3 "$SRC/scripts/diffconfig" "$KDIR/config" "$B/.config" > "$WORK/config-differences.txt" || true
 # Options in the TV's config that this source doesn't know are dropped.
 # That's harmless unless a kernel header uses one the TV turns on (Realtek's
@@ -149,7 +149,15 @@ if [ -n "$_lost" ]; then
     echo "Give the source their Kconfig (kconfig-stub.py makes one from the TV's config) and build again." >&2
     exit 1
 fi
-make "$@" -j"$(nproc)" modules_prepare >> "$LOG" 2>&1
+# Options the source adds or changes are noted rather than stopping the
+# build: most come from a newer tree (another kernel name's source used for
+# this one) and touch structs a USB network driver never uses, but the
+# report should say so.
+sed -n 's/^+\([A-Za-z0-9_]*\) \([^n].*\)/\1 \2/p; s/^ \([A-Za-z0-9_]*\) \(.* -> .*\)/\1 \2/p' "$WORK/config-differences.txt" |
+    while read -r _o _v; do
+        if grep -rqw "CONFIG_$_o" "$SRC/include" "$SRC/arch/$ARCH/include" 2>/dev/null; then echo "$_o $_v"; fi
+    done > "$WORK/header-options.txt"
+make "$@" -j"$(nproc)" modules_prepare >> "$LOG" 2>&1 || { tail -n 5 "$LOG" >&2; exit 1; }
 grep -Fqx "#define UTS_RELEASE \"$KERNEL\"" "$B/include/generated/utsrelease.h" || {
     echo "built release doesn't match $KERNEL" >&2; exit 1; }
 # tv_abi_checks.h pins USB struct offsets measured on a real TV with LG's
@@ -177,3 +185,7 @@ cp "$KO" "$WORK/$MODULE"
 rm -rf "$B"
 SHA=$(sha256sum "$WORK/$MODULE" | cut -d' ' -f1)
 printf '%s\t%s\t%s\t%s\t%s\t%s\tstruct offsets %s\n' "$LABEL" "$KERNEL" "$DRIVER" "$MODULE" "$SHA" "$(cat "$WORK/exports.txt")" "$ABI"
+if [ -s "$WORK/header-options.txt" ]; then
+    echo "Config options the source adds or changes that kernel headers use (check the driver doesn't depend on them):" >&2
+    sed 's/^/  /' "$WORK/header-options.txt" >&2
+fi

@@ -47,7 +47,7 @@ The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r815
 | Kernel | TVs (from the firmware archive) | LG source used | Struct offsets |
 | --- | --- | --- | --- |
 | `5.4.268-329.ptl4tv.2` | 2022 to 2025 OLEDs (o22 family) on firmware 33.20 to 33.23, 67 firmware files | webOS25 WG ReNew (C2), kernel 324 | checked |
-| `5.4.268-320` | 2022 to 2024 OLEDs on webOS 23 firmware 23.20 to 23.25, 38 files | webOS25 WG ReNew (C2), kernel 324 | checked |
+| `5.4.268-320` | 2022 to 2024 OLEDs on webOS 24 firmware 23.20 to 23.25, 38 files | webOS25 WG ReNew (C2), kernel 324 | checked |
 | `5.4.96-307` | 2022 and 2023 OLEDs on firmware 03.31, 03.33 and 13.30, 19 files | webOS 23 O ReNew (C2), `linux-5.4-lg115x` | unchecked |
 | `5.4.268-294.24.papikonda.2`, K24 chip only | 2024 and 2025 TVs with the K24 chip on firmware 33.31, 17 files | webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2` | unchecked |
 
@@ -57,6 +57,13 @@ The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r815
 | `5.4.268-294.24.papikonda.2`, per chip: K24N, K25Lp, K8Hp, K8Hpp, K8LpN, K8LpN2 | 2023 to 2025 LCDs and OLEDs with those Realtek chips on firmware 33.31, about 64 files | webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2` | unchecked |
 | `5.4.268-294.ptl4tv.24`, K24N and K25Lp (with `ax88179_178a` for K25Lp) | 2025 TVs on firmware 33.30, 18 files | the same | unchecked |
 | `5.4.96-115.30.mole.2` and `5.4.96-115.28.mirima.1`, per chip: K8Hp, K8Lp, K8Ap (with `ax88179_178a`) | 2022 and 2023 LCDs (like the NANO75) on webOS 22 firmware 04.53 to 04.60, about 57 files | webOS 22 KLP_12.0 (55UQ8000), `kernel-1.0.0-114`, LG's real K8 source | unchecked |
+| `5.4.96-115.16.mebbin.1`, `5.4.96-115.16.mebbin.2`, `5.4.96-115.22.meru.2`, `5.4.96-115.28.1.22.mirima.2` and `5.4.96-115.9.marine.1`, per chip: K8Lp, K8HpT, K8Ap (with `ax88179_178a`) | webOS 22 TVs on older firmware 03.21 to 04.54, 16 files | the same | unchecked |
+| `5.4.96-132.40.nameri.2`, `5.4.96-132.40.nameri.pine.1` and `5.4.96-132.50.namtok.2`, per chip: K8Hp, K8Hpp, K8LpN (with `ax88179_178a`) | webOS 23 TVs on firmware 03.31, 13.30 and 13.41, 19 files | webOS 23 KHP+ 5.0 (65QNED80ARA), `kernel-1.0.0-nbr4tv.39`, the 132 kernels' own source | unchecked |
+| `5.4.96-223.29.1.okapi.2`, `5.4.96-223.9.oeta.2` and `5.4.96-223.obr4tv.29`, K24 (and K8LpN2 for oeta.2), with `ax88179_178a` | 2024 TVs on their first webOS 24 firmware, 03.10, 03.11 and 23.20, 16 files | webOS 24 K 2.0 (55QNED85T3C), `kernel-223.obr4tv.4` | unchecked |
+| `5.4.268-223.29.okapi.5`, `5.4.268-223.29.okapi.pine.4`, `5.4.268-223.42.okapi.nmrm.2` and `5.4.268-223.obr4tv.42`, per chip: K24, K24T, K8Hp, K8Hpp, K8HpT, K8LpN, K8LpN2 (with `ax88179_178a`) | webOS 24 TVs on firmware 23.21 to 23.25, including 2022 OLEDs (A2, B2) updated to webOS 24, 49 files | none published: webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2`, the nearest 5.4.268 source | unchecked |
+
+| `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2`, K6Hp chip | 2020 TVs with the K6Hp chip (like the NANO87) on firmware 03.21, 04.63 and 04.64, 19 files | as for K6Lp: the K6Hp config is the same | unchecked |
+| `4.4.84-611.japoon.14`, K6Lp chip | LG's HU810P projector on firmware 03.00 and 03.10, 3 files | the 612.21 source above | unchecked |
 
 The K24 and K6Lp ones matter most: those kernels have no Realtek driver built in at all, not even an old one (the K6Lp ones have no `cdc_ncm` either), so a Realtek adapter doesn't work on them today.  The K6Lp kernels have no AX88179 driver either.
 
@@ -71,16 +78,18 @@ The webOS 22 K8 ones matter as much: those kernels have only `asix` built in, so
 - **One kernel name can mean several configs.**  `5.4.268-294.24.papikonda.2` runs on seven Realtek chips (K24, K24N, K25Lp, K8Hp, K8Hpp, K8LpN, K8LpN2), and their configs differ in about 100 options: K24 has no Realtek driver, K8Hpp has an old one.  A driver for that kernel name has to be picked by chip too, as `get-driver` already does for K5Lp.
 - **Struct layouts differ between chips**, even with the same kernel source: `struct device` (inside `struct usb_device`) grows or shrinks with options like `PINCTRL`.  So a module is only right for the chip whose config it was built with.
 - **Newer firmware carries the kernel inside the rootfs**, as `boot/Image.lz4-<kernel>` in LG's LZ4P container (a 32-byte header, a table of block lengths, then raw LZ4 blocks).  `kernel-info.py` unpacks it.
+- **Firmware 23.xx is webOS 24**, not webOS 23: the platform version inside each EPK says so (9.x is webOS 24, 8.x webOS 23, 7.x webOS 22).  The first webOS 24 firmware (03.1x and 23.20) runs 223 kernels on 5.4.96, later ones on 5.4.268.
+- **LG hasn't published every kernel.**  Its webOS 24 packages all hold `kernel-223.obr4tv.4` on 5.4.96, so the 223 kernels on 5.4.268 are built from the webOS 25 source (294), the nearest 5.4.268 tree.  LG's own header changes between those branches are config-gated or prototype-only for what a USB network driver uses, and `build.sh` now lists any config option the source adds or changes that a kernel header uses (here only `GENERIC_IRQ_IPI`, which these drivers never touch).
+- **TVs with LG's own chips on kernel 4.4 already have both drivers.**  The 2020 CX (`4.4.84-219.jcl4tvmr.6`, o20 and o208k) and 2021 TVs on `4.4.84-229.kcl4tv.6` (e60n) build `r8152` and `ax88179_178a` into the kernel, so there's nothing to add there.  DonZoomik's `r8152` v2.22.1 (for RTL8156) doesn't compile on 4.4 without porting.
+- **Some LG source trees ship already configured** (a `.config` and generated headers in the tree, like the webOS 5.0 JO package), which a separate build folder refuses.  Move them aside first.
 - **LG's packages are laid out differently each year.**  webOS 25 packages have `soc_*/linux-and-kdriver_*.tar.gz` (LG's chips) or `soc_*/kernel-*.tar.gz` (Realtek's).  The webOS 23 C2 package has `chipset/SIC_O22_webOS23.zip`, with the kernel inside `kdriver.tar` as `kdriver/kernel/linux-5.4-lg115x.tgz`.
 
 ## Next
 
 - Testers for each driver above.
-- The other six papikonda.2 chips, which need LG's source for a model with that chip.
-- `ax88179_178a` for kernels that lack it (K24 already has dd3git's).
-- The K6Hp chip, which runs the same 2020 kernel names as K6Lp with its own config, and K6Lp's older kernels (`4.4.84-612.35.jasper.2`, `4.4.84-611.japoon.14`).
-- The other webOS 22 and 23 K8 kernels (`5.4.96-115.16.mebbin.*`, `5.4.96-115.22.meru.2`, `5.4.96-132.*`) and webOS 23's `5.4.268-223.*` (okapi), which need their own configs and, for 223, LG's webOS 23 source.
-- Other 2020 and 2021 kernels (`4.4.84-219.jcl4tvmr.6` on CX OLEDs, `4.4.84-229.kcl4tv.6`), which need their own LG source.
+- `5.4.96-115.16.mebbin.2` on K8Hp, which only one firmware file in the archive has.
+- K6Lp's `4.4.84-612.35.jasper.2` (one firmware file, chip unknown).
+- An `r8152` with RTL8156 support for 4.4 kernels, which needs Realtek's driver ported back.
 
 ## Testing one
 

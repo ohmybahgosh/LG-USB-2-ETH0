@@ -352,7 +352,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 ### More drivers on the way
 
-We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all, Realtek and ASIX drivers for 2020 TVs with the K6Lp chip (like the UN7300) and 2022 TVs with K8 chips (like the NANO75), which have neither, and Realtek ones for every chip that runs the webOS 25 kernel `5.4.268-294.24.papikonda.2`.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
+We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all, Realtek and ASIX drivers for 2020 TVs with the K6Lp chip (like the UN7300) and 2022 TVs with K8 chips (like the NANO75), which have neither, Realtek ones for every chip that runs the webOS 25 kernel `5.4.268-294.24.papikonda.2`, and Realtek and ASIX ones for Realtek-chip TVs on webOS 23 and 24 (including 2022 OLEDs updated to webOS 24) and 2020 K6Hp TVs (like the NANO87).  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
 
 **Help test one.**  If your TV runs one of those kernels, the app shows a **Test a new driver** row, or run:
 

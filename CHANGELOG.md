@@ -7,6 +7,9 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Added
 
 - **More drivers to test, for Realtek-chip TVs on webOS 22 and 25.**  `r8152_oot` for `5.4.268-294.24.papikonda.2` on K24N, K25Lp, K8Hp, K8Hpp, K8LpN and K8LpN2, and for `5.4.268-294.ptl4tv.24` on K24N and K25Lp (with `ax88179_178a` there).  For webOS 22 TVs with K8 chips (like the 2022 NANO75), which have no Realtek or AX88179 driver at all, `r8152_oot` and `ax88179_178a` for `5.4.96-115.30.mole.2` and `5.4.96-115.28.mirima.1` on K8Hp, K8Lp and K8Ap, from LG's real K8 source.  Each is built with its TV's own config.  The script's list of drivers to test is now one table.
+- **Drivers to test for Realtek-chip TVs on webOS 23 and 24, and more on webOS 22.**  `r8152_oot` and `ax88179_178a` for the webOS 24 kernels (`5.4.268-223.*` on K24, K24T, K8Hp, K8Hpp, K8HpT, K8LpN and K8LpN2, which includes 2022 OLEDs updated to webOS 24, and the first webOS 24 firmware's `5.4.96-223.*`), the webOS 23 `5.4.96-132.*` kernels (K8Hp, K8Hpp, K8LpN) and five older webOS 22 `5.4.96-115.*` kernels.  The `5.4.268-223` ones come from the nearest 5.4.268 source, since LG hasn't published theirs.
+- **Drivers to test for 2020 TVs with the K6Hp chip** (like the NANO87): `r8152` and `ax88179_178a` for `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2`, whose K6Hp config is the same as K6Lp's.  Also for `4.4.84-611.japoon.14` (the HU810P projector).
+- **The driver build lists config options the source adds or changes that kernel headers use**, so a build from a neighboring kernel's source says what differs.  It also shows the end of the log when a step fails.
 - **The driver build stops when the source is missing options that change kernel headers**, and `scripts/driver-build/kconfig-stub.py` writes their Kconfig from the TV's config, so a module never gets a different struct layout than the TV's kernel.
 
 ## [2.4.9] - 2026-11-05
