@@ -10,6 +10,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 
 ### Changed
 
+- **The drivers don't depend on their authors' repositories anymore.**  All three modules `get-driver` offers are now also mirrored, byte for byte and credited to their authors, in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers).  `get-driver` still downloads from the author first, and uses the mirror only if that fails.  The pinned SHA-256 decides either way.
 - "Faster Realtek driver" is now just "Faster driver", in the app and the menu, since it's not only for Realtek adapters anymore.  The app's confirm screen names whoever built the driver for that TV.
 
 ## [2.4.4] - 2026-11-04

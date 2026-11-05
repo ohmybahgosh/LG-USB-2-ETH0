@@ -20,7 +20,7 @@ So you can judge it yourself:
 - Renames network interfaces with `ip link`, and brings them up and down.
 - Writes its process ID and per-boot state to `/tmp` (RAM).
 - Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.  After standby, if webOS doesn't reconnect the adapter on that driver, it takes the link down and up, or re-plugs the adapter in software (`/sys/bus/usb/devices/*/authorized`) so it goes back to the generic driver.
-- `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  Nothing else is downloaded.
+- `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  If the author's copy can't be downloaded, it tries a byte-for-byte mirror in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers), also at a fixed commit, and the same SHA-256 check decides.  Nothing else is downloaded.
 - `update` downloads the newest release from GitHub, and installs it only if its SHA-256 matches (and its size, for the app).
 - `speedtest` talks to Cloudflare's public speed test, only when you run it.
 - With `--wifi-fallback`, it turns Wi-Fi on through webOS's connection manager when the cable has had no link for a minute, and off again when it works, remembering that in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`.

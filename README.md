@@ -289,7 +289,7 @@ sh LG-USB-2-ETH0.sh get-driver
 sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/ax88179_178a.ko
 ```
 
-`get-driver` only offers a module for the exact kernel it was built for, and only when an adapter it supports is plugged in (it checks the adapter's USB ID against the module's own list).  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  The modules come from those projects, not this one, so credit and thanks go to DonZoomik, mbenitez343 and OCT0PUSCRIME.
+`get-driver` only offers a module for the exact kernel it was built for, and only when an adapter it supports is plugged in (it checks the adapter's USB ID against the module's own list).  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  If that repository ever goes away, it falls back to a byte-for-byte copy in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers), with the same check.  The modules come from those projects, not this one, so credit and thanks go to DonZoomik, mbenitez343 and OCT0PUSCRIME.
 
 What LG-USB-2-ETH0 does with it:
 

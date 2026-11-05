@@ -809,24 +809,26 @@ use_hook_driver() {
 # Better driver modules known to work on one exact kernel, as
 # "url sha256 file author-page". They're built and published by their
 # authors. get-driver checks the SHA-256 before keeping a download.
-# known_driver KERNEL: "url sha256 file page ids" for a driver module known
-# to work on exactly that kernel.  Each one is pinned to a fixed commit and
-# kept only if its SHA-256 matches.  ids are the USB adapters the module
+# known_driver KERNEL: "url sha256 file page ids mirror" for a driver module
+# known to work on exactly that kernel.  Each one is pinned to a fixed commit
+# and kept only if its SHA-256 matches.  ids are the USB adapters the module
 # supports (from its own aliases): it's only offered when one is plugged in.
+# mirror is a byte-for-byte copy in ohmybahgosh/lg-webos-usb-drivers, also at
+# a fixed commit, tried only if the author's download fails.
 known_driver() {
     case "$1" in
         5.4.268-329.ptl4tv.5)
             # DonZoomik's build of Realtek's v2.22.1 driver (2022 C2, 2024 C4 on webOS 25)
-            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152 045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012" ;;
+            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152 045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/5.4.268-329.ptl4tv.5/r8152_oot.ko" ;;
         5.4.268-294.17.paparoa.pine.2)
             # mbenitez343's build of the kernel's own r8152 v1.10.11, for 2024
             # QNED and OLED (K25lp / Paparoa) on webOS 25, where LG removed
             # it.  Gigabit RTL8152/RTL8153 adapters only, not 2.5G ones.
-            echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601" ;;
+            echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/5.4.268-294.17.paparoa.pine.2/r8152.ko" ;;
         4.4.84-612.jcl4tv.40)
             # OCT0PUSCRIME's build of ASIX's own AX88179/178A driver (v1.19.0),
             # for webOS 5 (2020 UN7300), whose kernel has no ASIX driver
-            echo "https://raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c9489034886382a23625b753aab9e661de/ax88179_178a.ko c9aefe84ee61d7021d739af37d70214a4b82f4b449a5eaf3501cec1f21af1831 ax88179_178a.ko https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver 04e8:a100,0711:0179,0930:0a13,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00" ;;
+            echo "https://raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c9489034886382a23625b753aab9e661de/ax88179_178a.ko c9aefe84ee61d7021d739af37d70214a4b82f4b449a5eaf3501cec1f21af1831 ax88179_178a.ko https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver 04e8:a100,0711:0179,0930:0a13,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/4.4.84-612.jcl4tv.40/ax88179_178a.ko" ;;
         *) return 1 ;;
     esac
 }
@@ -893,11 +895,12 @@ get_driver() {
     }
     # shellcheck disable=SC2086 # split the fields on purpose
     set -- $_kd
-    _url=$1 _sum=$2 _file=$3 _page=$4 _ids=$5
+    _url=$1 _sum=$2 _file=$3 _page=$4 _ids=$5 _mirror=${6:-}
     _dest="$DRIVER_DIR/$_file"
     info "Kernel $_k has a known better driver: $_file"
     echo "  Built and published by: $_page"
     echo "  Download: $_url"
+    [ -n "$_mirror" ] && echo "  Mirror, if that fails: $_mirror"
     echo "  It's a kernel module from that project, not from LG-USB-2-ETH0. It's only offered"
     echo "  for this exact kernel, and its SHA-256 is checked before it's kept."
     if _gid=$(supported_adapter "$_ids"); then
@@ -916,7 +919,16 @@ get_driver() {
         else
             confirm "Download it?" || { echo "Cancelled. Nothing changed."; return 1; }
             clock_ok || warn "The TV's clock says $(date). Certificates can't be checked until it's right, so the download may fail."
-            if ! fetch "$_dest.part" "$_url"; then
+            # The author's copy first, then the mirror if that download fails
+            # or isn't the right file.  The checksum below decides either way.
+            _gotit=0
+            for _u in "$_url" $_mirror; do
+                [ "$_u" = "$_url" ] || echo "  Trying the mirror: $_u"
+                if fetch "$_dest.part" "$_u" && [ "$(sha256sum "$_dest.part" | awk '{print $1}')" = "$_sum" ]; then
+                    _gotit=1; break
+                fi
+            done
+            if [ "$_gotit" = 0 ] && [ ! -s "$_dest.part" ]; then
                 rm -f "$_dest.part"
                 download_help "$_file"
                 error_exit "Download failed. Nothing changed."
@@ -962,7 +974,9 @@ driver_offer() {
     fi
     _okd=$(known_driver "$(uname -r)") || { echo none; return; }
     # Only when the module supports a plugged-in adapter
-    if supported_adapter "${_okd##* }" >/dev/null; then echo available; else echo none; fi
+    # shellcheck disable=SC2086 # split the fields on purpose
+    set -- $_okd
+    if supported_adapter "$5" >/dev/null; then echo available; else echo none; fi
 }
 
 # === Hook state ===

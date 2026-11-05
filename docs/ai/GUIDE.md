@@ -33,7 +33,7 @@ Four parts live in this repository:
 
 **Check before acting, one try only.**  The hook does nothing without a settings file, or with invalid settings (`settings_ok`).  A driver module is loaded only if its file is there, it was built for the running kernel (`module_kernel` reads its `vermagic`) and its SHA-256 matches the one saved at install.  An adapter gets one takeover try per boot (`TAKEOVER_STATE`), so a driver that doesn't support it can't cause repeated drops.  Only adapters whose USB IDs the module lists are moved (`takeover_fits`), so a phone tethered over `cdc_ether` is never touched.
 
-**Downloads are pinned and checked.**  `get-driver` downloads from a fixed commit and keeps the file only if its SHA-256 matches the one in `known_driver`.  `update` installs a release only after checking its SHA-256 (and size, for the app).  `fetch` uses HTTPS only, with time limits.  Never add a download that isn't pinned and checked.
+**Downloads are pinned and checked.**  `get-driver` downloads from a fixed commit and keeps the file only if its SHA-256 matches the one in `known_driver`.  Each entry also names a mirror in ohmybahgosh/lg-webos-usb-drivers (a fixed commit too), tried only when the author's copy fails.  A new driver goes in that repository as well.  `update` installs a release only after checking its SHA-256 (and size, for the app).  `fetch` uses HTTPS only, with time limits.  Never add a download that isn't pinned and checked.
 
 **The background check must stay cheap.**  `watch_run` wakes every few seconds for as long as the TV is on.  Its first checks are shell globs with no subprocesses; only when something changed does it look closer.  Keep it that way: no `$(...)`, pipes or external commands in the fast path.
 

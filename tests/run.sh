@@ -1234,6 +1234,20 @@ test_driver_offer_webos5_asix() {
     check "pinned download" grep -q "raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c" "$STATE/curl.log"
 }
 
+# The author's repository is gone: get-driver falls back to the mirror, and
+# the mirror's file still has to match the pinned SHA-256
+test_get_driver_mirror() {
+    add_builtin
+    local k=5.4.268-329.ptl4tv.5
+    printf 'DonZoomik/webos-r8152' > "$STATE/curl_404"
+    FAKE_KERNEL=$k run get-driver -y
+    check "tried the author first" grep -q "raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98" "$STATE/curl.log"
+    check "then the pinned mirror" grep -q "raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf75.*/drivers/$k/r8152_oot.ko" "$STATE/curl.log"
+    check "says so" has "Trying the mirror"
+    check "mirror file checked too" has "Checksum mismatch"
+    check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
+}
+
 test_get_driver_download_fails() {
     add_builtin
     touch "$STATE/curl_fail"
@@ -1328,6 +1342,7 @@ t json_skips_p2p test_json_skips_p2p
 t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t boot_skips_changed_module test_boot_skips_changed_module
 t driver_offer_webos5_asix test_driver_offer_webos5_asix
+t get_driver_mirror test_get_driver_mirror
 t get_driver_download_fails test_get_driver_download_fails
 t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
