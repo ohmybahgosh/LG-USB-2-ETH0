@@ -11,7 +11,7 @@
 [![Project page](https://img.shields.io/badge/ohmybahgosh.dev-project%20page-3ddc97)](https://ohmybahgosh.dev/lg-usb-2-eth0/)
 [![GitHub stars](https://img.shields.io/github/stars/ohmybahgosh/LG-USB-2-ETH0?style=social)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
 
-<img src="assets/banner.webp" width="100%" alt="LG-USB-2-ETH0 for rooted LG webOS TVs: make a USB Ethernet adapter the TV's eth0, two to three times the built-in port, from a TV app on the remote.  Homebrew Channel app, faster Realtek driver, Wi-Fi as a backup, undo in one press.  Next to it, the app's status screen on a TV and its icon on the home screen." />
+<img src="assets/banner.webp" width="100%" alt="LG-USB-2-ETH0 for rooted LG webOS TVs: make a USB Ethernet adapter the TV's eth0, two to three times the built-in port, from a TV app on the remote.  Homebrew Channel app, Realtek and ASIX drivers, Wi-Fi as a backup, undo in one press.  Next to it, the app's status screen on a TV and its icon on the home screen." />
 
 </div>
 
@@ -335,7 +335,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 Don't expect gigabit.  The TV's USB port is the limit.  On a C2 at full speed, the busiest CPU core was only about a third busy, so tweaks like spreading network work over more cores or bigger buffers don't help.  Measured on real TVs:
 
-<img src="assets/speeds.svg" width="100%" alt="Bar chart of measured speeds in Mbit/s: built-in port about 95; RTL8153 on the generic cdc_ncm driver 200 to 255; the same adapter with the r8152 module 290 to 330; RTL8156 on a C2 over USB 2.0 with r8152_oot 272 down and 287 up." />
+<img src="assets/speeds.svg" width="100%" alt="Bar chart of measured speeds in Mbit/s: built-in port about 95; RTL8153 on the generic cdc_ncm driver 200 to 255; the same adapter with the r8152 module 290 to 330; RTL8156 on a C2 over USB 2.0 with r8152_oot 272 down and 287 up; ASIX AX88179 on a 2024 G4 with its own driver 292 down and 51 up; ASIX AX88179 on a 2020 UN7300 with OCT0PUSCRIME's driver 228 down and 325 up." />
 
 | Setup | Speed | Source |
 |-------|-------|--------|
@@ -426,7 +426,7 @@ It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinn
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
-The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
+The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.  The banner at the top is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK, its manifest and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`).  Then it tells ohmybahgosh.dev to refresh its Homebrew Channel repository.
 

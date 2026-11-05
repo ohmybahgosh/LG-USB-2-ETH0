@@ -11,6 +11,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Changed
 
 - **Drivers can be built per chip.**  throwaway96's modules are built for a chip rather than one exact kernel, so `get-driver` also checks the chip name.  When a TV has more than one known driver, it offers the one for the adapter plugged in.
+- **A new README banner and speeds chart.**  The banner now says Realtek and ASIX drivers, and comes from `scripts/banner/banner.html` (`node scripts/banner/make.js`), so it can be redone when the app changes.  The speeds chart adds the two ASIX results.
 - **A known driver may name only the base kernel version.**  Some builds say `5.4.268` inside rather than the TV's full kernel name, and the TV loads them.  The script now accepts that only for a file whose SHA-256 is pinned for the exact kernel running, and keeps the strict check for every other `--module`.
 
 ## [2.4.5] - 2026-11-04

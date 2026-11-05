@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1600px; height: 800px; overflow: hidden; }
+  body {
+    font-family: Inter, sans-serif; color: #f2f5f3;
+    background:
+      radial-gradient(ellipse 900px 600px at 78% 40%, rgba(34,229,132,.09), transparent 70%),
+      radial-gradient(ellipse 700px 500px at 10% 100%, rgba(34,229,132,.06), transparent 70%),
+      radial-gradient(circle, rgba(255,255,255,.035) 1px, transparent 1.2px) 0 0 / 22px 22px,
+      linear-gradient(135deg, #0b0f14, #0e1612 55%, #101a16);
+    position: relative;
+  }
+  .mono { font-family: "JetBrainsMono Nerd Font Mono", "DejaVu Sans Mono", monospace; }
+  .left { position: absolute; left: 90px; top: 112px; width: 720px; }
+  .head { display: flex; align-items: center; gap: 34px; }
+  .icon { width: 140px; height: 140px; border-radius: 34px; background: #121a17; box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 18px 40px rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+  .icon img { width: 112px; height: 112px; border-radius: 22px; }
+  h1 { font-size: 66px; font-weight: 800; letter-spacing: -1.5px; color: #eafff3; line-height: 1; }
+  .sub { margin-top: 18px; font-size: 30px; font-weight: 500; color: #93a39b; }
+  .sub b { color: #f2f5f3; font-weight: 800; }
+  .pitch { margin-top: 58px; font-size: 35px; font-weight: 800; line-height: 1.22; letter-spacing: -.3px; }
+  .pitch em { font-style: normal; color: #22e584; }
+  .chips { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 16px; width: 760px; }
+  .chip { display: flex; align-items: center; gap: 14px; padding: 12px 22px; border-radius: 40px; background: #121a17; border: 1px solid rgba(255,255,255,.08); font-size: 22px; font-weight: 600; color: #e8efeb; }
+  .chip i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .prompt { margin-top: 46px; font-size: 25px; color: #e8efeb; }
+  .prompt span { color: #22e584; }
+  .tv { position: absolute; left: 838px; top: 88px; width: 692px; height: 402px; border-radius: 22px; background: #0d1311; border: 2px solid rgba(255,255,255,.07); box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 120px rgba(34,229,132,.06); padding: 12px; }
+  .tv img { width: 100%; height: 100%; border-radius: 12px; display: block; object-fit: cover; }
+  .stand { position: absolute; left: 1076px; top: 498px; width: 216px; height: 18px; border-radius: 0 0 12px 12px; background: #141c19; }
+  .shadow { position: absolute; left: 976px; top: 534px; width: 416px; height: 8px; border-radius: 8px; background: rgba(255,255,255,.04); }
+  .dock { position: absolute; left: 872px; top: 604px; display: flex; gap: 18px; align-items: center; }
+  .tile { width: 84px; height: 84px; border-radius: 20px; background: #131b18; box-shadow: 0 0 0 1px rgba(255,255,255,.04); }
+  .tile.sel { width: 124px; height: 124px; border-radius: 26px; border: 5px solid #f4fff9; background: #0f1613; box-shadow: 0 0 40px rgba(34,229,132,.35); display: flex; align-items: center; justify-content: center; margin: 0 2px; }
+  .tile.sel img { width: 98px; height: 98px; border-radius: 18px; }
+  .dock-label { position: absolute; left: 1100px; top: 750px; width: 280px; text-align: center; font-size: 25px; font-weight: 700; color: #f2f5f3; }
+</style></head>
+<body>
+  <div class="left">
+    <div class="head">
+      <div class="icon"><img src="../../webos-app/src/icon160.png" alt=""></div>
+      <div>
+        <h1>LG-USB-2-ETH0</h1>
+        <div class="sub">for rooted <b>LG webOS</b> TVs</div>
+      </div>
+    </div>
+    <div class="pitch">Make a USB Ethernet adapter the TV's <em>eth0</em>: two to three times the built-in port, from a TV app on the remote.</div>
+    <div class="chips">
+      <div class="chip"><i style="background:#3db4f2"></i>Homebrew Channel app</div>
+      <div class="chip"><i style="background:#22e584"></i>Realtek &amp; ASIX drivers</div>
+      <div class="chip"><i style="background:#febc2e"></i>Wi-Fi as a backup</div>
+      <div class="chip"><i style="background:#3db4f2"></i>Undo in one press</div>
+    </div>
+    <div class="prompt mono"><span>root@LGwebOSTV</span>:~# sh LG-USB-2-ETH0.sh apply</div>
+  </div>
+  <div class="tv"><img src="../../assets/screenshots/app-home.png" alt=""></div>
+  <div class="stand"></div>
+  <div class="shadow"></div>
+  <div class="dock">
+    <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+    <div class="tile sel"><img src="../../webos-app/src/icon160.png" alt=""></div>
+    <div class="tile"></div><div class="tile"></div>
+  </div>
+  <div class="dock-label">LG-USB-2-ETH0</div>
+</body></html>
