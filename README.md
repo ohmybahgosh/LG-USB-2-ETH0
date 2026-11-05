@@ -40,7 +40,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 >
 > The fixes that mattered most came from that real-TV testing, not from the AI: standby putting the adapter back on the slow driver, webOS quietly sending traffic over Wi-Fi instead of the adapter, and the GitHub report form opening blank on a phone.  The [changelog](CHANGELOG.md) has the full story.
 >
-> - **Tests on every push:** 75+ [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
+> - **Tests on every push:** 80+ [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
 > - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches.  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 > - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
 >
@@ -180,6 +180,7 @@ Last log lines (/var/lib/webosbrew/lg-usb-2-eth0.log)
 
 No problems found.
 Notes:
+  - The Homebrew Channel blocks four of LG's update servers, but misses others.  install --block-updates closes the rest.
   - eth0 is on USB 2.0, which tops out around 300 Mbit/s on these TVs.
 ```
 
@@ -241,6 +242,7 @@ At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  Th
 7. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
 8. With `--module`, it also keeps the adapter on the faster driver.  Standby resets the TV's USB ports, and a Realtek adapter comes back on `cdc_ncm`, so the hook moves it over again.  It first lets webOS reconnect the network, then checks webOS reconnects it after the move.  If not, it takes the link down and up, and if that doesn't help, gives the adapter back to `cdc_ncm` until the next boot, so you're never left without a connection.  The check every few seconds only looks at a couple of `/sys` folders, so it costs next to nothing.
 9. With `--wifi-fallback`, it checks whether `eth0` still has a cable link (one `/sys` file).  After a minute without one, if Wi-Fi is off, it turns Wi-Fi on through webOS's own connection manager, the same switch as in the TV's settings, and turns it off again once the cable has worked for 30 seconds.  It remembers turning Wi-Fi on in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`, so that still happens after a reboot in between.
+10. With `--block-updates`, before anything else, it turns webOS's own update check off and blocks LG's update servers again (see [Blocking updates](#blocking-updates)), since the hosts entries and firewall rule don't survive a reboot.
 
 It logs to `/var/lib/webosbrew/lg-usb-2-eth0.log` (it starts over once it reaches 32 KB), and `status` shows the last lines.  `apply` and `revert` run detached from your SSH session, so they finish even when the session drops, and they warn you first if you're connected through a port that's about to change.
 
@@ -450,7 +452,7 @@ tests/run.sh bash
 tests/run.sh busybox watch   # only tests whose name contains "watch"
 ```
 
-It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, falling back to the mirror and picking the driver by chip and adapter, keeping the faster driver after standby, the Wi-Fi fallback (and leaving Wi-Fi alone when it's already on), flagging a 100 Mbit/s or half-duplex link, the speed test, updates (refusing a bad checksum, for the app and the plain script, and what's new after one), and the report.  A fake `curl` and `luna-send` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
+It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, falling back to the mirror and picking the driver by chip and adapter, keeping the faster driver after standby, the Wi-Fi fallback (and leaving Wi-Fi alone when it's already on), blocking updates with and without the Homebrew Channel's block (and undoing only its own changes), flagging a 100 Mbit/s or half-duplex link, the speed test, updates (refusing a bad checksum, for the app and the plain script, and what's new after one), and the report.  A fake `curl`, `luna-send`, `nyx-cmd` and `iptables` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
