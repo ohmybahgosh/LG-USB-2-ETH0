@@ -691,10 +691,12 @@ wifi_back() {
 }
 
 # --block-updates: close more of LG's firmware update path, on top of the
-# Homebrew Channel's own Block system updates.  It never replaces that, never
-# touches its setting, and only adds: webOS's own update switch turned off,
-# the update servers it misses in /etc/hosts, and one firewall rule for the
-# server the updater reaches by IP.  All of it is undone by updates_unblock.
+# Homebrew Channel's own Block system updates.  It never touches that
+# setting, and only adds: webOS's own update switch turned off, every update
+# server not already in /etc/hosts (so with the Homebrew Channel's block off,
+# its four servers too, in a writable copy of /etc/hosts like the one it
+# makes), and one firewall rule for the server the updater reaches by IP.
+# All of it is undone by updates_unblock.
 UPD_HOSTS="snu.lge.com su.lge.com su-ssl.lge.com su-dev.lge.com snu-dev.lge.com nsu.lge.com ngfts.lge.com"
 UPD_IP=156.147.69.32
 UPD_TAG="# lg-usb-2-eth0 block-updates"
@@ -744,6 +746,8 @@ updates_block() {
                 for _h in $_miss; do printf '0.0.0.0\t%s %s\n::\t%s %s\n' "$_h" "$UPD_TAG" "$_h" "$UPD_TAG"; done
             } >> "$HOSTS_FILE"
             echo "Blocked update servers in $HOSTS_FILE: $_miss"
+            [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] ||
+                echo "The Homebrew Channel's Block system updates is off, so its servers are blocked here too."
         else
             echo "Could not add update servers to $HOSTS_FILE."
         fi
@@ -1634,8 +1638,12 @@ show_status() {
     if [ "$_usb" = eth0 ] && [ "$(sysval "$NET/eth0/carrier" 2>/dev/null)" = 1 ] && [ -n "$_def" ] && [ "$_def" != eth0 ]; then
         status_note "Traffic goes out $_def, not the adapter. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable."
     fi
-    if [ ! -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && [ "$(hook_setting BLOCK_UPDATES)" != 1 ]; then
-        status_note "Firmware updates aren't blocked.  An update can remove root for good: turn on Block system updates in the Homebrew Channel, or install with --block-updates."
+    if [ "$(hook_setting BLOCK_UPDATES)" != 1 ]; then
+        if [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ]; then
+            status_note "The Homebrew Channel blocks four of LG's update servers, but misses others.  install --block-updates closes the rest."
+        else
+            status_note "Firmware updates aren't blocked.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel."
+        fi
     fi
     [ -f "$WIFI_MARK" ] && status_note "The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link.  It turns Wi-Fi off again once the cable works for ${WIFI_BACK_SECS}s."
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."

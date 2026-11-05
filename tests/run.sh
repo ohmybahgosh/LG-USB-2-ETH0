@@ -571,6 +571,29 @@ test_block_updates() {
     check "mark gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
 }
 
+# With the Homebrew Channel's block off, --block-updates covers its servers too
+test_block_updates_without_hbc() {
+    add_builtin
+    printf '%s\n' '127.0.0.1 localhost' '127.0.1.1 LGwebOSTV' > "$SB/hosts"
+    cp "$SB/hosts" "$SB/hosts.orig"
+    run install -y --block-updates
+    check "says so" has "Block system updates is off"
+    local h
+    for h in snu.lge.com su.lge.com su-ssl.lge.com su-dev.lge.com snu-dev.lge.com nsu.lge.com ngfts.lge.com; do
+        check "blocks $h" grep -q "[[:space:]]$h " "$SB/hosts"
+    done
+    run status
+    check "no warning" lacks "aren't blocked"
+    run install -y --no-block-updates
+    check "back as it was" cmp -s "$SB/hosts" "$SB/hosts.orig"
+    run status
+    check "warns when nothing blocks updates" has "Firmware updates aren't blocked"
+    mkdir -p "$ROOT/var/luna/preferences"
+    touch "$ROOT/var/luna/preferences/webosbrew_block_updates"
+    run status
+    check "points out what the HBC block misses" has "misses others"
+}
+
 # If the update check was already off, turning the option off leaves it off;
 # uninstall undoes the rest; the boot hook blocks again after a reboot
 test_block_updates_undo() {
@@ -821,6 +844,7 @@ t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
 t block_updates test_block_updates
 t block_updates_undo test_block_updates_undo
+t block_updates_without_hbc test_block_updates_without_hbc
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd

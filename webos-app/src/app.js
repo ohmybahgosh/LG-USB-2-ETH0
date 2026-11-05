@@ -226,7 +226,9 @@
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
         var u = s.updates || {};
-        $('updates-hint').textContent = u.hbcBlock === false ? 'also turn on Block system updates in the Homebrew Channel' : 'on top of the Homebrew Channel\'s block';
+        $('updates-hint').textContent = u.hbcBlock === false ?
+            (bootOn && h.blockUpdates ? 'also covers the Homebrew Channel\'s block, which is off' : 'the Homebrew Channel\'s block is off too') :
+            'on top of the Homebrew Channel\'s block';
         // The faster-driver row only appears when it fits this TV: a driver is
         // known for this exact kernel and the adapter is one it supports, or a
         // driver is already set up (so it can be turned off again).
@@ -437,7 +439,7 @@
             } else {
                 confirmThen('Block updates harder?',
                     'A firmware update can remove root for good, and LG\'s current firmware, webOS 26 included, can\'t be rooted again.  ' +
-                    'This adds to the Homebrew Channel\'s Block system updates: it turns off webOS\'s own update check, blocks the update servers that block misses, and the one the updater reaches by IP.  ' +
+                    'It turns off webOS\'s own update check, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  ' +
                     'It starts now and at every boot, and turning it off undoes all of it.',
                     function () { act('Block updates', installArgs('--block-updates')); });
             }
