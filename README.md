@@ -247,13 +247,13 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | TP-Link UE306 V1.6 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)) | ASIX AX88179 (`0b95:1790`) | 2020 UN7300 (55UN7300PUF), webOS 5, USB 2.0 port | Works with OCT0PUSCRIME's `ax88179_178a` build from `get-driver`, since that kernel has no ASIX driver.  228 Mbit/s down, 325 up |
 | ASIX AX88179 adapter ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)) | ASIX AX88179/178A (`0b95:1790`) | 2024 G4 (OLED65G48LW), webOS 25, USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver, no extra driver needed.  292 Mbit/s down, 51 up |
 
-It has a USB-C plug, and LG TVs have USB-A ports, so it's plugged in through a small USB-C (female) to USB-A (male) adapter ([this 4-pack on Amazon](https://www.amazon.com/dp/B0BJ8YQ2LM)).  That's not the ideal setup: it's just what the author had on hand, and it works.  Those little adapters are USB 2.0, which is all the C2's port can do anyway, but on a TV with a USB 3.0 port they'd hold the adapter back.  If you're buying, get a USB-A adapter like the ones below and skip the converter.
+**A note on the UGREEN.**  It has a USB-C plug and LG TVs have USB-A ports, so on the author's C2 it goes through a small USB-C (female) to USB-A (male) converter ([this 4-pack on Amazon](https://www.amazon.com/dp/B0BJ8YQ2LM)).  It works, but it's just what was on hand.  Those converters are USB 2.0, which is all the C2's port can do anyway, but on a TV with a USB 3.0 port they'd hold the adapter back.  If you're buying, get one with a USB-A plug and skip the converter.
 
-**Same chip, with a USB-A plug.**  These use the same Realtek RTL8156BG chip as the tested UGREEN, so they should get the same driver and similar results.  They haven't been tested on a TV yet, so a report helps.
+**Realtek adapters with a USB-A plug.**  These use the same RTL8156BG chip as the UGREEN, so they should work the same way: on `cdc_ncm` out of the box, and faster with `r8152_oot` where `get-driver` offers it.  None has been tested on a TV yet, so a report helps.
 
 | Adapter | Chip | Plug |
 |---------|------|------|
-| [UGREEN USB to 2.5G Ethernet, model 25051 (Amazon)](https://www.amazon.com/dp/B0CWV2Q6HJ) | RTL8156BG | USB-A, USB 3.0.  The USB-A version of the tested one. |
+| [UGREEN USB to 2.5G Ethernet, model 25051 (Amazon)](https://www.amazon.com/dp/B0CWV2Q6HJ) | RTL8156BG | USB-A, USB 3.0.  The USB-A version of the UGREEN above. |
 | [Cable Matters USB to 2.5Gb Ethernet, model 202485 (Amazon)](https://www.amazon.com/dp/B0GFHS6L87) | RTL8156BG | USB-A, USB 3.0 |
 | [SABRENT USB-A to 2.5Gbps Ethernet, NT-UA25 (Amazon)](https://www.amazon.com/dp/B0FMBXSNKL) | RTL8156BG | USB-A, USB 3.0 |
 
