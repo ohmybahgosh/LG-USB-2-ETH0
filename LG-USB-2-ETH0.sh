@@ -64,6 +64,7 @@ WIFI_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wifi"
 # off, so turning the option off puts it back
 UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
 HOSTS_FILE="${LGU2E_HOSTS:-/etc/hosts}"
+# shellcheck disable=SC2034 # used by updates_block, in CORE
 SWUPDATE_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/swupdate"
 
 # === Defaults (install options) ===
