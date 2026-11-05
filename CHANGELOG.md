@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Building drivers from LG's kernel source.**  `scripts/driver-build/build.sh` builds a driver for one kernel, DonZoomik's way, and keeps it only if its vermagic matches, the kernel exports every symbol it uses, and (on o22 5.4.268 kernels) the USB struct offsets match.  Rebuilt from LG's C2 source, DonZoomik's driver comes out the same as his.  Realtek drivers are built for `5.4.268-329.ptl4tv.2`, `5.4.268-320`, `5.4.96-307` and K24's `5.4.268-294.24.papikonda.2`, and wait for testers before `get-driver` offers them: see [docs/driver-build.md](docs/driver-build.md).
+- **The firmware audit reads newer firmware too**, whose kernel is inside the rootfs as `boot/Image.lz4` (LG's LZ4P format), and with `SAVE=DIR` keeps each kernel's image and config.
+
 ## [2.4.7] - 2026-11-05
 
 ### Added

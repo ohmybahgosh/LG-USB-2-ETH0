@@ -40,8 +40,8 @@ Last run: November 5, 2026, on the latest US firmware for each model.  The raw d
 [`scripts/firmware-audit/audit.sh`](../scripts/firmware-audit/audit.sh) takes one firmware `.zip` (or `.epk`) from LG's support site:
 
 1. Unpacks it with [epk2extract](https://github.com/openlgtv/epk2extract) from openlgtv, which has the decryption keys for most LG chips.
-2. If the firmware has a kernel image, `kernel-info.py` reads its version string and the config built into it, which says driver by driver whether it's built in, a module, or missing.
-3. Some updates only carry the root filesystem.  Then it reads `lib/modules/<kernel>/modules.builtin` from there instead (`usr/lib/modules` on webOS 26).
+2. If the firmware has a kernel image, `kernel-info.py` reads its version string and the config built into it, which says driver by driver whether it's built in, a module, or missing.  Newer firmware keeps the kernel inside the root filesystem, as `boot/Image.lz4-<kernel>` in LG's LZ4P format, and it reads that one too.
+3. Some updates have neither.  Then it reads `lib/modules/<kernel>/modules.builtin` from the root filesystem instead (`usr/lib/modules` on webOS 26).
 4. It prints one line for `results.tsv`, and deletes the firmware and everything it unpacked.
 
 ```sh
@@ -49,8 +49,8 @@ git clone https://github.com/openlgtv/epk2extract && (cd epk2extract && ./build.
 EPK2EXTRACT=$PWD/epk2extract/build_linux/epk2extract scripts/firmware-audit/audit.sh firmware.zip OLED65C2PUA
 ```
 
-It needs `unsquashfs` (squashfs-tools) and python3.  A firmware file is 1 to 2 GB, so it only keeps one at a time.
+It needs `unsquashfs` (squashfs-tools) and python3.  A firmware file is 1 to 2 GB, so it only keeps one at a time.  With `SAVE=DIR` it also keeps the kernel image and its config in `DIR/<kernel>/`, for [building a driver](driver-build.md) against that kernel.
 
-The download links are on each model's LG support page (Manuals & Software, Download Software).
+The download links for current firmware are on each model's LG support page (Manuals & Software, Download Software).  LG only keeps the latest one, so older firmware comes from the [EPK firmware archive](https://tv.slada.sk/).  Its [`processed_fw.json`](https://tv.slada.sk/processed_fw.json) lists the exact kernel of every firmware it has (`kernelVersion`), so you can find which firmware runs a kernel without downloading anything.  Please try LG's download first, and keep to two downloads at a time there.
 
 Want a model added?  Open an issue with its model number.

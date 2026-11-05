@@ -12,11 +12,13 @@
 # kernel is the exact name `uname -r` prints on that TV.  built-in lists the
 # USB network drivers compiled into the kernel, and modules the ones built as
 # loadable modules.  source says where that came from: the kernel's own
-# config (when the firmware has a kernel image with one built in), or the
-# root filesystem's lib/modules (when the update only carries the rootfs).
+# config (when the firmware has a kernel image with one built in, as a
+# kernel part or as boot/Image* in the rootfs), or the root filesystem's
+# lib/modules (when it has neither).
 #
 # Everything it unpacked, and the firmware file itself, is deleted
-# afterwards.  Set KEEP=1 to keep the firmware file.  Needs python3 and
+# afterwards.  Set KEEP=1 to keep the firmware file, and SAVE=DIR to keep
+# the kernel image and its config in DIR/<kernel>/ for building drivers.  Needs python3 and
 # unsquashfs (squashfs-tools).
 set -eu
 
@@ -57,8 +59,11 @@ WANT='r8152|r8153_ecm|asix|ax88179_178a|cdc_ether|cdc_ncm|cdc_eem|smsc95xx|smsc7
 KIMG=$(find "$WORK" -name 'kernel.pak.unlz4' | head -n 1)
 [ -n "$KIMG" ] || KIMG=$(find "$WORK" -name 'kernel.pak' | head -n 1)
 if [ -n "$KIMG" ]; then
-    _out=$(python3 "$HERE/kernel-info.py" "$KIMG" 2>/dev/null || true)
+    _out=$(python3 "$HERE/kernel-info.py" "$KIMG" ${SAVE:+"$WORK/save"} 2>/dev/null || true)
     KERNEL=$(echo "$_out" | sed -n 's/^kernel=//p')
+    if [ -n "${SAVE:-}" ] && [ -n "$KERNEL" ] && [ -f "$WORK/save/config" ]; then
+        mkdir -p "$SAVE/$KERNEL" && mv "$WORK/save/Image" "$WORK/save/config" "$SAVE/$KERNEL/"
+    fi
     BUILTIN=$(echo "$_out" | sed -n 's/^builtin=//p')
     MODULES=$(echo "$_out" | sed -n 's/^modules=//p')
     [ -n "$(echo "$_out" | sed -n 's/^config=//p')" ] && SOURCE=config
@@ -69,9 +74,24 @@ fi
 if [ -z "$SOURCE" ]; then
     ROOTFS=$(find "$WORK" -name rootfs.pak | head -n 1)
     if [ -n "$ROOTFS" ]; then
-        unsquashfs -q -n -d "$WORK/rfs" "$ROOTFS" lib/modules usr/lib/modules > /dev/null 2>&1 || true
+        unsquashfs -q -n -d "$WORK/rfs" "$ROOTFS" boot lib/modules usr/lib/modules > /dev/null 2>&1 || true
+        # Newer rootfs images carry the kernel too, as boot/Image.lz4-<kernel>
+        # (LG's LZ4P container), with the config built in
+        _img=$(find "$WORK/rfs/boot" -type f -name 'Image*' 2>/dev/null | head -n 1)
+        if [ -n "$_img" ]; then
+            _out=$(python3 "$HERE/kernel-info.py" "$_img" ${SAVE:+"$WORK/save"} 2>/dev/null || true)
+            if [ -n "$(echo "$_out" | sed -n 's/^config=//p')" ]; then
+                KERNEL=$(echo "$_out" | sed -n 's/^kernel=//p')
+                BUILTIN=$(echo "$_out" | sed -n 's/^builtin=//p')
+                MODULES=$(echo "$_out" | sed -n 's/^modules=//p')
+                SOURCE=config
+                if [ -n "${SAVE:-}" ] && [ -n "$KERNEL" ]; then
+                    mkdir -p "$SAVE/$KERNEL" && mv "$WORK/save/Image" "$WORK/save/config" "$SAVE/$KERNEL/"
+                fi
+            fi
+        fi
         _b=$(find "$WORK/rfs" -path '*/lib/modules/*' -name modules.builtin 2>/dev/null | head -n 1)
-        if [ -n "$_b" ]; then
+        if [ -n "$_b" ] && [ -z "$SOURCE" ]; then
             _k=$(dirname "$_b")
             [ -n "$KERNEL" ] || KERNEL=${_k##*/}
             BUILTIN=$(grep -E '/net/usb/' "$_b" | sed 's#.*/##; s#\.ko$##' | grep -x -E "$WANT" | sort | tr '\n' ' ' | sed 's/ $//')

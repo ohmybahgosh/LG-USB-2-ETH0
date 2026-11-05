@@ -2,9 +2,12 @@
 """Read a Linux kernel image from LG TV firmware: its version string, and
 which USB network drivers its built-in config (CONFIG_IKCONFIG) has.
 
-Usage: kernel-info.py KERNEL_IMAGE
-Prints kernel=, config=yes|, builtin= and modules= lines.
+Usage: kernel-info.py KERNEL_IMAGE [SAVE_DIR]
+Prints kernel=, config=yes|, builtin= and modules= lines.  With SAVE_DIR,
+also writes the decompressed image (Image) and its config (config) there,
+for building a driver against that kernel.
 """
+import os
 import gzip
 import zlib
 import re
@@ -83,13 +86,33 @@ def unlz4_legacy(data):
     return bytes(out)
 
 
-def main(path):
+def unlz4p(data):
+    """LG's LZ4P container (boot/Image.lz4 in newer rootfs images): a 32-byte
+    header (magic, decompressed size, compressed size, block size, block
+    count), a little-endian length per block, then independent raw LZ4 blocks."""
+    size = int.from_bytes(data[4:8], 'little')
+    count = int.from_bytes(data[16:20], 'little')
+    lengths = [int.from_bytes(data[32 + 4 * k:36 + 4 * k], 'little') for k in range(count)]
+    out = bytearray()
+    i = 32 + 4 * count
+    for n in lengths:
+        out += lz4_block(data[i:i + n])
+        i += n
+    return bytes(out[:size])
+
+
+def main(path, save=None):
     data = open(path, 'rb').read()
-    if data[:4] == bytes.fromhex('02214c18'):
+    if data[:4] == b'LZ4P':
+        data = unlz4p(data)
+    elif data[:4] == bytes.fromhex('02214c18'):
         data = unlz4_legacy(data)
     elif data[:2] == b'\x1f\x8b':
         # Only the first gzip member: the image can have padding after it
         data = zlib.decompressobj(31).decompress(data)
+    if save:
+        os.makedirs(save, exist_ok=True)
+        open(os.path.join(save, 'Image'), 'wb').write(data)
     m = re.search(rb'Linux version (\S+) \(', data)
     print('kernel=' + (m.group(1).decode() if m else ''))
     start = data.find(b'IKCFG_ST')
@@ -102,6 +125,8 @@ def main(path):
     except OSError:
         print('config=')
         return
+    if save:
+        open(os.path.join(save, 'config'), 'w').write(config)
     values = dict(re.findall(r'^CONFIG_(\w+)=(\S+)', config, re.M))
     print('config=yes')
     print('builtin=' + ' '.join(n for s, n in DRIVERS if values.get(s) == 'y'))
@@ -109,4 +134,4 @@ def main(path):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)

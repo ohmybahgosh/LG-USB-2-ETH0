@@ -346,6 +346,8 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 **Which drivers does your TV's kernel have?**  The [firmware audit](docs/firmware-audit.md) reads them straight from LG's firmware for 13 models from 2019 to 2025, webOS 26 included.
 
+**More drivers on the way.**  We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them and how to help.
+
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
 
 ## Real speeds
@@ -456,7 +458,7 @@ It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinn
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
-The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.  `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has, for the [firmware audit](docs/firmware-audit.md).  The banner at the top is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
+The app screenshots come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).  The recording at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.  `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has, for the [firmware audit](docs/firmware-audit.md), and `scripts/driver-build/build.sh` builds a driver for one kernel from LG's source and checks it ([docs/driver-build.md](docs/driver-build.md)).  The banner at the top is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
 
 Releases are made by pushing a `v*` tag.  The release workflow runs the tests, checks the tag against `VERSION` in the script, builds the app, and publishes the script, `SHA256SUMS`, the IPK, its manifest and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`).  Then it tells ohmybahgosh.dev to refresh its Homebrew Channel repository.
 
