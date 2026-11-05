@@ -2,12 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.4.8] - 2026-11-05
 
 ### Added
 
-- **Building drivers from LG's kernel source.**  `scripts/driver-build/build.sh` builds a driver for one kernel, DonZoomik's way, and keeps it only if its vermagic matches, the kernel exports every symbol it uses, and (on o22 5.4.268 kernels) the USB struct offsets match.  Rebuilt from LG's C2 source, DonZoomik's driver comes out the same as his.  Realtek drivers are built for `5.4.268-329.ptl4tv.2`, `5.4.268-320`, `5.4.96-307` and K24's `5.4.268-294.24.papikonda.2`, and wait for testers before `get-driver` offers them: see [docs/driver-build.md](docs/driver-build.md).
 - **`test-driver`, and Test a new driver in the app, for testers.**  On a TV whose kernel has an experimental driver, one command (or one press in the app) does the whole test: downloads the driver and checks its SHA-256 and vermagic, loads it until the next restart only, moves a Realtek adapter to it, checks it gets online, and shows a report with no MAC or IP addresses.  The app shows it as a QR code that opens a filled-in driver test report, a new issue form.  A test that freezes the TV is marked before the driver loads, so it's reported as such after the restart.  `report` and `status --json` include the last test's result.
+- **Building drivers from LG's kernel source.**  `scripts/driver-build/build.sh` builds a driver for one kernel, DonZoomik's way, and keeps it only if its vermagic matches, the kernel exports every symbol it uses, and (on o22 5.4.268 kernels) the USB struct offsets match.  Rebuilt from LG's C2 source, DonZoomik's driver comes out the same as his.  Realtek drivers are built for `5.4.268-329.ptl4tv.2`, `5.4.268-320`, `5.4.96-307` and K24's `5.4.268-294.24.papikonda.2`, and wait for testers before `get-driver` offers them: see [docs/driver-build.md](docs/driver-build.md).
 - **The firmware audit reads newer firmware too**, whose kernel is inside the rootfs as `boot/Image.lz4` (LG's LZ4P format), and with `SAVE=DIR` keeps each kernel's image and config.
 
 ## [2.4.7] - 2026-11-05
