@@ -1,0 +1,17 @@
+#!/bin/sh
+# Fake `iptables` for the test suite: keeps OUTPUT rules, one per line, in
+# $FAKE_STATE/iptables.  Handles -C (check), -I (insert) and -D (delete).
+printf 'iptables %s\n' "$*" >> "$FAKE_STATE/iptables.log"
+f=$FAKE_STATE/iptables
+touch "$f"
+op=$1
+shift
+rule="$*"
+case "$op" in
+    -C) grep -qxF -- "$rule" "$f" ;;
+    -I) printf '%s\n' "$rule" > "$f.new"; cat "$f" >> "$f.new"; mv "$f.new" "$f" ;;
+    -D) n=$(grep -nxF -- "$rule" "$f" | head -n 1 | cut -d: -f1)
+        [ -n "$n" ] || exit 1
+        sed "${n}d" "$f" > "$f.new"; mv "$f.new" "$f" ;;
+    *) exit 0 ;;
+esac

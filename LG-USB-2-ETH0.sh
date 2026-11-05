@@ -60,6 +60,11 @@ HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
 # Kept while --wifi-fallback has turned Wi-Fi on, so it's turned off again
 # once the cable works, even after a reboot in between
 WIFI_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+# --block-updates: what webOS's own update switch was before it was turned
+# off, so turning the option off puts it back
+UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
+HOSTS_FILE="${LGU2E_HOSTS:-/etc/hosts}"
+SWUPDATE_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/swupdate"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -73,9 +78,10 @@ DRIVER=""
 MODULE_SHA=""
 WATCH=0
 WIFI_FALLBACK=0
+BLOCK_UPDATES=0
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_BLOCK=0
 JSON=0
 PHASE=""
 CHECK_ONLY=0
@@ -147,7 +153,11 @@ Options:
   --wifi-fallback    Turn Wi-Fi on if eth0 loses its cable link for a minute,
                      and off again once the cable works.  Only when Wi-Fi was
                      off, and only Wi-Fi networks the TV already knows
-  --no-watch, --no-module, --no-mac, --no-wifi-fallback
+  --block-updates    Block firmware updates more thoroughly, on top of the
+                     Homebrew Channel's own block: turn webOS's update check
+                     off, block the update servers it misses, and the one
+                     it reaches by IP.  Updates can remove root for good
+  --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-block-updates
                      Turn that setting off again
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
@@ -679,6 +689,88 @@ wifi_back() {
     _wifi_on=""
 }
 
+# --block-updates: close more of LG's firmware update path, on top of the
+# Homebrew Channel's own Block system updates.  It never replaces that, never
+# touches its setting, and only adds: webOS's own update switch turned off,
+# the update servers it misses in /etc/hosts, and one firewall rule for the
+# server the updater reaches by IP.  All of it is undone by updates_unblock.
+UPD_HOSTS="snu.lge.com su.lge.com su-ssl.lge.com su-dev.lge.com snu-dev.lge.com nsu.lge.com ngfts.lge.com"
+UPD_IP=156.147.69.32
+UPD_TAG="# lg-usb-2-eth0 block-updates"
+
+# webOS's hidden update switch (support/softwareUpdateEnable): true, false,
+# or nothing when it can't tell.  With it off, the updater skips its check.
+upd_setting() {
+    luna-send -n 1 luna://com.webos.settingsservice/getSystemSettings \
+        '{"category":"support","keys":["softwareUpdateEnable"]}' 2>/dev/null |
+        sed -nE 's/.*"softwareUpdateEnable":[[:space:]]*"?(true|false)"?.*/\1/p'
+}
+upd_set() {
+    case "$(luna-send -n 1 luna://com.webos.settingsservice/setSystemSettings \
+        "{\"category\":\"support\",\"settings\":{\"softwareUpdateEnable\":\"$1\"}}" 2>/dev/null)" in
+        *'"returnValue":true'*|*'"returnValue": true'*) return 0 ;;
+    esac
+    return 1
+}
+upd_fw_rule() { iptables -C OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; }
+# The update servers missing from /etc/hosts
+upd_missing_hosts() {
+    for _h in $UPD_HOSTS; do
+        grep -Eq "^[^#]*[[:space:]]$_h([[:space:]]|#|$)" "$HOSTS_FILE" 2>/dev/null || printf '%s ' "$_h"
+    done
+}
+
+updates_block() {
+    _us=$(upd_setting)
+    # Remember what it was, once, so turning the option off restores it
+    [ -n "$_us" ] && [ ! -f "$UPD_MARK" ] && echo "$_us" > "$UPD_MARK"
+    if [ "$_us" != false ]; then
+        if upd_set false; then echo "Turned webOS's update check off."; else echo "Could not turn webOS's update check off."; fi
+    fi
+    # An update that was already found or downloaded
+    rm -f "$SWUPDATE_DIR/Image_Update_Info.xml" "$SWUPDATE_DIR/Package_Update_Info.xml" 2>/dev/null
+    _miss=$(upd_missing_hosts)
+    if [ -n "$_miss" ]; then
+        # /etc/hosts is read-only unless something (like the Homebrew
+        # Channel's own block) put a writable copy over it.  Then do the same.
+        if ! ( : >> "$HOSTS_FILE" ) 2>/dev/null; then
+            cp "$HOSTS_FILE" "$RUN_DIR/lg-usb-2-eth0.hosts" 2>/dev/null &&
+                mount --bind "$RUN_DIR/lg-usb-2-eth0.hosts" "$HOSTS_FILE" 2>/dev/null
+        fi
+        if ( : >> "$HOSTS_FILE" ) 2>/dev/null; then
+            {
+                echo "$UPD_TAG"
+                for _h in $_miss; do printf '0.0.0.0\t%s %s\n::\t%s %s\n' "$_h" "$UPD_TAG" "$_h" "$UPD_TAG"; done
+            } >> "$HOSTS_FILE"
+            echo "Blocked update servers in $HOSTS_FILE: $_miss"
+        else
+            echo "Could not add update servers to $HOSTS_FILE."
+        fi
+    fi
+    if command -v iptables >/dev/null 2>&1 && ! upd_fw_rule; then
+        if iptables -I OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; then echo "Blocked $UPD_IP, which the updater reaches by IP."; else echo "Could not block $UPD_IP."; fi
+    fi
+    return 0
+}
+
+updates_unblock() {
+    if [ -f "$UPD_MARK" ]; then
+        _was=$(cat "$UPD_MARK" 2>/dev/null)
+        [ "$_was" = true ] && { upd_set true || echo "Could not turn webOS's update check back on."; }
+        rm -f "$UPD_MARK"
+    fi
+    if grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
+        # Written in place: /etc/hosts may be a bind mount that can't be replaced
+        grep -v "$UPD_TAG" "$HOSTS_FILE" > "$RUN_DIR/lg-usb-2-eth0.hosts.new" 2>/dev/null &&
+            cat "$RUN_DIR/lg-usb-2-eth0.hosts.new" > "$HOSTS_FILE" 2>/dev/null
+        rm -f "$RUN_DIR/lg-usb-2-eth0.hosts.new"
+    fi
+    if command -v iptables >/dev/null 2>&1; then
+        while upd_fw_rule; do iptables -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
+    fi
+    return 0
+}
+
 # Runs after boot when --watch or --wifi-fallback is on, or when a --module
 # driver is in use.  With a driver: if the adapter comes back on cdc_ncm (TV
 # standby can reset USB), move it over again.  With --watch: also follow
@@ -761,6 +853,7 @@ watch_run() {
 # and it changes nothing when no adapter shows up.
 boot_run() {
     echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
+    [ "$BLOCK_UPDATES" = 1 ] && updates_block
     load_module
     _t=0
     while [ "$_t" -lt "$WAIT_SECS" ] && [ -z "$(find_usb_nic)" ]; do
@@ -1091,6 +1184,7 @@ settings_ok() {
     case "$WAIT_SECS" in ''|*[!0-9]*) return 1 ;; esac
     case "$WATCH" in 0|1) ;; *) return 1 ;; esac
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
+    case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
@@ -1107,6 +1201,7 @@ load_settings() {
     if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); MODULE_SHA=$(hook_setting MODULE_SHA); fi
     if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
     if [ "$SET_WIFI" = 0 ]; then _v=$(hook_setting WIFI_FALLBACK); [ -n "$_v" ] && WIFI_FALLBACK=$_v; fi
+    if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     return 0
 }
@@ -1151,6 +1246,7 @@ write_hook() {
         echo "MODULE_SHA=\"$MODULE_SHA\""
         echo "WATCH=\"$WATCH\""
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
+        echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
     _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
@@ -1256,6 +1352,7 @@ install_fix() {
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
     [ "$WIFI_FALLBACK" = 1 ] && echo "  -  If eth0 loses its cable link for ${WIFI_GRACE}s while Wi-Fi is off, turn Wi-Fi on, and off again once the cable works"
+    [ "$BLOCK_UPDATES" = 1 ] && echo "  -  Block firmware updates more thoroughly, on top of the Homebrew Channel's own block (starts now)"
     echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
@@ -1269,6 +1366,12 @@ install_fix() {
     stop_watcher
     write_hook
     success "Boot hook installed: $HOOK"
+    if [ "$BLOCK_UPDATES" = 1 ]; then
+        updates_block
+    elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
+        updates_unblock
+        echo "Update blocking is off again.  The Homebrew Channel's own block is unchanged."
+    fi
     if [ "$APPLY_NOW" = 1 ]; then
         run_detached swap_in
     else
@@ -1290,6 +1393,10 @@ uninstall_fix() {
     if [ -f "$WIFI_MARK" ]; then
         rm -f "$WIFI_MARK"
         warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
+    fi
+    if [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
+        updates_unblock
+        echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
     fi
     _bi=$(find_builtin_nic)
     if [ "$APPLY_NOW" = 1 ]; then
@@ -1390,6 +1497,7 @@ show_status() {
             [ -n "$(hook_setting DRIVER)" ] && _s="$_s (driver $(hook_setting DRIVER))"
             [ "$(hook_setting WATCH)" = 1 ] && _s="$_s, keeps watching (--watch)"
             [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _s="$_s, Wi-Fi as a backup (--wifi-fallback)"
+            [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _s="$_s, blocks firmware updates (--block-updates)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
@@ -1525,6 +1633,9 @@ show_status() {
     if [ "$_usb" = eth0 ] && [ "$(sysval "$NET/eth0/carrier" 2>/dev/null)" = 1 ] && [ -n "$_def" ] && [ "$_def" != eth0 ]; then
         status_note "Traffic goes out $_def, not the adapter. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable."
     fi
+    if [ ! -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && [ "$(hook_setting BLOCK_UPDATES)" != 1 ]; then
+        status_note "Firmware updates aren't blocked.  An update can remove root for good: turn on Block system updates in the Homebrew Channel, or install with --block-updates."
+    fi
     [ -f "$WIFI_MARK" ] && status_note "The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link.  It turns Wi-Fi off again once the cable works for ${WIFI_BACK_SECS}s."
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."
     if [ "$_usb" = eth0 ]; then
@@ -1614,10 +1725,13 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"running":%s,"pid":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s},' \
+        "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
+        "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")"
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"blockUpdates":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
-        "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
+        "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
@@ -1935,6 +2049,7 @@ show_report() {
         [ -n "$(hook_setting MODULE)" ] && _h="$_h, module $(basename "$(hook_setting MODULE)")"
         [ "$(hook_setting WATCH)" = 1 ] && _h="$_h, watch"
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
+        [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
     fi
     echo "Hook:    $_h"
     echo "Interfaces:"
@@ -2053,6 +2168,8 @@ while [ $# -gt 0 ]; do
         --no-watch) WATCH=0; SET_WATCH=1 ;;
         --wifi-fallback) WIFI_FALLBACK=1; SET_WIFI=1 ;;
         --no-wifi-fallback) WIFI_FALLBACK=0; SET_WIFI=1 ;;
+        --block-updates) BLOCK_UPDATES=1; SET_BLOCK=1 ;;
+        --no-block-updates) BLOCK_UPDATES=0; SET_BLOCK=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
         --file)
             shift

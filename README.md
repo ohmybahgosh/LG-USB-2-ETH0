@@ -21,7 +21,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 
 > [!TIP]
 > **Is it safe, and how do I undo it?**
-> It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files are touched, and network settings only if you turn on the Wi-Fi backup, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
+> It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files are touched, and network settings only if you turn on the Wi-Fi backup or Block updates harder, so a reboot without the hook always starts clean.  With no adapter plugged in, the hook changes nothing.
 > Undo everything with **Turn everything off** in the TV app, or `sh LG-USB-2-ETH0.sh uninstall --now`.
 
 > [!WARNING]
@@ -29,6 +29,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 >
 > - Turn off **Automatic software updates** in the TV's settings (on recent models it's under Support, Software Update).
 > - In the Homebrew Channel, open Settings and turn on **Block system updates**.
+> - For more, turn on **Block updates harder** in the LG-USB-2-ETH0 app (or install with `--block-updates`).  It adds to the Homebrew Channel's block without touching it: see [Blocking updates](#blocking-updates).
 > - Some TVs still show the update prompt anyway.  Blocking LG's update servers on your router or Pi-hole stops it: see the list in [Homebrew Channel issue #96](https://github.com/webosbrew/webos-homebrew-channel/issues/96#issuecomment-2119483327).
 > - Not sure about your firmware?  Check it at [CanI.RootMy.TV](https://cani.rootmy.tv/).
 >
@@ -56,6 +57,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 - [A faster driver](#a-faster-driver)
 - [webOS compatibility](#webos-compatibility)
 - [Real speeds](#real-speeds)
+- [Blocking updates](#blocking-updates)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
 - [Upgrading from v1](#upgrading-from-v1)
@@ -93,7 +95,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 <sub>The recording above is from a real LG C2.  The screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found, like a cable that only connects at 100 Mbit/s.
-- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup** and **Switch now**, as on/off switches.
+- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Block updates harder** and **Switch now**, as on/off switches.
 - **Faster driver:** only shows up when a driver is known for your TV's exact kernel and an adapter it supports is plugged in.  It downloads, checks and sets up the driver in one go.
 - **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
@@ -220,7 +222,8 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `--module /path/driver.ko` | Load this driver module at boot.  An adapter with no driver gets it right away, and one the kernel gave to a generic driver (`cdc_ncm` or `cdc_ether`) is moved over to it.  Refuses a module built for another kernel.  See [A faster driver](#a-faster-driver). |
 | `--driver NAME` | The driver name the module registers, if it can't be read from the file.  Rarely needed. |
 | `--wifi-fallback` | Wi-Fi as a backup.  If `eth0` loses its cable link for a minute while Wi-Fi is off, turn Wi-Fi on, so the TV joins a network it already knows.  Once the cable works again for 30 seconds, turn Wi-Fi back off, so traffic returns to the adapter.  It only turns Wi-Fi off if it turned it on.  Starts from the next boot. |
-| `--no-watch`, `--no-module`, `--no-mac`, `--no-wifi-fallback` | Turn that setting off again. |
+| `--block-updates` | Block firmware updates more thoroughly, on top of the Homebrew Channel's own block.  See [Blocking updates](#blocking-updates).  Starts right away, and again at every boot. |
+| `--no-watch`, `--no-module`, `--no-mac`, `--no-wifi-fallback`, `--no-block-updates` | Turn that setting off again. |
 | `--json` | With `status`, `speedtest` or `update --check`: machine-readable output.  The TV app uses it. |
 
 The options you install with are saved in `/var/lib/webosbrew/lg-usb-2-eth0.conf`.  Run `install` again to change any of them; the ones you don't give are kept.
@@ -361,6 +364,19 @@ Don't expect gigabit.  The TV's USB port is the limit.  On a C2 at full speed, t
 
 That's still two to three times the built-in port, which is plenty for 4K remuxes.
 
+## Blocking updates
+
+A firmware update can remove root, and current firmware can't be rooted again (see the warning at the top).  The Homebrew Channel's **Block system updates** is the first line: it points four of LG's update servers at nothing in `/etc/hosts`.  People in [Homebrew Channel issue #96](https://github.com/webosbrew/webos-homebrew-channel/issues/96) found what it misses, and **Block updates harder** (`--block-updates`) adds that on top:
+
+- **webOS's own update check, turned off.**  A hidden webOS setting (`softwareUpdateEnable` in the `support` category) stops the updater's check, including the one it makes early in boot, before the Homebrew Channel's block is in place.  It's the same switch [Homebrew Channel PR #264](https://github.com/webosbrew/webos-homebrew-channel/pull/264) turns off.
+- **The update servers the block misses**, added to `/etc/hosts`: `nsu.lge.com` (LG's current update server, which a TV still reached with the block on), `snu-dev.lge.com` and `ngfts.lge.com`.  It only adds the ones that aren't there yet, in lines marked as its own, and never changes the Homebrew Channel's.
+- **The server the updater reaches by IP** (`156.147.69.32`), which no hosts file can block, with one firewall rule.
+- **Update details already found or downloaded** (in `/mnt/lg/cmn_data/swupdate`), deleted, so a waiting prompt goes away.
+
+It does this right away and again at every boot, and turning it off undoes all of it: the update check goes back to how it was, and its hosts lines and firewall rule come off.  The Homebrew Channel's own setting stays as you left it either way, so keep that on too.  Tested on a C2 with webOS 25.
+
+It doesn't touch webOS's update service itself.  Overriding that, as some people in the issue have, goes deeper into the system than this script should.  If you can, also block the servers above on your router or Pi-hole: that covers the TV before it has even started.
+
 ## Troubleshooting
 
 **Lost SSH while switching?**  The switch still finishes on the TV.  Reconnect over Wi-Fi.  The adapter has its own MAC address, so your router may give the TV a new IP.  A DHCP reservation for the adapter's MAC keeps it steady.
@@ -389,7 +405,7 @@ That's still two to three times the built-in port, which is plenty for 4K remuxe
 
 **Does it survive a firmware update?**  The hook lives in the Homebrew Channel's folder, so it stays as long as root does.  If an update removes root, the hook stops running and the TV just goes back to using the built-in port.  Current firmware, webOS 26 included, can't be rooted again, so keep updates off: see the warning at the top.
 
-**Does it change my network settings?**  No.  webOS still sets up the wired connection itself.  The script only changes which device is called `eth0`.  The one exception is `--wifi-fallback`, if you turn it on: it flips the Wi-Fi switch on when the cable stops working, and back off when it works again.
+**Does it change my network settings?**  No.  webOS still sets up the wired connection itself.  The script only changes which device is called `eth0`.  The one exception is `--wifi-fallback`, if you turn it on: it flips the Wi-Fi switch on when the cable stops working, and back off when it works again.  `--block-updates` doesn't change your network either, but it does add LG's update servers to `/etc/hosts` and one firewall rule, so firmware updates can't get through.
 
 **Does it affect Wi-Fi?**  No, unless you turn on `--wifi-fallback`.  Wi-Fi modules are never renamed or moved, even the ones that sit on USB.
 

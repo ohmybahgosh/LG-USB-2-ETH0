@@ -13,7 +13,8 @@
   var withSpeed = p.get('speed') !== '0';
   var status = {
     version: ver, model: 'OLED65C2PUA', webos: 'webOS 25', webosRelease: '10.3.1', firmware: '33.30.65', kernel: '5.4.268-329.ptl4tv.5',
-    hook: { state: 'enabled', link: '', wait: '120', mac: '', module: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driver: 'r8152_oot', watch: true, wifiFallback: true, wifiFallbackOn: false, running: true, pid: '1234' },
+    hook: { state: 'enabled', link: '', wait: '120', mac: '', module: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driver: 'r8152_oot', watch: true, wifiFallback: true, wifiFallbackOn: false, blockUpdates: true, running: true, pid: '1234' },
+    updates: { check: 'false', hbcBlock: true, missingHosts: '', firewall: true },
     adapter: { name: 'eth0', driver: 'r8152_oot', mac: '', carrier: true, speed: 1000, duplex: 'full', ip: '192.168.1.42/24', id: '0bda:8156', chip: 'Realtek RTL8156', bus: 'USB 2.0' },
     adapterIsEth0: true,
     builtin: { name: 'eth2', driver: 'lg1k_eth', mac: '', carrier: false, speed: 0, ip: '' },

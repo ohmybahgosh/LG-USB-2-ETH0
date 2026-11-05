@@ -160,7 +160,7 @@ run() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
-        FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" \
+        FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
     OUT=$(cat "$SB/out")
@@ -170,7 +170,7 @@ run() {
 run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
-        LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" \
+        LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 \
         $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
@@ -520,6 +520,83 @@ test_wifi_fallback_settings() {
     check "bad value refused" wait_log "invalid settings"
 }
 
+# wait_for_file FILE TEXT: wait up to 15s for TEXT to show up in FILE
+wait_for_file() {
+    local i=0
+    while [ "$i" -lt 15 ]; do
+        grep -q "$2" "$1" 2>/dev/null && return 0
+        sleep 1
+        i=$((i + 1))
+    done
+    echo "    $1 never got: $2"
+    return 1
+}
+
+# /etc/hosts as the Homebrew Channel's own block leaves it
+hbc_hosts() {
+    printf '%s\n' '127.0.0.1 localhost' '# This file is dynamically regenerated on boot by webosbrew startup script' \
+        '127.0.0.1 snu.lge.com su-dev.lge.com su.lge.com su-ssl.lge.com' '::1 snu.lge.com su-dev.lge.com su.lge.com su-ssl.lge.com' > "$SB/hosts"
+}
+
+# --block-updates adds to the Homebrew Channel's block, and undoes only its own
+test_block_updates() {
+    add_builtin
+    hbc_hosts
+    mkdir -p "$ROOT/mnt/lg/cmn_data/swupdate"
+    echo x > "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    run install -y --block-updates
+    check "exit 0" rc_is 0
+    check "saved" grep -q '^BLOCK_UPDATES="1"' "$CONF"
+    check "update check off" grep -qx false "$STATE/updcheck"
+    check "remembers it was on" grep -qx true "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "adds nsu.lge.com" grep -q "nsu.lge.com" "$SB/hosts"
+    check "adds snu-dev.lge.com" grep -q "snu-dev.lge.com" "$SB/hosts"
+    check "doesn't repeat the HBC ones" sh -c "! grep 'lg-usb-2-eth0' '$SB/hosts' | grep -q ' snu.lge.com '"
+    check "firewall rule" grep -q "156.147.69.32" "$STATE/iptables"
+    check "cached update info gone" test ! -e "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    run install -y --block-updates
+    check "one firewall rule" test "$(grep -c 156.147.69.32 "$STATE/iptables")" = 1
+    check "hosts lines added once" test "$(grep -c 'nsu.lge.com' "$SB/hosts")" = 2
+    run status --json
+    check "json says on" has '"blockUpdates":true'
+    check "json: nothing missing" has '"missingHosts":""'
+    check "json: HBC block seen" has '"hbcBlock":false'
+    run status
+    check "status names it" has "blocks firmware updates"
+    run install -y --no-block-updates
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "our hosts lines gone" sh -c "! grep -q 'lg-usb-2-eth0' '$SB/hosts'"
+    check "HBC's lines kept" grep -q '^127.0.0.1 snu.lge.com su-dev.lge.com' "$SB/hosts"
+    check "firewall rule gone" sh -c "! grep -q 156.147.69.32 '$STATE/iptables'"
+    check "mark gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+}
+
+# If the update check was already off, turning the option off leaves it off;
+# uninstall undoes the rest; the boot hook blocks again after a reboot
+test_block_updates_undo() {
+    add_builtin
+    hbc_hosts
+    echo false > "$STATE/updcheck"
+    run install -y --block-updates
+    check "remembers it was off" grep -qx false "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    run install -y --no-block-updates
+    check "stays off" grep -qx false "$STATE/updcheck"
+    echo true > "$STATE/updcheck"
+    run install -y --block-updates
+    : > "$STATE/iptables"
+    hbc_hosts
+    run_hook
+    check "boot blocks again" wait_for_file "$STATE/iptables" 156.147.69.32
+    check "boot adds hosts" grep -q "nsu.lge.com" "$SB/hosts"
+    run uninstall -y
+    check "uninstall says so" has "Undid --block-updates"
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "hosts clean" sh -c "! grep -q 'lg-usb-2-eth0' '$SB/hosts'"
+    check "firewall clean" sh -c "! grep -q 156.147.69.32 '$STATE/iptables'"
+    run --help
+    check "help lists it" has "--block-updates"
+}
+
 test_disable_enable() {
     add_builtin
     run install -y
@@ -741,6 +818,8 @@ t link_speed test_link_speed
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
+t block_updates test_block_updates
+t block_updates_undo test_block_updates_undo
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd

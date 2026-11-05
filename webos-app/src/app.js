@@ -224,6 +224,9 @@
         $('tog-boot').className = 'tog' + (bootOn ? ' on' : '');
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
+        $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
+        var u = s.updates || {};
+        $('updates-hint').textContent = u.hbcBlock === false ? 'also turn on Block system updates in the Homebrew Channel' : 'on top of the Homebrew Channel\'s block';
         // The faster-driver row only appears when it fits this TV: a driver is
         // known for this exact kernel and the adapter is one it supports, or a
         // driver is already set up (so it can be turned off again).
@@ -254,7 +257,7 @@
         btn.style.display = show ? '' : 'none';
         // Squeeze the rows a little when there are more of them, so they fit
         var n = buttons().length;
-        $('actions').className = 'actions' + (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''));
+        $('actions').className = 'actions' + (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : '')));
         if (!show) { return; }
         $('update-title').textContent = 'Update to v' + upd.latest;
         $('update-hint').textContent = upd.source === 'homebrew' ? 'opens the Homebrew Channel' : 'you have v' + upd.current + ', downloads and installs';
@@ -423,6 +426,20 @@
                     'If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  ' +
                     'Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.',
                     function () { act('Wi-Fi backup', installArgs('--wifi-fallback')); });
+            }
+        },
+        updates: function () {
+            if (!state) { return; }
+            if (state.hook.state === 'enabled' && state.hook.blockUpdates) {
+                confirmThen('Stop blocking updates harder?',
+                    'webOS\'s own update check goes back to how it was, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.',
+                    function () { act('Update blocking off', installArgs('--no-block-updates')); });
+            } else {
+                confirmThen('Block updates harder?',
+                    'A firmware update can remove root for good, and LG\'s current firmware, webOS 26 included, can\'t be rooted again.  ' +
+                    'This adds to the Homebrew Channel\'s Block system updates: it turns off webOS\'s own update check, blocks the update servers that block misses, and the one the updater reaches by IP.  ' +
+                    'It starts now and at every boot, and turning it off undoes all of it.',
+                    function () { act('Block updates', installArgs('--block-updates')); });
             }
         },
         apply: function () {

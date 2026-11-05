@@ -2,7 +2,8 @@
 # Fake `luna-send` for the test suite: logs the call.  getAppInfo answers
 # with the version in $FAKE_STATE/appver (as if an install had finished).
 # Wi-Fi's switch is $FAKE_STATE/wifi ("enabled" or "disabled", default off);
-# $FAKE_STATE/wifi-broken makes setstate fail.
+# $FAKE_STATE/wifi-broken makes setstate fail.  webOS's update check
+# (support/softwareUpdateEnable) is $FAKE_STATE/updcheck, default true.
 printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
 case "$*" in
     *getAppInfo*) printf '{"appInfo":{"version":"%s"},"returnValue":true}\n' "$(cat "$FAKE_STATE/appver" 2>/dev/null)" ;;
@@ -17,6 +18,14 @@ case "$*" in
         case "$*" in
             *'"wifi":"enabled"'*) echo enabled > "$FAKE_STATE/wifi" ;;
             *'"wifi":"disabled"'*) echo disabled > "$FAKE_STATE/wifi" ;;
+        esac
+        echo '{"returnValue":true}' ;;
+    *getSystemSettings*softwareUpdateEnable*)
+        printf '{"returnValue":true,"category":"support","settings":{"softwareUpdateEnable":"%s"}}\n' "$(cat "$FAKE_STATE/updcheck" 2>/dev/null || echo true)" ;;
+    *setSystemSettings*softwareUpdateEnable*)
+        case "$*" in
+            *'"softwareUpdateEnable":"false"'*) echo false > "$FAKE_STATE/updcheck" ;;
+            *'"softwareUpdateEnable":"true"'*) echo true > "$FAKE_STATE/updcheck" ;;
         esac
         echo '{"returnValue":true}' ;;
     *) echo '{"returnValue":true}' ;;

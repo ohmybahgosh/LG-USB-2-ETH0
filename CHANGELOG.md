@@ -7,6 +7,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Added
 
 - **A firmware audit.**  `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has.  [docs/firmware-audit.md](docs/firmware-audit.md) has the results for 13 models from 2019 to 2025, webOS 26 included.  Among other things, it shows the C2, C3, C4 and UR9000 share one kernel, and that the 2024 B4 and QNED85 share the 2025 B5's, so dd3git's ASIX driver fits them too.
+- **Block updates harder (`--block-updates`), in the app and the script.**  On top of the Homebrew Channel's Block system updates, never instead of it: it turns off webOS's own update check (`softwareUpdateEnable`), adds the update servers that block misses (`nsu.lge.com`, `snu-dev.lge.com`, `ngfts.lge.com`) to `/etc/hosts`, drops traffic to `156.147.69.32` with one firewall rule, and deletes cached update details.  Right away and at every boot.  Turning it off undoes all of it.  From the findings in Homebrew Channel issue #96 and PR #264.  `status` notes when firmware updates aren't blocked at all.
 - **`report` names the chip and the built-in USB network drivers**, from `/lib/modules/<kernel>/modules.builtin`.  Compatibility reports now show which drivers a TV has without anyone needing to look.
 
 ### Changed
