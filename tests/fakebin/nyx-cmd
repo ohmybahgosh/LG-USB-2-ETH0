@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fake `nyx-cmd` for the test suite: answers only the chip name, from $FAKE_SOC
+if [ "$1 $2 $3" = "DeviceInfo query device_name" ] && [ -n "$FAKE_SOC" ]; then
+    echo "$FAKE_SOC"
+    exit 0
+fi
+exit 1

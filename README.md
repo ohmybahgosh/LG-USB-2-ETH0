@@ -33,7 +33,7 @@ This script renames the adapter to `eth0` and parks the built-in port under anot
 > - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches.  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 > - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
 >
-> The driver modules `get-driver` offers aren't part of this code: [DonZoomik](https://github.com/DonZoomik/webos-r8152), [mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) and [OCT0PUSCRIME](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) built them, and this script only checks and loads them.  Commits list me as the author and Claude as the committer, which is why they show as Verified.  Found a problem?  See [SECURITY.md](SECURITY.md) or open an issue.
+> The driver modules `get-driver` offers aren't part of this code: [DonZoomik](https://github.com/DonZoomik/webos-r8152), [mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix), [OCT0PUSCRIME](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver), [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) and [throwaway96](https://github.com/throwaway96/webos-kernel-drivers) built them, and this script only checks and loads them.  Commits list me as the author and Claude as the committer, which is why they show as Verified.  Found a problem?  See [SECURITY.md](SECURITY.md) or open an issue.
 
 ## Contents
 
@@ -236,7 +236,7 @@ It logs to `/var/lib/webosbrew/lg-usb-2-eth0.log` (it starts over once it reache
 What decides whether this works on your TV is **whether its kernel has a driver for your adapter's chip**.  That varies by model and firmware, not just by webOS version.  The chip matters more than the brand.
 
 - **Realtek RTL8153 (gigabit) and RTL8156 (2.5G):** the most common chips.  Newer kernels may only have the generic `cdc_ncm` driver for them, which works but is slower, and 2024 QNED and OLED models have no Realtek driver at all.  On both, `get-driver` may offer a better one: see [A faster driver](#a-faster-driver).
-- **ASIX AX88179:** works out of the box on many TVs, using the TV's own `ax88179_178a` driver, like a 2024 G4 on webOS 25 ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)).  A 2020 UN7300 on webOS 5 has no ASIX driver, and `get-driver` offers one for it ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)).  There's also one report of an AX88179A not being detected on a 2025 B5 with webOS 25.
+- **ASIX AX88179:** works out of the box on many TVs, using the TV's own `ax88179_178a` driver, like a 2024 G4 on webOS 25 ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)).  Where the kernel has no ASIX driver, `get-driver` offers one for a 2020 UN7300 on webOS 5 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)), a 2025 B5 on webOS 25, and TVs with the Realtek K5Lp chip.
 - **USB 2.0 is fine.**  Many LG TVs, the C2 included, only have USB 2.0 ports.  There you'll top out around 300 Mbit/s, still about three times the built-in port.  If your TV does have a USB 3.0 port (usually the blue one), use it for more.
 
 ### Tested adapters
@@ -270,9 +270,9 @@ Before buying, run `sh LG-USB-2-ETH0.sh status`.  It lists which USB network dri
 A driver module built for your exact kernel helps in two cases:
 
 - **The adapter is on a slow generic driver.**  Many TVs give Realtek RTL8153 and RTL8156 adapters to `cdc_ncm`.  It works, but it's slower and drops out under load.  The TV's own Realtek driver is often too old to recognize newer chips, and because it's built into the kernel, it can't be swapped out.  A newer Realtek driver under a different name fixes that.
-- **The kernel has no driver for the chip at all.**  LG removed the Realtek driver from 2024 QNED and OLED models, and some older TVs have no ASIX driver.  There the adapter isn't detected until a module adds one.
+- **The kernel has no driver for the chip at all.**  LG removed the Realtek driver from 2024 QNED and OLED models, and some TVs have no ASIX driver.  There the adapter isn't detected until a module adds one.
 
-`get-driver` knows three, each built for one exact kernel:
+`get-driver` knows these.  Most are built for one exact kernel, and a few for one chip:
 
 **Realtek adapters on kernel `5.4.268-329.ptl4tv.5`:** that's the kernel on at least the 2022 C2, 2024 C4 and 2024 G4 with webOS 25 (firmware 33.31.68).  [DonZoomik](https://github.com/DonZoomik/webos-r8152) built `r8152_oot` (Realtek's v2.22.1 driver) for it.  If your TV runs that kernel, `status` says so, and two commands set it up:
 
@@ -296,7 +296,11 @@ sh LG-USB-2-ETH0.sh get-driver
 sh LG-USB-2-ETH0.sh install --module /home/root/lg-usb-2-eth0/drivers/ax88179_178a.ko
 ```
 
-`get-driver` only offers a module for the exact kernel it was built for, and only when an adapter it supports is plugged in (it checks the adapter's USB ID against the module's own list).  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  If that repository ever goes away, it falls back to a byte-for-byte copy in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers), with the same check.  The modules come from those projects, not this one, so credit and thanks go to DonZoomik, mbenitez343 and OCT0PUSCRIME.
+**2025 TVs on webOS 25 (B5) with an ASIX adapter:** [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) built the ASIX driver from LG's own kernel source for kernel `5.4.268-294.24.papikonda.2`, tested on an OLED55B56LA with a UGREEN AX88179 adapter.  Its source is published too.  It's the same `ax88179_178a.ko` file name, so the same two commands set it up.
+
+**TVs with the Realtek K5Lp chip, kernel 4.4.84:** [throwaway96](https://github.com/throwaway96/webos-kernel-drivers), who builds kernel modules for many webOS chips, built the kernel's own `r8152` (gigabit RTL8152 and RTL8153) and `ax88179_178a` for it.  These are built per chip, so `get-driver` also checks the chip name (`nyx-cmd DeviceInfo query device_name`) and offers the one for your adapter.  Not yet tested with LG-USB-2-ETH0, so a report helps.
+
+`get-driver` only offers a module for the exact kernel it was built for, and only when an adapter it supports is plugged in (it checks the adapter's USB ID against the module's own list).  Some of these modules name only the base kernel version inside (like `5.4.268`), which the TV accepts.  The script allows that only for a file whose SHA-256 is pinned for your exact kernel, and keeps the strict check for any other `--module`.  It downloads from a fixed commit of the author's repository and keeps the file only if its SHA-256 matches.  If that repository ever goes away, it falls back to a byte-for-byte copy in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers), with the same check.  The modules come from those projects, not this one, so credit and thanks go to DonZoomik, mbenitez343, OCT0PUSCRIME, dd3git and throwaway96.
 
 What LG-USB-2-ETH0 does with it:
 
@@ -323,7 +327,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2022 C2 (OLED65C2PUA), kernel `5.4.268-329.ptl4tv.5` | Tested by the author.  An RTL8156 adapter (`0bda:8156`) comes up on `cdc_ncm`, and LG-USB-2-ETH0 makes it `eth0`.  With `r8152_oot` from `get-driver` and `install --module`, it's confirmed through a full reboot: at startup the hook loads the driver, moves the adapter over on the first try, turns scatter-gather off and makes it `eth0`, with traffic going out the adapter.  The C2's USB port runs at USB 2.0 speed. | This repo |
 | webOS 25 on 2024 QNED and OLED (Paparoa), kernel `5.4.268-294.17.paparoa.pine.2` | The Realtek driver was removed.  A gigabit RTL8153 adapter works with mbenitez343's `r8152` build (stable on a QNED86, per its author), which `get-driver` now offers.  Not yet tested with LG-USB-2-ETH0 on one of these TVs, so a report helps. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2024 G4 (OLED65G48LW), kernel `5.4.268-329.ptl4tv.5` | An ASIX AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  Settings show the wired connection and apps play.  292 Mbit/s down over USB 2.0. | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
-| webOS 25 on a 2025 B5 | One report of an AX88179A not being detected at all. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185) |
+| webOS 25 on a 2025 B5 (OLED55B56LA), kernel `5.4.268-294.24.papikonda.2` | No ASIX driver: an AX88179A wasn't detected at all.  dd3git's `ax88179_178a` build fixes that, and `get-driver` offers it.  Not yet tested with LG-USB-2-ETH0, so a report helps. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185), [dd3git/lg-webos-ax88179-driver](https://github.com/dd3git/lg-webos-ax88179-driver) |
 
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
 
@@ -418,7 +422,7 @@ tests/run.sh bash
 tests/run.sh busybox watch   # only tests whose name contains "watch"
 ```
 
-It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums and falling back to the mirror, keeping the faster driver after standby, the Wi-Fi fallback (and leaving Wi-Fi alone when it's already on), flagging a 100 Mbit/s or half-duplex link, the speed test, updates (refusing a bad checksum, for the app and the plain script, and what's new after one), and the report.  A fake `curl` and `luna-send` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
+It covers swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, falling back to the mirror and picking the driver by chip and adapter, keeping the faster driver after standby, the Wi-Fi fallback (and leaving Wi-Fi alone when it's already on), flagging a 100 Mbit/s or half-duplex link, the speed test, updates (refusing a bad checksum, for the app and the plain script, and what's new after one), and the report.  A fake `curl` and `luna-send` stand in for the network and the TV's services.  CI runs ShellCheck and the whole suite under all three shells on every push.
 
 The TV app is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).  CI builds it on every push, and checks the issue forms too.
 
@@ -438,7 +442,7 @@ AI-assisted pull requests are welcome too, held to the same standard as the rest
 
 A big thank you to **[DonZoomik](https://github.com/DonZoomik)** for [webos-r8152](https://github.com/DonZoomik/webos-r8152).  He found the right kernel source in LG's open-source bundles, built Realtek's current driver for webOS 25 under its own name so it can sit beside the TV's built-in one, and tracked down the scatter-gather setting that hangs the TV's USB controller.  He also published careful benchmarks.  That work is what turns a USB adapter on these TVs from "works, but drops out" into a steady connection, and `get-driver` and `--module` are built on it.  If it helps you too, go give his repo a star.
 
-Thanks to **[mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix)** too, for building and sharing the `r8152` driver that brings wired USB Ethernet back to 2024 LG TVs, and to **[OCT0PUSCRIME](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver)** for building ASIX's driver for webOS 5 and testing it with LG-USB-2-ETH0.
+Thanks to **[mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix)** too, for building and sharing the `r8152` driver that brings wired USB Ethernet back to 2024 LG TVs, to **[OCT0PUSCRIME](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver)** for building ASIX's driver for webOS 5 and testing it with LG-USB-2-ETH0, to **[dd3git](https://github.com/dd3git/lg-webos-ax88179-driver)** for the ASIX driver for 2025 TVs, source included, and to **[throwaway96](https://github.com/throwaway96/webos-kernel-drivers)** for building kernel modules for so many webOS chips.
 
 Thanks also to the [webOS Homebrew](https://www.webosbrew.org/) project for the Homebrew Channel and the startup hooks this script relies on, and to [RootMyTV](https://rootmy.tv/) for making rooting possible.
 

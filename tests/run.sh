@@ -159,7 +159,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -1242,10 +1242,60 @@ test_get_driver_mirror() {
     printf 'DonZoomik/webos-r8152' > "$STATE/curl_404"
     FAKE_KERNEL=$k run get-driver -y
     check "tried the author first" grep -q "raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98" "$STATE/curl.log"
-    check "then the pinned mirror" grep -q "raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf75.*/drivers/$k/r8152_oot.ko" "$STATE/curl.log"
+    check "then the pinned mirror" grep -q "raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e7.*/drivers/$k/r8152_oot.ko" "$STATE/curl.log"
     check "says so" has "Trying the mirror"
     check "mirror file checked too" has "Checksum mismatch"
     check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
+}
+
+# 2025 B5: dd3git's ASIX build, whose vermagic says only 5.4.268
+test_driver_offer_2025_asix() {
+    add_builtin
+    local k=5.4.268-294.24.papikonda.2
+    add_unclaimed 1-1 0b95 1790
+    FAKE_KERNEL=$k run status --json
+    check "unclaimed AX88179: available" offer_is available
+    check "names who built it" has '"driverPage":"https://github.com/dd3git/lg-webos-ax88179-driver"'
+    FAKE_KERNEL=$k run get-driver -y
+    check "pinned download" grep -q "raw.githubusercontent.com/dd3git/lg-webos-ax88179-driver/3a871c9" "$STATE/curl.log"
+    check "still checksummed" has "Checksum mismatch"
+}
+
+# A module whose vermagic has only the base version is refused, unless it's
+# a known driver for this exact kernel (matched by SHA-256)
+test_base_vermagic_needs_known_sha() {
+    add_builtin
+    local k=5.4.268-294.24.papikonda.2
+    fake_ko "$SB/ax.ko" ax88179_178a 5.4.268 0b95:1790
+    FAKE_KERNEL=$k run install -y --module "$SB/ax.ko"
+    check "unknown file refused" rc_is 1
+    check "says why" has "built for kernel 5.4.268"
+    local sum
+    sum=$(sha256sum "$SB/ax.ko" | awk '{print $1}')
+    LGU2E_TEST_DRIVER="https://example.test/ax.ko $sum ax.ko https://example.test 0b95:1790" FAKE_KERNEL=$k run install -y --module "$SB/ax.ko"
+    check "known file accepted" rc_is 0
+    LGU2E_TEST_DRIVER="https://example.test/ax.ko $sum ax.ko https://example.test 0b95:1790" FAKE_KERNEL=$k run status --json
+    check "offer is active, not wrong-kernel" offer_is active
+}
+
+# K5Lp: throwaway96's per-chip builds, picked by the adapter plugged in
+test_driver_offer_k5lp() {
+    add_builtin
+    add_unclaimed 1-1 0bda 8153
+    FAKE_SOC=k5lp FAKE_KERNEL=4.4.84 run status --json
+    check "RTL8153 on K5Lp: available" offer_is available
+    check "the r8152 build" has '/drivers/r8152.ko"'
+    check "names who built it" has '"driverPage":"https://github.com/throwaway96/webos-kernel-drivers"'
+    FAKE_SOC=o18 FAKE_KERNEL=4.4.84 run status --json
+    check "another chip: none" offer_is none
+    remove_usb 1-1
+    add_unclaimed 1-1 0b95 1790
+    FAKE_SOC=K5LP FAKE_KERNEL=4.4.84 run status --json
+    check "AX88179 on K5Lp: the ASIX build" has '/drivers/ax88179_178a.ko"'
+    FAKE_SOC=k5lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run status --json
+    check "an exact-kernel build wins" has '"driverPage":"https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver"'
+    FAKE_KERNEL=4.4.84 run status --json
+    check "no chip known: none" offer_is none
 }
 
 test_get_driver_download_fails() {
@@ -1343,6 +1393,9 @@ t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t boot_skips_changed_module test_boot_skips_changed_module
 t driver_offer_webos5_asix test_driver_offer_webos5_asix
 t get_driver_mirror test_get_driver_mirror
+t driver_offer_2025_asix test_driver_offer_2025_asix
+t base_vermagic_needs_known_sha test_base_vermagic_needs_known_sha
+t driver_offer_k5lp test_driver_offer_k5lp
 t get_driver_download_fails test_get_driver_download_fails
 t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer

@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.4.6] - 2026-11-04
+
+### Added
+
+- **Two more sources of faster drivers.**  `get-driver` and the app now offer [dd3git's](https://github.com/dd3git/lg-webos-ax88179-driver) ASIX AX88179 driver for kernel `5.4.268-294.24.papikonda.2` (2025 B5 on webOS 25, where an AX88179A wasn't detected), and [throwaway96's](https://github.com/throwaway96/webos-kernel-drivers) `r8152` and `ax88179_178a` for TVs with the Realtek K5Lp chip on kernel 4.4.84.  Both are mirrored in lg-webos-usb-drivers too.
+
+### Changed
+
+- **Drivers can be built per chip.**  throwaway96's modules are built for a chip rather than one exact kernel, so `get-driver` also checks the chip name.  When a TV has more than one known driver, it offers the one for the adapter plugged in.
+- **A known driver may name only the base kernel version.**  Some builds say `5.4.268` inside rather than the TV's full kernel name, and the TV loads them.  The script now accepts that only for a file whose SHA-256 is pinned for the exact kernel running, and keeps the strict check for every other `--module`.
+
 ## [2.4.5] - 2026-11-04
 
 ### Added

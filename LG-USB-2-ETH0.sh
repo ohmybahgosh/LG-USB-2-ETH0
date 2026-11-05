@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.5"
+VERSION="2.4.6"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -372,6 +372,76 @@ module_kernel() {
     tr -c '[:alnum:]_=.+ -' '\n' < "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1
 }
 
+# Better driver modules known to work on one exact kernel, as
+# "url sha256 file author-page". They're built and published by their
+# authors. get-driver checks the SHA-256 before keeping a download.
+# known_driver KERNEL: "url sha256 file page ids mirror" for a driver module
+# known to work on exactly that kernel.  Each one is pinned to a fixed commit
+# and kept only if its SHA-256 matches.  ids are the USB adapters the module
+# supports (from its own aliases): it's only offered when one is plugged in.
+# mirror is a byte-for-byte copy in ohmybahgosh/lg-webos-usb-drivers, also at
+# a fixed commit, tried only if the author's download fails.
+known_driver() {
+    _kdo=$(known_exact "$1"; known_by_soc "$1"; [ -n "${LGU2E_TEST_DRIVER:-}" ] && echo "$LGU2E_TEST_DRIVER")
+    [ -n "$_kdo" ] || return 1
+    echo "$_kdo"
+}
+
+known_exact() {
+    case "$1" in
+        5.4.268-329.ptl4tv.5)
+            # DonZoomik's build of Realtek's v2.22.1 driver (2022 C2, 2024 C4 on webOS 25)
+            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152 045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/5.4.268-329.ptl4tv.5/r8152_oot.ko" ;;
+        5.4.268-294.17.paparoa.pine.2)
+            # mbenitez343's build of the kernel's own r8152 v1.10.11, for 2024
+            # QNED and OLED (K25lp / Paparoa) on webOS 25, where LG removed
+            # it.  Gigabit RTL8152/RTL8153 adapters only, not 2.5G ones.
+            echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/5.4.268-294.17.paparoa.pine.2/r8152.ko" ;;
+        4.4.84-612.jcl4tv.40)
+            # OCT0PUSCRIME's build of ASIX's own AX88179/178A driver (v1.19.0),
+            # for webOS 5 (2020 UN7300), whose kernel has no ASIX driver
+            echo "https://raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c9489034886382a23625b753aab9e661de/ax88179_178a.ko c9aefe84ee61d7021d739af37d70214a4b82f4b449a5eaf3501cec1f21af1831 ax88179_178a.ko https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver 04e8:a100,0711:0179,0930:0a13,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/4.4.84-612.jcl4tv.40/ax88179_178a.ko" ;;
+        5.4.268-294.24.papikonda.2)
+            # dd3git's build of the ASIX driver from LG's kernel source, for
+            # the K24 chip (tested on a 2025 B5).  Its vermagic says only
+            # 5.4.268, so module_fits accepts it by its SHA-256.
+            echo "https://raw.githubusercontent.com/dd3git/lg-webos-ax88179-driver/3a871c9ef7b21bdbc6d93dd2ca2bd07d94c08d37/ax88179_178a.ko f75802cfeca28381c9cf990e589f34bc21129d643408c40ca56b11b9ff1c1987 ax88179_178a.ko https://github.com/dd3git/lg-webos-ax88179-driver 04b4:3610,04e8:a100,050d:0128,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/5.4.268-294.24.papikonda.2/ax88179_178a.ko" ;;
+    esac
+    return 0
+}
+
+# Drivers built per chip (SoC) rather than per exact kernel.  Their vermagic
+# carries only the base version (like 4.4.84), so the chip is checked too.
+known_by_soc() {
+    case "$(tv_soc)" in
+        k5lp)
+            case "$1" in
+                4.4.84|4.4.84-*)
+                    # throwaway96's builds of the kernel's own drivers for K5Lp
+                    echo "https://raw.githubusercontent.com/throwaway96/webos-kernel-drivers/67cb647be62a0d516fc1e5ead24ce2f967a44bbd/armv7l-4.4.84-k5lp/drivers/net/usb/r8152.ko 4735b94db05247a1b3f2d40a25179abfc4b06c60692e4a8edacc888df16ad9c4 r8152.ko https://github.com/throwaway96/webos-kernel-drivers 04e8:a101,0955:09ff,0bda:8152,0bda:8153,17ef:304f,17ef:7205 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/k5lp-4.4.84/r8152.ko"
+                    echo "https://raw.githubusercontent.com/throwaway96/webos-kernel-drivers/67cb647be62a0d516fc1e5ead24ce2f967a44bbd/armv7l-4.4.84-k5lp/drivers/net/usb/ax88179_178a.ko dabd33606f30197d1eb58e7c8b02549ebcca3a8015504da6b0d6c2fb97c711fd ax88179_178a.ko https://github.com/throwaway96/webos-kernel-drivers 04e8:a100,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/b8970e766062d0086520aecb96a6c8343cea1f72/drivers/k5lp-4.4.84/ax88179_178a.ko" ;;
+            esac ;;
+    esac
+    return 0
+}
+
+# The TV's chip (SoC), lowercase, like k5lp or o22
+tv_soc() {
+    command -v nyx-cmd >/dev/null 2>&1 || return 0
+    { if command -v timeout >/dev/null 2>&1; then timeout 5 nyx-cmd DeviceInfo query device_name; else nyx-cmd DeviceInfo query device_name; fi; } 2>/dev/null | head -n 1 | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_'
+}
+
+# module_fits FILE: FILE is built for the kernel running now.  Its vermagic
+# names this kernel, or it's a known driver for this kernel by SHA-256 (some
+# builds carry only the base version, like 5.4.268, and the TV loads them).
+module_fits() {
+    _mfk=$(module_kernel "$1")
+    if [ -z "$_mfk" ] || [ "$_mfk" = "$(uname -r)" ]; then return 0; fi
+    command -v sha256sum >/dev/null 2>&1 || return 1
+    _mfs=$(sha256sum "$1" | awk '{print $1}')
+    known_driver "$(uname -r)" | awk -v s="$_mfs" '$2 == s {f = 1} END {exit !f}'
+}
+
 # Load the --module driver, but only if it's the exact file that was
 # installed and it was built for the kernel running now. A firmware update
 # can change the kernel while root survives; loading a module built for
@@ -386,7 +456,7 @@ load_module() {
         echo "Module $_m already loaded."
     elif [ ! -r "$MODULE" ]; then
         echo "Module file $MODULE is missing. Skipping it."
-    elif [ -n "$_mk" ] && [ "$_mk" != "$(uname -r)" ]; then
+    elif ! module_fits "$MODULE"; then
         echo "Not loading $MODULE: it's built for kernel $_mk, but the TV now runs $(uname -r) (a firmware update?). The adapter stays on its current driver."
     elif [ -n "$MODULE_SHA" ] && command -v sha256sum >/dev/null 2>&1 && \
          [ "$(sha256sum "$MODULE" | awk '{print $1}')" != "$MODULE_SHA" ]; then
@@ -782,7 +852,7 @@ resolve_driver() {
     fi
     case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "Could not work out the driver name of $MODULE." ;; esac
     _vm=$(module_kernel "$MODULE")
-    if [ -n "$_vm" ] && [ "$_vm" != "$(uname -r)" ]; then
+    if ! module_fits "$MODULE"; then
         error_exit "$MODULE is built for kernel $_vm, but this TV runs $(uname -r). Loading it could crash the TV."
     fi
     MODULE_SHA=""
@@ -806,31 +876,21 @@ use_hook_driver() {
     return 0
 }
 
-# Better driver modules known to work on one exact kernel, as
-# "url sha256 file author-page". They're built and published by their
-# authors. get-driver checks the SHA-256 before keeping a download.
-# known_driver KERNEL: "url sha256 file page ids mirror" for a driver module
-# known to work on exactly that kernel.  Each one is pinned to a fixed commit
-# and kept only if its SHA-256 matches.  ids are the USB adapters the module
-# supports (from its own aliases): it's only offered when one is plugged in.
-# mirror is a byte-for-byte copy in ohmybahgosh/lg-webos-usb-drivers, also at
-# a fixed commit, tried only if the author's download fails.
-known_driver() {
-    case "$1" in
-        5.4.268-329.ptl4tv.5)
-            # DonZoomik's build of Realtek's v2.22.1 driver (2022 C2, 2024 C4 on webOS 25)
-            echo "https://raw.githubusercontent.com/DonZoomik/webos-r8152/1ea8e98a24ef7443c590024d48947fee22d29cf1/r8152_oot.ko fe1691622747c106af44f7834675ec75ca3327a797c6bbec394e2998db66e8cb r8152_oot.ko https://github.com/DonZoomik/webos-r8152 045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/5.4.268-329.ptl4tv.5/r8152_oot.ko" ;;
-        5.4.268-294.17.paparoa.pine.2)
-            # mbenitez343's build of the kernel's own r8152 v1.10.11, for 2024
-            # QNED and OLED (K25lp / Paparoa) on webOS 25, where LG removed
-            # it.  Gigabit RTL8152/RTL8153 adapters only, not 2.5G ones.
-            echo "https://raw.githubusercontent.com/mbenitez343/lg-webos-2024-ethernet-fix/05ad4588bbdf91825567726713650c4f4bf13fdc/r8152.ko 7c7c32586fabf4a65899362594a130923d01cb90309c209e04c45d91840273ba r8152.ko https://github.com/mbenitez343/lg-webos-2024-ethernet-fix 045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3054,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/5.4.268-294.17.paparoa.pine.2/r8152.ko" ;;
-        4.4.84-612.jcl4tv.40)
-            # OCT0PUSCRIME's build of ASIX's own AX88179/178A driver (v1.19.0),
-            # for webOS 5 (2020 UN7300), whose kernel has no ASIX driver
-            echo "https://raw.githubusercontent.com/OCT0PUSCRIME/lg-webos-ax88179-driver/734b54c9489034886382a23625b753aab9e661de/ax88179_178a.ko c9aefe84ee61d7021d739af37d70214a4b82f4b449a5eaf3501cec1f21af1831 ax88179_178a.ko https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver 04e8:a100,0711:0179,0930:0a13,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00 https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/47fdf750666adaba3029413b2b5574797eff2f7b/drivers/4.4.84-612.jcl4tv.40/ax88179_178a.ko" ;;
-        *) return 1 ;;
-    esac
+# pick_driver KERNEL: of the known drivers for KERNEL, the one that supports
+# the adapter plugged in now, or else the first
+pick_driver() {
+    _pl=$(known_driver "$1") || return 1
+    _pf="" _pk=""
+    while IFS= read -r _pline; do
+        [ -n "$_pline" ] || continue
+        [ -n "$_pf" ] || _pf=$_pline
+        # shellcheck disable=SC2086 # split the fields on purpose
+        set -- $_pline
+        if supported_adapter "$5" >/dev/null; then _pk=$_pline; break; fi
+    done <<EOF
+$_pl
+EOF
+    echo "${_pk:-$_pf}"
 }
 
 # adapter_id NAME: the vid:pid of a USB network interface
@@ -888,7 +948,7 @@ download_help() {
 get_driver() {
     preflight
     _k=$(uname -r)
-    _kd=$(known_driver "$_k") || {
+    _kd=$(pick_driver "$_k") || {
         info "No known better driver for kernel $_k."
         echo "If someone has built one for this exact kernel, install it with --module /full/path/driver.ko."
         return 0
@@ -940,7 +1000,7 @@ get_driver() {
             error_exit "Checksum mismatch (got $_got, expected $_sum). The file was deleted and nothing changed."
         fi
         _vm=$(module_kernel "$_dest.part")
-        if [ -n "$_vm" ] && [ "$_vm" != "$_k" ]; then
+        if ! module_fits "$_dest.part"; then
             rm -f "$_dest.part"
             error_exit "The module is built for kernel $_vm, not $_k. The file was deleted and nothing changed."
         fi
@@ -964,15 +1024,14 @@ driver_offer() {
     _om=$(hook_setting MODULE)
     if [ -n "$_om" ]; then
         [ -r "$_om" ] || { echo missing; return; }
-        _ok=$(module_kernel "$_om")
-        [ -z "$_ok" ] || [ "$_ok" = "$(uname -r)" ] || { echo wrong-kernel; return; }
+        module_fits "$_om" || { echo wrong-kernel; return; }
         _os=$(hook_setting MODULE_SHA)
         if [ -n "$_os" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_om" | awk '{print $1}')" != "$_os" ]; then
             echo changed; return
         fi
         echo active; return
     fi
-    _okd=$(known_driver "$(uname -r)") || { echo none; return; }
+    _okd=$(pick_driver "$(uname -r)") || { echo none; return; }
     # Only when the module supports a plugged-in adapter
     # shellcheck disable=SC2086 # split the fields on purpose
     set -- $_okd
@@ -1426,7 +1485,7 @@ show_status() {
             status_issue "The driver module $_hm is missing. Run 'get-driver' and 'install --module' again, or 'install --no-module'."
         else
             _hk=$(module_kernel "$_hm")
-            if [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ]; then
+            if ! module_fits "$_hm"; then
                 status_issue "The driver module is built for kernel $_hk, but the TV now runs $(uname -r), probably after a firmware update. It won't be loaded. Run 'get-driver' to see if there's one for the new kernel."
             fi
             _hs=$(hook_setting MODULE_SHA)
@@ -1542,7 +1601,7 @@ show_json() {
     done
     _jpid=$(watcher_pid) || _jpid=""
     _kd=0; _kf=""; _kp=""
-    if _k=$(known_driver "$(uname -r)"); then
+    if _k=$(pick_driver "$(uname -r)"); then
         _kd=1
         # shellcheck disable=SC2086 # split the fields on purpose
         set -- $_k
