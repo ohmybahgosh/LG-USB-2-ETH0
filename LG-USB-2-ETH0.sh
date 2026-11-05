@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/2b6a738600596003ef270827e81c0c86168bcfc3/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/ade609816e5b9f19a48dfa07919a9632bebf03fb/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1227,38 +1227,68 @@ R8152_IDS="045e:07ab,045e:07c6,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153
 AX88179_IDS="04e8:a100,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00"
 R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012"
 
+# The untested drivers, one per line: kernel, chip ("-" for any), file and
+# SHA-256.  A chip-specific one is in <kernel>-<chip> in the mirror's
+# experimental folder, others in <kernel>.  One kernel name can run on
+# several chips with different configs, so most are built per chip.
+EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
+5.4.268-320 - r8152_oot.ko 952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0
+5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
+5.4.268-294.24.papikonda.2 k24 r8152_oot.ko cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6
+4.4.84-612.40.jimna.1 k6lp r8152.ko 388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e
+4.4.84-612.40.jimna.1 k6lp ax88179_178a.ko 0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22
+4.4.84-612.21.6.jardine.2 k6lp r8152.ko f4c84da8cf2cf24ec50daede4ff82f36112d745e59a3d3eef65de9a5edbc7c87
+4.4.84-612.21.6.jardine.2 k6lp ax88179_178a.ko 727f2f59e7ab271b88febbde1c9fca5492d0e2c6b106723563daff6ecb2397f3
+5.4.268-294.24.papikonda.2 k24n r8152_oot.ko 9d9a23b5c2384c9ec93c78a750f1b33e8ca73120f2dca9d826d0b77f274baeda
+5.4.268-294.24.papikonda.2 k25lp r8152_oot.ko 31921857e73f83d8958d0d8afb79d4ee8a555128edd294e233fb96997c3decae
+5.4.268-294.24.papikonda.2 k8hp r8152_oot.ko 6b771e9b1abe20dabff4278a0ce290f788d8498a9b39a4d954fc43fcf5570730
+5.4.268-294.24.papikonda.2 k8hpp r8152_oot.ko f5612354712de5306fffc85084366d6e5afa97fe05af44c54ae20f9c7c59cdb3
+5.4.268-294.24.papikonda.2 k8lpn r8152_oot.ko a995b73fe10ed405824f1e6fd733e8a2df76917f6afad5db9ca39dd612ee232f
+5.4.268-294.24.papikonda.2 k8lpn2 r8152_oot.ko c888183287baa0d19befe5a335fb76c5d7fe1bf079eba09905531e2b1672b391
+5.4.268-294.ptl4tv.24 k24n r8152_oot.ko 113c7828fea0beb02a7d0d8566bb90491d5b5736537079c2d2b0895db676a3ab
+5.4.268-294.ptl4tv.24 k25lp r8152_oot.ko 9b0035c3094381980cb9ffda2b665e310c22ada4ca056a345f2ebf31fdd02d53
+5.4.268-294.ptl4tv.24 k25lp ax88179_178a.ko db0902a367c93acde238cf48170cb4c48791ddd748380f8e27b99e645f545c49
+5.4.96-115.30.mole.2 k8hp r8152_oot.ko 398b239f2298d00b3dea134eebfa84cee2d79c122f33f68349d923516f1e017c
+5.4.96-115.30.mole.2 k8hp ax88179_178a.ko 33e919bd94cec6e3c20921984ba0405a8fd4768d03e41a288ccfe69732e48770
+5.4.96-115.30.mole.2 k8lp r8152_oot.ko 2405c5aeded1b052c6ee8f53c7498ac73f38a315788d056cc3eef462577fb801
+5.4.96-115.30.mole.2 k8lp ax88179_178a.ko b754497e8c95b7cb377c1b9b6da8fffc70825b68830c3759077ada0a6b7fc385
+5.4.96-115.30.mole.2 k8ap r8152_oot.ko 65281484986c73df3f95abe7d2fda7bf7f7e0880c388f32732b34167a8a92b94
+5.4.96-115.30.mole.2 k8ap ax88179_178a.ko 6045ef1212973109a33e464f58425770640697cc7c6b838ad708663073d3b852
+5.4.96-115.28.mirima.1 k8hp r8152_oot.ko 24eeec6deafe5fb73071732fd1e6bed6de94c5e9a6a877335b830f668829a00d
+5.4.96-115.28.mirima.1 k8hp ax88179_178a.ko 5fa2abdd63d67aaaa75cc17ac0fd79264fb7195662e7568bdf617e3c45cdf5d6
+5.4.96-115.28.mirima.1 k8lp r8152_oot.ko 12614a7b59b47a74dc53822436059795ed351a247eba0fcb34587c419d3352db
+5.4.96-115.28.mirima.1 k8lp ax88179_178a.ko 29db46149c50823ea1810d3955d20c94f195bd3471b9ad4244c44030ed84d11e
+5.4.96-115.28.mirima.1 k8ap r8152_oot.ko d097f39b6cad9a093cba010931e99b4af419ac25d15b2d0e9208198534dd848e
+5.4.96-115.28.mirima.1 k8ap ax88179_178a.ko b74e8220efe09c51b2d36b2feea7227bab1aa011d30b059e8442260e37f65db7"
+
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
-# untested drivers built for exactly that kernel (and chip), if there are any
+# untested drivers built for exactly that kernel (and this TV's chip)
 experimental_driver() {
     if [ -n "${LGU2E_TEST_EXPERIMENTAL:-}" ]; then
         echo "$LGU2E_TEST_EXPERIMENTAL"
         return 0
     fi
-    case "$1" in
-        5.4.268-329.ptl4tv.2) _xf=$1 _xs=450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9 ;;
-        5.4.268-320) _xf=$1 _xs=952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0 ;;
-        5.4.96-307) _xf=$1 _xs=8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da ;;
-        5.4.268-294.24.papikonda.2)
-            # This kernel name runs on seven chips, each with its own config.
-            # This build is K24's.
-            [ "$(tv_soc)" = k24 ] || return 1
-            _xf=$1-k24 _xs=cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6 ;;
-        4.4.84-612.40.jimna.1|4.4.84-612.21.6.jardine.2)
-            # 2020 TVs with the K6Lp chip, which have no Realtek driver (nor
-            # cdc_ncm) and no AX88179 one.  K6Hp TVs run the same kernel
-            # names with their own config.
-            [ "$(tv_soc)" = k6lp ] || return 1
-            _xf=$1-k6lp
-            case "$1" in
-                *jimna*) _xr=388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e _xa=0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22 ;;
-                *) _xr=f4c84da8cf2cf24ec50daede4ff82f36112d745e59a3d3eef65de9a5edbc7c87 _xa=727f2f59e7ab271b88febbde1c9fca5492d0e2c6b106723563daff6ecb2397f3 ;;
-            esac
-            echo "$EXPERIMENTAL_URL/$_xf/r8152.ko $_xr r8152.ko $_xf $R8152_IDS"
-            echo "$EXPERIMENTAL_URL/$_xf/ax88179_178a.ko $_xa ax88179_178a.ko $_xf $AX88179_IDS"
-            return 0 ;;
-        *) return 1 ;;
-    esac
-    echo "$EXPERIMENTAL_URL/$_xf/r8152_oot.ko $_xs r8152_oot.ko $_xf $R8152_OOT_IDS"
+    _xo="" _xc="" _xcr=0
+    while read -r _xk _xch _xfile _xs; do
+        [ "$_xk" = "$1" ] || continue
+        _xf=$1
+        if [ "$_xch" != - ]; then
+            [ "$_xcr" = 1 ] || { _xc=$(tv_soc); _xcr=1; }
+            [ "$_xc" = "$_xch" ] || continue
+            _xf=$1-$_xch
+        fi
+        case "$_xfile" in
+            r8152_oot.ko) _xi=$R8152_OOT_IDS ;;
+            r8152.ko) _xi=$R8152_IDS ;;
+            *) _xi=$AX88179_IDS ;;
+        esac
+        _xo="$_xo$EXPERIMENTAL_URL/$_xf/$_xfile $_xs $_xfile $_xf $_xi
+"
+    done <<EOF
+$EXPERIMENTAL_DRIVERS
+EOF
+    [ -n "$_xo" ] || return 1
+    printf '%s' "$_xo"
 }
 
 # pick_experimental KERNEL: of its experimental drivers, the one for the

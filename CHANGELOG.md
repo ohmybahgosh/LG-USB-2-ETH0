@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **More drivers to test, for Realtek-chip TVs on webOS 22 and 25.**  `r8152_oot` for `5.4.268-294.24.papikonda.2` on K24N, K25Lp, K8Hp, K8Hpp, K8LpN and K8LpN2, and for `5.4.268-294.ptl4tv.24` on K24N and K25Lp (with `ax88179_178a` there).  For webOS 22 TVs with K8 chips (like the 2022 NANO75), which have no Realtek or AX88179 driver at all, `r8152_oot` and `ax88179_178a` for `5.4.96-115.30.mole.2` and `5.4.96-115.28.mirima.1` on K8Hp, K8Lp and K8Ap, from LG's real K8 source.  Each is built with its TV's own config.  The script's list of drivers to test is now one table.
+- **The driver build stops when the source is missing options that change kernel headers**, and `scripts/driver-build/kconfig-stub.py` writes their Kconfig from the TV's config, so a module never gets a different struct layout than the TV's kernel.
+
 ## [2.4.9] - 2026-11-05
 
 ### Added

@@ -28,7 +28,9 @@
 # didn't use to, with HOSTCFLAGS=-fcommon for their host tools.  Realtek-chip sources also need
 # CHIP_NAME (like k24) and LG's drivers/rtk_kdriver tree, or empty
 # drivers/rtk_kdriver/common_header/CHIP/include and .../rbus/CHIP folders in
-# its place (r8152 doesn't use anything from it).  It never touches a TV.
+# its place (r8152 doesn't use anything from it).  If the TV's config has
+# options the source doesn't define and a kernel header uses one, the build
+# stops: kconfig-stub.py writes declarations for them.  It never touches a TV.
 #
 # The module is kept only if its vermagic is exactly the kernel's, the kernel
 # has MODVERSIONS off, and every symbol it imports is exported by the kernel
@@ -113,7 +115,19 @@ cp $FILES "$M/"
 # folders when this is set (DonZoomik's build does the same)
 export PKG_CONFIG_SYSROOT_DIR=/
 set -- -C "$SRC" O="$B" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" LOCALVERSION="$LOCALVERSION"
-[ "$ARCH" = arm64 ] && set -- "$@" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT"
+if [ "$ARCH" = arm64 ]; then
+    # The 32-bit compat vDSO is built during kernel prep, and needs ARMv8
+    # instructions the compat compiler doesn't use by default.  It isn't
+    # part of the module.
+    _cc32=$WORK/compat
+    mkdir -p "$_cc32"
+    for _t in as ld objcopy objdump nm strip ar readelf; do
+        _p=$(command -v "${CROSS_COMPILE_COMPAT}$_t") && ln -sf "$_p" "$_cc32/${CROSS_COMPILE_COMPAT##*/}$_t"
+    done
+    printf '#!/bin/sh\nexec %s "$@" -march=armv8-a\n' "$(command -v "${CROSS_COMPILE_COMPAT}gcc")" > "$_cc32/${CROSS_COMPILE_COMPAT##*/}gcc"
+    chmod +x "$_cc32/${CROSS_COMPILE_COMPAT##*/}gcc"
+    set -- "$@" CROSS_COMPILE_COMPAT="$_cc32/${CROSS_COMPILE_COMPAT##*/}"
+fi
 case "$BASE" in
     4.*)
         export REAL_CC="${CROSS_COMPILE}gcc"
@@ -122,6 +136,19 @@ esac
 LOG=$WORK/build.log
 make "$@" olddefconfig > "$LOG" 2>&1
 python3 "$SRC/scripts/diffconfig" "$KDIR/config" "$B/.config" > "$WORK/config-differences.txt" || true
+# Options in the TV's config that this source doesn't know are dropped.
+# That's harmless unless a kernel header uses one the TV turns on (Realtek's
+# options in page-flags.h or thread_info.h, for example): then a module would
+# get a different struct layout than the TV's kernel.  Stop if so.  One the
+# TV has off is the same as one that doesn't exist.
+_lost=$(sed -n 's/^-\([A-Za-z0-9_]*\) [^n].*/\1/p' "$WORK/config-differences.txt" | while read -r _o; do
+    if grep -rqw "CONFIG_$_o" "$SRC/include" "$SRC/arch/$ARCH/include" 2>/dev/null; then printf ' %s' "$_o"; fi
+done)
+if [ -n "$_lost" ]; then
+    echo "The TV's config has options this source doesn't define, and kernel headers use them:$_lost" >&2
+    echo "Give the source their Kconfig (kconfig-stub.py makes one from the TV's config) and build again." >&2
+    exit 1
+fi
 make "$@" -j"$(nproc)" modules_prepare >> "$LOG" 2>&1
 grep -Fqx "#define UTS_RELEASE \"$KERNEL\"" "$B/include/generated/utsrelease.h" || {
     echo "built release doesn't match $KERNEL" >&2; exit 1; }

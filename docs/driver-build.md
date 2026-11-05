@@ -24,7 +24,7 @@ DRIVER_SRC=$PWD/webos-r8152 scripts/driver-build/build.sh \
     kernels/5.4.268-329.ptl4tv.2 path/to/linux-rockhopper r8152 out
 ```
 
-It prints one line: the kernel, the module, its SHA-256 and the checks.  `intree:NAME` builds `drivers/net/usb/NAME.c` from LG's own source instead, for a kernel that leaves that driver out (like `intree:ax88179_178a` or `intree:r8152`).  Realtek-chip sources (K24 and others) also need `CHIP_NAME` (like `k24`) and LG's `drivers/rtk_kdriver` tree, or empty `drivers/rtk_kdriver/common_header/CHIP/include` and `drivers/rtk_kdriver/common_header/rbus/CHIP` folders in its place (r8152 uses nothing from it).
+It prints one line: the kernel, the module, its SHA-256 and the checks.  On arm64 it also gives the 32-bit compat vDSO, built during kernel prep, the `-march=armv8-a` it needs (it isn't part of the module).  `intree:NAME` builds `drivers/net/usb/NAME.c` from LG's own source instead, for a kernel that leaves that driver out (like `intree:ax88179_178a` or `intree:r8152`).  Realtek-chip sources (K24 and others) also need `CHIP_NAME` (like `k24`) and LG's `drivers/rtk_kdriver` tree, or empty `drivers/rtk_kdriver/common_header/CHIP/include` and `drivers/rtk_kdriver/common_header/rbus/CHIP` folders in its place (r8152 uses nothing from it).
 
 ### 32-bit kernels (2020 and 2021 TVs)
 
@@ -54,7 +54,15 @@ The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r815
 | `4.4.84-612.40.jimna.1`, K6Lp chip only | 2020 TVs with the K6Lp chip (like the UN7300) on current firmware 04.64, 22 files | webOS 5.0 JKHP 2.0 (UN7310), `kernel-1.0.0-612.21` | unchecked |
 | `4.4.84-612.21.6.jardine.2`, K6Lp chip only | 2020 TVs with the K6Lp chip on firmware 03.21, 21 files | the same, which is `612.21.6.jardine.3`, one step from this kernel | unchecked |
 
+| `5.4.268-294.24.papikonda.2`, per chip: K24N, K25Lp, K8Hp, K8Hpp, K8LpN, K8LpN2 | 2023 to 2025 LCDs and OLEDs with those Realtek chips on firmware 33.31, about 64 files | webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2` | unchecked |
+| `5.4.268-294.ptl4tv.24`, K24N and K25Lp (with `ax88179_178a` for K25Lp) | 2025 TVs on firmware 33.30, 18 files | the same | unchecked |
+| `5.4.96-115.30.mole.2` and `5.4.96-115.28.mirima.1`, per chip: K8Hp, K8Lp, K8Ap (with `ax88179_178a`) | 2022 and 2023 LCDs (like the NANO75) on webOS 22 firmware 04.53 to 04.60, about 57 files | webOS 22 KLP_12.0 (55UQ8000), `kernel-1.0.0-114`, LG's real K8 source | unchecked |
+
 The K24 and K6Lp ones matter most: those kernels have no Realtek driver built in at all, not even an old one (the K6Lp ones have no `cdc_ncm` either), so a Realtek adapter doesn't work on them today.  The K6Lp kernels have no AX88179 driver either.
+
+The webOS 22 K8 ones matter as much: those kernels have only `asix` built in, so neither a Realtek adapter nor an AX88179 works on a 2022 NANO75 today.  On papikonda.2, ASIX adapters already have dd3git's driver: the config options that shape shared structs (`REALTEK_SCHED_LOG`, `REALTEK_MEMORY_MANAGEMENT`, `NR_CPUS`, `PREEMPT` and others) are the same on every chip that runs it, so only the Realtek driver is built per chip there.
+
+**When the source is missing part of the config.**  The B4's source has machine support for K24 and K25 only, not K8, and no `rtk_kdriver` tree.  Options the TV's config has but the source doesn't define are dropped, which is harmless unless a kernel header uses one: on K8, `REALTEK_SCHED_LOG` changes `struct thread_info` and `REALTEK_MEMORY_MANAGEMENT` changes page flags, so a module built without them would use the wrong layout.  `build.sh` now stops when that happens and names the options.  `kconfig-stub.py` then writes their Kconfig from the TV's own config (into the missing `arch/arm64/mach-k8/Kconfig` here), so every one keeps the TV's value, and the build config comes out the same as the TV's.
 
 **How the K6Lp builds were checked without a tester:** their firmware does carry the kernel, as a U-Boot image around a self-unpacking ARM zImage, with the config built in.  `kernel-info.py` unpacks that now, so each was built with the TV's own config and checked against the TV's own kernel: every option in the config exists in LG's source, the module's `vermagic` flags are the same as LG's own modules for that kernel (`SMP preempt mod_unload ARMv7`), and every symbol it imports is in the TV's kernel.  For jimna.1, whose source LG hasn't published (it's revision 612.40, the source 612.21), a full build of the 612.21 source with jimna.1's config exports 8,447 symbols, and all but 98 are in the real kernel.  The 98 are LG's TV tuner code (`KHAL_DEMOD_*`), which a network driver doesn't use.
 
@@ -71,6 +79,7 @@ The K24 and K6Lp ones matter most: those kernels have no Realtek driver built in
 - The other six papikonda.2 chips, which need LG's source for a model with that chip.
 - `ax88179_178a` for kernels that lack it (K24 already has dd3git's).
 - The K6Hp chip, which runs the same 2020 kernel names as K6Lp with its own config, and K6Lp's older kernels (`4.4.84-612.35.jasper.2`, `4.4.84-611.japoon.14`).
+- The other webOS 22 and 23 K8 kernels (`5.4.96-115.16.mebbin.*`, `5.4.96-115.22.meru.2`, `5.4.96-132.*`) and webOS 23's `5.4.268-223.*` (okapi), which need their own configs and, for 223, LG's webOS 23 source.
 - Other 2020 and 2021 kernels (`4.4.84-219.jcl4tvmr.6` on CX OLEDs, `4.4.84-229.kcl4tv.6`), which need their own LG source.
 
 ## Testing one

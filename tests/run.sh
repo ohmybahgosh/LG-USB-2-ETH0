@@ -1524,14 +1524,16 @@ test_test_driver_checks() {
     FAKE_KERNEL=5.4.268-329.ptl4tv.5 run test-driver -y
     check "points to the tested one" has "It does have a tested one"
     # The K24 build only on K24, and only with a supported adapter
-    FAKE_SOC=k8hpp FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    FAKE_SOC=k9xyz FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "other chip: nothing" has "No new driver to test"
+    FAKE_SOC=k8hpp FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "K8Hpp has its own build" has "Plug in a USB adapter with a chip the new driver is for"
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "no adapter: refused" has "Plug in a USB adapter with a chip the new driver is for"
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/2b6a738.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/ade6098.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
@@ -1554,17 +1556,21 @@ test_test_driver_k6lp() {
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run status --json
     check "offered with the adapter" has '"driverTest":{"available":true,"adapterOk":true,"folder":"4.4.84-612.40.jimna.1-k6lp"'
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "ASIX: the ASIX build" grep -q "2b6a738.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
+    check "ASIX: the ASIX build" grep -q "ade6098.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
-    check "Realtek: the r8152 build" grep -q "2b6a738.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    check "Realtek: the r8152 build" grep -q "ade6098.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
     check "RTL8156: not supported by these" has "Plug in a USB adapter with a chip"
+    # webOS 22 K8 TVs: the Realtek build of their own chip
+    : > "$STATE/curl.log"
+    FAKE_SOC=k8lp FAKE_KERNEL=5.4.96-115.30.mole.2 run test-driver -y
+    check "mole.2 K8Lp: r8152_oot" grep -q "ade6098.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # An adapter no driver has: the new one takes it as it loads (no cdc_ncm
