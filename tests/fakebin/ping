@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fake `ping` for the test suite: never touches the network.  Answers unless
+# $FAKE_STATE/ping_fail exists.
+echo "ping $*" >> "$FAKE_STATE/ping.log"
+[ -e "$FAKE_STATE/ping_fail" ] && exit 1
+exit 0

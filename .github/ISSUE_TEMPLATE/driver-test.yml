@@ -1,0 +1,56 @@
+name: Driver test report
+description: Send the result of testing a new driver (test-driver, or Test a new driver in the app), whatever it was
+title: "[Driver test] <TV model> on <kernel>"
+labels: ["driver-test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing!  Every result helps, including a TV that froze: it's how a new driver gets offered to everyone with that kernel, or held back.  The app fills this in for you.  From SSH, paste what `sh LG-USB-2-ETH0.sh test-driver --last` shows.
+  - type: input
+    id: model
+    attributes:
+      label: TV model
+      placeholder: OLED65C2PUA
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel and chip
+      placeholder: 5.4.268-329.ptl4tv.2, o22
+    validations:
+      required: true
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter (brand, model and chip if you know it)
+      placeholder: Cable Matters 202023 (Realtek RTL8153)
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works, online on the new driver
+        - On the new driver with a cable link, but not online
+        - On the new driver, but no cable link
+        - Driver loaded, but the adapter didn't move to it
+        - Driver didn't load
+        - TV froze or restarted
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The test report
+      description: MAC and IP addresses are left out for you.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Did streaming apps work on it?  Any drops after a while, or after standby?

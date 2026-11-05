@@ -26,7 +26,9 @@ So you can judge it yourself:
 - With `--wifi-fallback`, it turns Wi-Fi on through webOS's connection manager when the cable has had no link for a minute, and off again when it works, remembering that in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`.
 - With `--block-updates`, at install and at every boot, it turns off webOS's update check (`softwareUpdateEnable`, remembering its old value in `/var/lib/webosbrew/lg-usb-2-eth0.updates`), adds LG's update servers that are missing to `/etc/hosts` in lines marked as its own, adds one `iptables` rule dropping traffic to `156.147.69.32`, and deletes cached update details in `/mnt/lg/cmn_data/swupdate`.  Turning it off undoes each of these.  It never changes the Homebrew Channel's own update block.
 
-Apart from `get-driver` and `update`, it doesn't download anything.  It never changes system files or opens any ports, and it changes network settings only if you turn on `--wifi-fallback`, which flips the Wi-Fi switch when the cable stops working and back when it works, or `--block-updates`, which blocks LG's update servers as above.
+- `test-driver` downloads one experimental driver the same way: only for a kernel (and chip) listed in the script, from a fixed commit of the mirror's `experimental/` folder, kept only if its SHA-256 matches and its vermagic is exactly the running kernel.  It's kept in RAM and loaded only until the next restart, never at boot, and only when you ask for the test.
+
+Apart from `get-driver`, `test-driver` and `update`, it doesn't download anything.  It never changes system files or opens any ports, and it changes network settings only if you turn on `--wifi-fallback`, which flips the Wi-Fi switch when the cable stops working and back when it works, or `--block-updates`, which blocks LG's update servers as above.
 
 ## Verifying a download
 

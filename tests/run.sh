@@ -159,7 +159,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -1430,6 +1430,118 @@ test_get_driver_file_checked() {
     check "nothing kept" test ! -e "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko"
 }
 
+# test-driver: a new driver built for this kernel, tried until the next restart
+DT=""
+drvtest_file() { DT=$ROOT/var/lib/webosbrew/lg-usb-2-eth0.drvtest; }
+dt_is() { grep -qx "$1" "$DT" || { echo "    $DT lacks $1:"; sed 's/^/      /' "$DT" 2>/dev/null; return 1; }; }
+
+# An adapter on cdc_ncm, and a driver for kernel 5.4.268-320 to test
+drvtest_setup() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8153 5000
+    fake_ko "$STATE/download" r8152_oot 5.4.268-320 0bda:8153 0bda:8156
+    XDRV="https://example.test/r8152_oot.ko $(sha256sum "$STATE/download" | awk '{print $1}') r8152_oot.ko 5.4.268-320 0bda:8153,0bda:8156"
+    drvtest_file
+}
+
+test_test_driver_works() {
+    drvtest_setup
+    # webOS gives the adapter an address once it's on the new driver
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run status --json
+    check "offered" has '"driverTest":{"available":true,"adapterOk":true,"folder":"5.4.268-320","state":"","result":""}'
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver -y
+    check "exit 0" rc_is 0
+    check "verified" has "Downloaded and verified"
+    check "loaded from RAM, not kept" grep -q "insmod $ROOT/tmp/lg-usb-2-eth0-test-r8152_oot.ko" "$STATE/insmod.log"
+    check "moved the adapter" has "cdc_ncm -> r8152_oot"
+    check "adapter on the new driver" drv eth1 r8152_oot
+    check "result works" dt_is "result=works"
+    check "says so" has "it works"
+    check "pinged through the adapter" grep -q -- "-I eth1" "$STATE/ping.log"
+    check "report has the kernel log" has "registered new interface driver r8152_oot"
+    check "report hides the MAC" lacks "6c:1f:f7:00:00:01"
+    check "and links the form" has "template=driver-test.yml"
+    check "no boot hook set up" test ! -e "$HOOK"
+    run report
+    check "report line" has "Driver test: works (experimental/5.4.268-320)"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run status --json
+    check "status has the result" has '"state":"done","result":"works"'
+}
+
+# The TV app starts the test and follows it through status --json
+test_test_driver_no_wait() {
+    drvtest_setup
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver -y --no-wait
+    check "exit 0" rc_is 0
+    check "no report printed" lacks "template=driver-test.yml"
+    local i=0
+    while [ "$i" -lt 20 ] && ! grep -qx "state=done" "$DT" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+    check "finishes in the background" dt_is "result=works"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver --last
+    check "--last shows it" has "Result:   works"
+}
+
+test_test_driver_eth0_kept() {
+    drvtest_setup
+    run apply -y
+    check "adapter is eth0" is eth0 usb:1-1
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver -y
+    check "still eth0 after the move" is eth0 usb:1-1
+    check "on the new driver" drv eth0 r8152_oot
+    check "no address: no internet" dt_is "result=no-internet"
+}
+
+test_test_driver_no_load() {
+    drvtest_setup
+    touch "$STATE/insmod_fail"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver -y
+    check "result no-load" dt_is "result=no-load"
+    check "kernel's message kept" has "invalid module format"
+    check "adapter untouched" drv eth1 cdc_ncm
+}
+
+test_test_driver_crashed() {
+    drvtest_setup
+    printf 'state=running\nboot=boot1\nkernel=5.4.268-320\nchip=o22\nadapter=0bda:8153 (Realtek RTL8153)\nfolder=5.4.268-320\nsha=abc\n' > "$DT"
+    FAKE_KERNEL=5.4.268-320 run test-driver -y
+    check "same boot: still running" has "still running"
+    FAKE_BOOT_ID=boot2 FAKE_KERNEL=5.4.268-320 run test-driver --last
+    check "a restart in between: crashed" dt_is "result=crashed"
+    check "says so" has "froze or restarted"
+    check "report says crashed" has "Result:   crashed"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_BOOT_ID=boot2 FAKE_KERNEL=5.4.268-320 run test-driver
+    check "asks before trying again" has "Try it once more?"
+    check "and didn't" test ! -e "$STATE/insmod.log"
+}
+
+test_test_driver_checks() {
+    add_builtin
+    drvtest_file
+    FAKE_KERNEL=9.9.9-other run test-driver -y
+    check "nothing for this kernel" has "No new driver to test for kernel 9.9.9-other"
+    FAKE_KERNEL=5.4.268-329.ptl4tv.5 run test-driver -y
+    check "points to the tested one" has "It does have a tested one"
+    # The K24 build only on K24, and only with a supported adapter
+    FAKE_SOC=k8hpp FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "other chip: nothing" has "No new driver to test"
+    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "no adapter: refused" has "Plug in a Realtek USB adapter"
+    check "nothing downloaded" test ! -e "$STATE/curl.log"
+    add_unclaimed 1-1 0bda 8153
+    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/97df868.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "checksummed" has "Checksum mismatch"
+    check "no test started" test ! -e "$DT"
+    check "nothing loaded" test ! -e "$STATE/insmod.log"
+    # An ASIX adapter there has a tested driver (dd3git's), so no test
+    remove_usb 1-1
+    add_unclaimed 1-1 0b95 1790
+    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "ASIX: use the tested one" has "has a tested driver for your adapter"
+}
+
 offer_is() {
     printf '%s' "$OUT" > "$SB/o.json"
     python3 -c "import json,sys; v=json.load(open(sys.argv[1]))['driverOffer']; assert v==sys.argv[2], v" "$SB/o.json" "$1" || { echo "    driverOffer is not $1"; return 1; }
@@ -1511,6 +1623,12 @@ t get_driver_download_fails test_get_driver_download_fails
 t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
+t test_driver_works test_test_driver_works
+t test_driver_no_wait test_test_driver_no_wait
+t test_driver_eth0_kept test_test_driver_eth0_kept
+t test_driver_no_load test_test_driver_no_load
+t test_driver_crashed test_test_driver_crashed
+t test_driver_checks test_test_driver_checks
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 echo

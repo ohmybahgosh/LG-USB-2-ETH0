@@ -48,6 +48,14 @@ HBC_DIR="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service
 MARKER="Managed by LG-USB-2-ETH0"
 # Where get-driver keeps downloaded driver modules (persistent storage)
 DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
+# test-driver: drivers this project built from LG's kernel source that
+# haven't run on a TV yet, kept in the mirror's experimental folder at a
+# fixed commit.  test-driver only ever loads one until the next restart.
+# How the test went is kept across a restart, so a test that froze the TV
+# is still reported.
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/97df8687acead285d864dcb49b5a45c84d5622f3/experimental"
+DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
+DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
 AUTOBIND_HOOK="$INIT_DIR/90-r8152-oot"
 # Updates: the latest GitHub release, and the Homebrew Channel repo that
@@ -87,6 +95,8 @@ JSON=0
 PHASE=""
 CHECK_ONLY=0
 DRIVER_FILE=""
+LAST=0
+NO_WAIT=0
 
 # === Helper Functions ===
 log() { printf '%b%s%b\n' "$1" "$2" "$NC"; }
@@ -140,6 +150,10 @@ Commands (no command opens the menu):
   get-driver  Download a better driver module known to work on this exact
               kernel, if there is one, and check its checksum. With
               --file PATH, check and use a copy you downloaded yourself
+  test-driver Try a new, not yet tested driver built for this exact
+              kernel, if there is one: download and check it, load it
+              until the next restart, move the adapter to it, and show a
+              report to send.  With --last, show the last test's report
   version     Print the version
 
 Options:
@@ -602,6 +616,75 @@ takeover_pending() {
 }
 
 iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
+
+# test-driver's detached part: load $MODULE, move the adapter to $DRIVER,
+# and write how it went to $DRVTEST_FILE (key=value lines).  It runs
+# detached because moving the adapter can drop the session that started it.
+drv_try() {
+    _dtl=$(dmesg 2>/dev/null | wc -l)
+    _dte=""
+    if [ -d "$SYS_MODULES/$DRIVER" ]; then
+        _dtd=already
+    elif _dte=$(insmod "$MODULE" 2>&1); then
+        _dtd=yes
+    else
+        _dtd=no
+    fi
+    echo "Loading $DRIVER: $_dtd${_dte:+ ($_dte)}"
+    if [ "$_dtd" != no ]; then
+        rm -f "$TAKEOVER_STATE"
+        take_over
+        wait_for_nic
+        [ "${DRVTEST_SWAP:-0}" = 1 ] && swap_in
+        # Give webOS time to bring the network up on it
+        _dtt=0
+        while [ "$_dtt" -lt "$NET_CHECK" ]; do
+            _dtn=$(find_usb_nic)
+            [ -n "$_dtn" ] && [ -n "$(iface_ipv4 "$_dtn")" ] && break
+            sleep 2
+            _dtt=$((_dtt + 2))
+        done
+    fi
+    _dtn=$(find_usb_nic)
+    _dtv="" _dtc="" _dts="" _dta=no _dtp=""
+    if [ -n "$_dtn" ]; then
+        _dtv=$(nic_driver "$_dtn")
+        _dtc=$(sysval "$NET/$_dtn/carrier" 2>/dev/null)
+        _dts=$(sysval "$NET/$_dtn/speed" 2>/dev/null)
+        if [ -n "$(iface_ipv4 "$_dtn")" ]; then
+            _dta=yes
+            if ! command -v ping >/dev/null 2>&1; then _dtp=skipped
+            elif ping -c 3 -W 3 -I "$_dtn" 1.1.1.1 > /dev/null 2>&1; then _dtp=ok
+            else _dtp=failed
+            fi
+        fi
+    fi
+    if [ "$_dtd" = no ]; then _dtr=no-load
+    elif [ "$_dtv" != "$DRIVER" ]; then _dtr=not-used
+    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ]; then _dtr=works
+    elif [ "$_dtc" = 1 ]; then _dtr=no-internet
+    else _dtr=no-link
+    fi
+    {
+        grep -E '^(kernel|chip|adapter|folder|sha|boot|started)=' "$DRVTEST_FILE" 2>/dev/null
+        echo "state=done"
+        echo "result=$_dtr"
+        echo "loaded=$_dtd"
+        [ -n "$_dte" ] && echo "insmod=$(echo "$_dte" | head -n 1)"
+        echo "iface=$_dtn"
+        echo "driver=$_dtv"
+        echo "carrier=$_dtc"
+        echo "speed=$_dts"
+        echo "address=$_dta"
+        echo "ping=$_dtp"
+        # What the kernel said about it, with MAC addresses hidden
+        dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|oops|bug|trace' | tail -n 20 \
+            | sed 's/\(\([0-9a-fA-F]\{2\}:\)\{3\}\)\([0-9a-fA-F]\{2\}:\)\{2\}[0-9a-fA-F]\{2\}/\1xx:xx:xx/g; s/^/dmesg=/'
+    } > "$DRVTEST_FILE.new"
+    mv -f "$DRVTEST_FILE.new" "$DRVTEST_FILE"
+    sync
+    echo "Result: $_dtr"
+}
 
 # wait_ipv4 SECONDS: wait for eth0 to have an IPv4 address (webOS's DHCP)
 wait_ipv4() {
@@ -1134,6 +1217,173 @@ driver_offer() {
     # shellcheck disable=SC2086 # split the fields on purpose
     set -- $_okd
     if supported_adapter "$5" >/dev/null; then echo available; else echo none; fi
+}
+
+# === Testing new drivers ===
+# All the experimental drivers are Realtek's r8152 v2.22.1 as DonZoomik
+# patched it, so they support the same adapters as his (from their aliases)
+R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012"
+
+# experimental_driver KERNEL: "url sha256 file folder ids" for an untested
+# driver built for exactly that kernel (and chip), if there is one
+experimental_driver() {
+    if [ -n "${LGU2E_TEST_EXPERIMENTAL:-}" ]; then
+        echo "$LGU2E_TEST_EXPERIMENTAL"
+        return 0
+    fi
+    case "$1" in
+        5.4.268-329.ptl4tv.2) _xf=$1 _xs=450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9 ;;
+        5.4.268-320) _xf=$1 _xs=952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0 ;;
+        5.4.96-307) _xf=$1 _xs=8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da ;;
+        5.4.268-294.24.papikonda.2)
+            # This kernel name runs on seven chips, each with its own config.
+            # This build is K24's.
+            [ "$(tv_soc)" = k24 ] || return 1
+            _xf=$1-k24 _xs=cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6 ;;
+        *) return 1 ;;
+    esac
+    echo "$EXPERIMENTAL_URL/$_xf/r8152_oot.ko $_xs r8152_oot.ko $_xf $R8152_OOT_IDS"
+}
+
+boot_id() {
+    if [ -n "${LGU2E_BOOT_ID:-}" ]; then echo "$LGU2E_BOOT_ID"; else cat /proc/sys/kernel/random/boot_id 2>/dev/null; fi
+}
+drvtest_get() { sed -n "s/^$1=//p" "$DRVTEST_FILE" 2>/dev/null | head -n 1; }
+
+# A test still marked running from before the last restart never finished:
+# the driver most likely froze or crashed the TV.  Record that.
+drvtest_settle() {
+    [ "$(drvtest_get state)" = running ] || return 0
+    [ "$(drvtest_get boot)" != "$(boot_id)" ] || return 0
+    { grep -E '^(kernel|chip|adapter|folder|sha|boot|started)=' "$DRVTEST_FILE"; echo "state=done"; echo "result=crashed"; } \
+        > "$DRVTEST_FILE.new" && mv -f "$DRVTEST_FILE.new" "$DRVTEST_FILE"
+}
+
+drvtest_says() {
+    case "$1" in
+        works) echo "it works: the adapter is on the new driver and online" ;;
+        no-internet) echo "the adapter is on the new driver with a cable link, but didn't get online" ;;
+        no-link) echo "the adapter is on the new driver, but has no cable link" ;;
+        not-used) echo "the driver loaded, but the adapter didn't move to it" ;;
+        no-load) echo "the kernel refused to load the driver" ;;
+        crashed) echo "the TV froze or restarted during the test" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+# The report to send: no MAC or IP addresses
+drvtest_report() {
+    tv_info
+    _r=$(drvtest_get result)
+    echo '```'
+    echo "LG-USB-2-ETH0 v$VERSION driver test"
+    echo "Model:    ${TV_MODEL:-unknown}"
+    echo "Firmware: ${FIRMWARE:-unknown} ($WEBOS_NAME)"
+    echo "Kernel:   $(drvtest_get kernel)"
+    echo "Chip:     $(drvtest_get chip)"
+    echo "Driver:   experimental/$(drvtest_get folder) ($(drvtest_get sha | cut -c1-16))"
+    echo "Adapter:  $(drvtest_get adapter)"
+    echo "Result:   $_r"
+    if [ "$_r" != crashed ]; then
+        _ri=$(drvtest_get insmod)
+        echo "Loaded:   $(drvtest_get loaded)${_ri:+ ($_ri)}"
+        echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $(drvtest_get speed)M, address $(drvtest_get address), ping $(drvtest_get ping)"
+        if grep -q '^dmesg=' "$DRVTEST_FILE" 2>/dev/null; then
+            echo "Kernel log:"
+            sed -n 's/^dmesg=/  /p' "$DRVTEST_FILE"
+        fi
+    fi
+    echo '```'
+}
+
+drvtest_show() {
+    info "Driver test: $(drvtest_says "$(drvtest_get result)")."
+    echo "Please send the report below, whatever the result: it's how a driver gets"
+    echo "added for this kernel.  Paste it into a driver test report:"
+    echo "  $DRVTEST_FORM"
+    echo "or reply in https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/4"
+    echo
+    drvtest_report
+}
+
+test_driver() {
+    preflight
+    drvtest_settle
+    if [ "$LAST" = 1 ]; then
+        if [ -f "$DRVTEST_FILE" ]; then drvtest_show; else info "No driver test yet."; fi
+        return 0
+    fi
+    [ "$(drvtest_get state)" != running ] || error_exit "A driver test is still running.  Wait a minute, then run 'test-driver --last'."
+    _k=$(uname -r)
+    _soc=$(tv_soc)
+    if [ "$(drvtest_get result)" = crashed ]; then
+        warn "The last driver test didn't finish: the TV restarted during it, so the driver most likely froze or crashed it."
+        drvtest_show
+        confirm "Try it once more?" || return 0
+    fi
+    _x=$(experimental_driver "$_k") || {
+        info "No new driver to test for kernel $_k${_soc:+ ($_soc chip)} yet."
+        pick_driver "$_k" > /dev/null && echo "It does have a tested one: run get-driver, or use Faster driver in the app."
+        echo "The ones being tested: https://github.com/ohmybahgosh/LG-USB-2-ETH0/blob/main/docs/driver-build.md"
+        return 0
+    }
+    # A tested driver for the adapter plugged in wins
+    if [ "$(driver_offer)" = available ]; then
+        info "Kernel $_k has a tested driver for your adapter.  Use get-driver, or Faster driver in the app."
+        return 0
+    fi
+    [ -z "$(hook_setting MODULE)" ] || error_exit "A driver module is already set up ($(hook_setting MODULE)).  Turn it off first (install --no-module), restart the TV, then test."
+    # shellcheck disable=SC2086 # split the fields on purpose
+    set -- $_x
+    _xurl=$1 _xsum=$2 _xfile=$3 _xfold=$4 _xids=$5
+    _xid=$(supported_adapter "$_xids") || error_exit "Plug in a Realtek USB adapter first (an RTL8152, RTL8153 or RTL8156 chip): the driver is for those."
+    _xchip=$(known_nic_id "$_xid") || _xchip=""
+    info "There's a new driver to test for kernel $_k: r8152_oot, built from LG's own kernel source."
+    echo "It hasn't run on a TV with this kernel yet.  The test:"
+    echo "  1. downloads it and checks its SHA-256, and that it's built for exactly this kernel"
+    echo "  2. loads it until the next restart only: nothing loads it at boot"
+    echo "  3. moves your adapter ($_xid${_xchip:+, $_xchip}) to it and checks it gets online"
+    echo "  4. shows a short report to send, so it can be offered to everyone with this kernel"
+    warn "If it doesn't fit, the TV can freeze or restart.  Restart it (unplug it if it doesn't restart on its own), then run test-driver again to report that too.  Nothing loads the driver again by itself."
+    confirm "Run the test?" || { echo "Cancelled.  Nothing changed."; return 1; }
+    command -v sha256sum >/dev/null 2>&1 || error_exit "sha256sum is missing, so the download can't be checked.  Nothing changed."
+    mkdir -p "$RUN_DIR" || error_exit "Could not create $RUN_DIR."
+    # In RAM: it's gone after a restart, like the test
+    _xko="$RUN_DIR/lg-usb-2-eth0-test-$_xfile"
+    clock_ok || warn "The TV's clock says $(date).  Certificates can't be checked until it's right, so the download may fail."
+    if ! fetch "$_xko.part" "$_xurl"; then
+        rm -f "$_xko.part"
+        error_exit "Download failed.  Check the TV is online and its clock is right ($(date)).  Nothing changed."
+    fi
+    _got=$(sha256sum "$_xko.part" | awk '{print $1}')
+    if [ "$_got" != "$_xsum" ]; then
+        rm -f "$_xko.part"
+        error_exit "Checksum mismatch (got $_got, expected $_xsum).  The file was deleted and nothing changed."
+    fi
+    if [ "$(module_kernel "$_xko.part")" != "$_k" ]; then
+        rm -f "$_xko.part"
+        error_exit "The module isn't built for kernel $_k.  The file was deleted and nothing changed."
+    fi
+    mv -f "$_xko.part" "$_xko" || error_exit "Could not save $_xko."
+    success "Downloaded and verified."
+    { echo "state=running"; echo "boot=$(boot_id)"; echo "kernel=$_k"; echo "chip=${_soc:-unknown}"
+      echo "adapter=$_xid${_xchip:+ ($_xchip)}"; echo "folder=$_xfold"; echo "sha=$_xsum"; echo "started=$(date)"; } > "$DRVTEST_FILE"
+    sync
+    MODULE=$_xko DRIVER=r8152_oot MODULE_SHA=$_xsum
+    # If the adapter is eth0 now, make it eth0 again after the move
+    _xswap=0
+    [ "$(find_usb_nic)" = eth0 ] && _xswap=1
+    run_detached "DRVTEST_FILE=\"$DRVTEST_FILE\"; DRVTEST_SWAP=$_xswap; drv_try" || { rm -f "$DRVTEST_FILE"; return 1; }
+    # The TV app follows it through status --json instead
+    [ "$NO_WAIT" = 1 ] && return 0
+    _i=0
+    while [ "$(drvtest_get state)" = running ] && [ "$_i" -lt 90 ]; do sleep 1; _i=$((_i + 1)); done
+    if [ "$(drvtest_get state)" = running ]; then
+        warn "Still testing in the background.  Run 'test-driver --last' in a minute for the result."
+        return 0
+    fi
+    echo
+    drvtest_show
 }
 
 # === Hook state ===
@@ -1747,6 +1997,18 @@ show_json() {
     printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverPage":%s,"driverDownloaded":%s,"autobindHook":%s,' \
         "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" "$(js "$_kp")" \
         "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
+    # A driver to test: only when no tested one fits (or is set up already)
+    drvtest_settle
+    _xa=0 _xok=0 _xfo=""
+    if [ "$(driver_offer)" = none ] && _x=$(experimental_driver "$(uname -r)"); then
+        _xa=1
+        # shellcheck disable=SC2086 # split the fields on purpose
+        set -- $_x
+        _xfo=$4
+        supported_adapter "$5" > /dev/null && _xok=1
+    fi
+    printf '"driverTest":{"available":%s,"adapterOk":%s,"folder":%s,"state":%s,"result":%s},' \
+        "$(jb "$_xa")" "$(jb "$_xok")" "$(js "$_xfo")" "$(js "$(drvtest_get state)")" "$(js "$(drvtest_get result)")"
     if [ -n "$(speed_get down)$(speed_get up)" ]; then
         printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"at":%s},' \
             "$(js "$(speed_get iface)")" "$(js "$(speed_get server)")" "$(speed_get ping | grep . || echo null)" \
@@ -2051,6 +2313,8 @@ show_report() {
     [ -n "$_soc" ] && echo "Chip:    $_soc"
     _bi=$(grep -E '/net/usb/' "${LGU2E_ROOT}/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null | sed 's#.*/##; s#\.ko$##' | tr '\n' ' ')
     echo "Built in: ${_bi:-unknown}"
+    drvtest_settle
+    [ -f "$DRVTEST_FILE" ] && echo "Driver test: $(drvtest_get result) (experimental/$(drvtest_get folder))"
     _h=$(hook_state)
     if [ "$_h" = enabled ]; then
         _h="$_h, wait $(hook_setting WAIT_SECS)s"
@@ -2129,6 +2393,11 @@ main_menu() {
         # Only offered when a driver is known for this exact kernel and adapter
         _offer=$(driver_offer)
         case "$_offer" in available) echo "9) Get the faster driver for this TV" ;; esac
+        _xoffer=0
+        if [ "$_offer" != available ] && experimental_driver "$(uname -r)" > /dev/null; then
+            _xoffer=1
+            echo "t) Test a new driver for this TV"
+        fi
         echo "0) Exit"
         read_answer "Choose an option: " || exit 1
         case "$ANSWER" in
@@ -2143,6 +2412,7 @@ main_menu() {
             s|S) speed_test ;;
             u|U) update_now ;;
             9) if [ "$_offer" = available ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
+            t|T) if [ "$_xoffer" = 1 ]; then test_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
             *) echo "Pick one of the numbers shown." ;;
         esac
@@ -2188,13 +2458,15 @@ while [ $# -gt 0 ]; do
         --json) JSON=1 ;;
         --phase) shift; PHASE=$1 ;;
         --check) CHECK_ONLY=1 ;;
+        --last) LAST=1 ;;
+        --no-wait) NO_WAIT=1 ;;
         --driver)
             shift
             DRIVER=$1; SET_MODULE=1
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|speedtest|update) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|update) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
@@ -2210,6 +2482,7 @@ case "$CMD" in
     status|doctor) if [ "$JSON" = 1 ]; then show_json; else show_status; fi ;;
     report) show_report ;;
     get-driver) get_driver ;;
+    test-driver) test_driver ;;
     speedtest) speed_test ;;
     update) if [ "$CHECK_ONLY" = 1 ]; then update_check; else update_now; fi ;;
     "") main_menu ;;

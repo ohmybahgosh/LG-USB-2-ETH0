@@ -244,6 +244,13 @@
         driverBtn.style.display = offer === 'none' ? 'none' : '';
         $('driver-hint').textContent = hints[offer] || '';
         $('tog-driver').className = 'tog' + (offer !== 'none' && offer !== 'available' && bootOn ? ' on' : '');
+        // A new driver to test: shown when there's one for this kernel, or a
+        // past test's report to send
+        var dt = s.driverTest || {};
+        document.querySelector('[data-action="drvtest"]').style.display = dt.available || dt.result ? '' : 'none';
+        $('drvtest-hint').textContent = dt.state === 'running' ? 'testing now' :
+            (dt.result ? 'last test: ' + (DT_SAYS[dt.result] || dt.result) :
+                (dt.adapterOk ? 'built for this TV\'s kernel, helps add support' : 'plug in a Realtek adapter to try it'));
         renderUpdate();
         if (current >= buttons().length) { current = buttons().length - 1; }
     }
@@ -374,6 +381,104 @@
         });
     }
 
+    // ------------------------------------------------------------------ driver test
+
+    // test-driver's results, in the app's words and the report form's
+    var DT_SAYS = {
+        works: 'it works', 'no-internet': 'link, but not online', 'no-link': 'no cable link',
+        'not-used': 'adapter didn\'t move to it', 'no-load': 'didn\'t load', crashed: 'the TV restarted'
+    };
+    var DT_FORM = {
+        works: 'Works, online on the new driver',
+        'no-internet': 'On the new driver with a cable link, but not online',
+        'no-link': 'On the new driver, but no cable link',
+        'not-used': 'Driver loaded, but the adapter didn\'t move to it',
+        'no-load': 'Driver didn\'t load',
+        crashed: 'TV froze or restarted'
+    };
+
+    // A QR code for a GitHub form link.  The GitHub phone apps open
+    // github.com/<owner>/<repo> links as a blank issue, so it goes through
+    // /login, which the phone's browser opens and forwards to the form.
+    function formQr(form) {
+        try {
+            var qr = window.qrcode(0, 'L');
+            qr.addData('https://github.com/login?return_to=' + encodeURIComponent(form));
+            qr.make();
+            return qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // The last test's report, as a QR code for a filled-in driver test form
+    function drvtestResult(again) {
+        runScript('test-driver --last', function (ok, out) {
+            var text = (out || '').replace(/\x1b\[[0-9;]*m/g, '');
+            var m = text.match(/```\s*\n([\s\S]*?)\n```/);
+            var report = (m ? m[1] : text).replace(/ {2,}/g, ' ').trim();
+            function line(k) { var r = report.match(new RegExp('^' + k + ':\\s*(.*)$', 'm')); return r ? r[1].trim() : ''; }
+            var result = line('Result'), s = state || {};
+            // The form has its own model field.  Up to 6 kernel log lines, so
+            // the QR code stays easy to scan.
+            var lines = report.split('\n').filter(function (l) { return !/^Model:/.test(l); });
+            var kl = lines.indexOf('Kernel log:');
+            if (kl >= 0) { lines = lines.slice(0, kl + 7); }
+            var short = lines.join('\n');
+            var form = REPO_PATH + '/issues/new?template=driver-test.yml' +
+                '&title=' + q('[Driver test] ' + (s.model || 'LG TV') + ' on ' + line('Kernel')) +
+                '&model=' + q(s.model || '') +
+                '&kernel=' + q(line('Kernel') + ', ' + line('Chip')) +
+                '&adapter=' + q(line('Adapter')) +
+                (DT_FORM[result] ? '&result=' + q(DT_FORM[result]) : '') +
+                '&report=' + q(short);
+            var svg = formQr(form);
+            var said = result === 'works' ? 'It works!  ' : (result === 'crashed' ? 'The TV restarted during the test, so this driver doesn\'t fit as it is.  ' : '');
+            var html = '<div class="qr">' + svg + '<div>' + esc(said) + 'Scan this with your phone to send the result on GitHub, already filled in.  ' +
+                'Every result helps, good or bad.  MAC and IP addresses are left out.<br><br><pre>' +
+                esc(report.split('\n').slice(0, 10).join('\n')) + '</pre></div></div>';
+            if (again) {
+                stepThen('Driver test: ' + (DT_SAYS[result] || result), html, 'Press OK to test again, or BACK to close.', drvtestStart);
+            } else {
+                overlay('message', 'Driver test: ' + (DT_SAYS[result] || result), html,
+                    result === 'works' ? 'Press OK or BACK to close.  The driver stays in use until the next restart.' : 'Press OK or BACK to close.');
+            }
+        });
+    }
+
+    // Start a test, then follow it until it's done (it runs detached, since
+    // moving the adapter takes the network down for a moment)
+    function drvtestStart() {
+        var dt = (state && state.driverTest) || {};
+        if (!dt.adapterOk) {
+            overlay('message', 'Test a new driver', 'Plug in a USB adapter with a Realtek chip (RTL8152, RTL8153 or RTL8156) first: the new driver is for those.', 'Press OK or BACK to close.');
+            return;
+        }
+        confirmThen('Test a new driver?',
+            'There\'s a driver built for this TV\'s kernel from LG\'s own source, that hasn\'t run on a TV with this kernel yet.  ' +
+            'The test downloads it, checks its checksum, loads it until the next restart only, moves the adapter to it and checks it gets online.  ' +
+            'The network drops for a moment.  If it doesn\'t fit, the TV can freeze or restart: restart it (unplug it if needed) and open the app again to send that result too.',
+            function () {
+                busy = true;
+                overlay('busy', 'Testing the new driver', '<span class="spinner"></span>Downloading and checking it, then moving the adapter over.  This takes up to a minute.', '');
+                runScript('test-driver -y --no-wait', function (ok, out, err) {
+                    var tries = 0;
+                    function poll() {
+                        refresh(function (s) {
+                            var st = s && s.driverTest ? s.driverTest.state : '';
+                            if (st === 'running' && tries++ < 40) { setTimeout(poll, 3000); return; }
+                            busy = false;
+                            if (st === 'done') { drvtestResult(false); return; }
+                            var text = (out || err || '').replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').slice(-12).join('\n');
+                            overlay('message', st === 'running' ? 'Driver test: still running' : 'Driver test: didn\'t start',
+                                '<pre>' + esc(text) + '</pre>', 'Press OK or BACK to close.');
+                        });
+                    }
+                    setTimeout(poll, 2000);
+                });
+            });
+    }
+
     function confirmThen(title, text, fn) {
         onConfirm = fn;
         overlay('confirm', title, esc(text), 'Press OK to go ahead, or BACK to cancel.');
@@ -412,6 +517,12 @@
                             ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);
                     });
             }
+        },
+        drvtest: function () {
+            if (!state || busy) { return; }
+            var dt = state.driverTest || {};
+            if (dt.state === 'running') { return; }
+            if (dt.result) { drvtestResult(dt.available); } else { drvtestStart(); }
         },
         watch: function () {
             if (!state) { return; }

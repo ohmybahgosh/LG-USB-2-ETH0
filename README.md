@@ -98,6 +98,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 - **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Block updates harder** and **Switch now**, as on/off switches.
 - **Faster driver:** only shows up when a driver is known for your TV's exact kernel and an adapter it supports is plugged in.  It downloads, checks and sets up the driver in one go.
 - **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
+- **Test a new driver:** only on TVs whose kernel has a driver waiting for testers (see [More drivers on the way](#more-drivers-on-the-way)).  One press downloads and checks it, loads it until the next restart, moves the adapter to it, checks it gets online, and shows a QR code that opens a filled-in test report.
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
 - **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo below, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.  Either way, the new version opens with a short list of what's new.
 - **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.  Do this before you remove the app.
@@ -210,6 +211,7 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 | `status` / `doctor` | Read-only report and checks.  Safe to run any time. |
 | `report` | Short, paste-ready report for a GitHub issue: TV, chip, kernel, the USB network drivers built into it, interfaces and settings.  MAC addresses are masked. |
 | `get-driver` | Downloads a better driver module, if one is known to work on your exact kernel, and checks its checksum.  With `--file PATH`, checks and uses a copy you downloaded yourself.  See [A faster driver](#a-faster-driver). |
+| `test-driver` | Tries a new driver built for your exact kernel that hasn't run on a TV yet, if there is one: downloads and checks it, loads it until the next restart only, moves the adapter to it, checks it gets online, and shows a report to send.  `--last` shows the last test's report again, including after a test that froze the TV.  See [More drivers on the way](#more-drivers-on-the-way). |
 | `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
 | `update` | Checks for a newer release and installs it, after checking its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
 
@@ -346,9 +348,19 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 **Which drivers does your TV's kernel have?**  The [firmware audit](docs/firmware-audit.md) reads them straight from LG's firmware for 13 models from 2019 to 2025, webOS 26 included.
 
-**More drivers on the way.**  We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them and how to help.
-
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
+
+### More drivers on the way
+
+We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all.  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
+
+**Help test one.**  If your TV runs one of those kernels, the app shows a **Test a new driver** row, or run:
+
+```sh
+sh LG-USB-2-ETH0.sh test-driver
+```
+
+It does the whole test: downloads the driver and checks its SHA-256, loads it until the next restart only, moves a Realtek adapter to it, checks it gets online, and shows a report to send (a QR code in the app).  If the TV freezes or restarts, restart it and open the app (or run `test-driver --last`) to send that result too.  Nothing loads the driver again by itself.
 
 ## Real speeds
 

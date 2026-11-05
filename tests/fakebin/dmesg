@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fake `dmesg` for the test suite: the kernel log is $FAKE_STATE/dmesg.
+# After a fake insmod, it also says the driver registered, with a MAC address
+# in it (the report must hide that).
+[ -f "$FAKE_STATE/dmesg" ] && cat "$FAKE_STATE/dmesg"
+if [ -f "$FAKE_STATE/insmod.log" ]; then
+    echo "[  100.000000] usbcore: registered new interface driver r8152_oot"
+    echo "[  101.000000] r8152_oot 1-1:1.0 eth1: v2.22.1 (2026/06/03)"
+    echo "[  101.100000] r8152_oot 1-1:1.0 eth1: MAC 6c:1f:f7:00:00:01"
+fi
+exit 0

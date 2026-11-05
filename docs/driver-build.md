@@ -57,4 +57,10 @@ The K24 one matters most: those kernels have no Realtek driver built in at all, 
 
 ## Testing one
 
-If your TV runs one of the kernels above (`uname -r` over SSH, or the first lines of `report`) and you have a Realtek USB adapter, the steps are in [discussion #4](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/4): download the module for your kernel from [lg-webos-usb-drivers/experimental](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental), `insmod` it, plug in the adapter and check it comes up, then reply there.  A driver that doesn't fit can at worst freeze or crash the TV until it restarts (unplug it if it doesn't on its own).  Nothing loads the driver again unless you do, so the TV comes back as it was.
+If your TV runs one of the kernels above and you have a Realtek USB adapter, the TV app shows a **Test a new driver** row.  Or over SSH:
+
+```sh
+sh LG-USB-2-ETH0.sh test-driver
+```
+
+It finds the driver for your kernel (and chip), downloads it from [lg-webos-usb-drivers/experimental](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental) at a fixed commit, and keeps it only if its SHA-256 matches and it's built for exactly your kernel.  Then it loads it, in RAM and until the next restart only, moves your adapter to it, waits for it to get online and pings out through it.  It ends with a short report (no MAC or IP addresses) and a link to a [driver test report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml); the app shows it as a QR code with the form filled in.  It marks the test as running before loading the driver, so if the TV freezes or restarts, the next `test-driver --last` (or opening the app) reports that too.  [Discussion #4](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/4) is for questions.  A driver that doesn't fit can at worst freeze or crash the TV until it restarts (unplug it if it doesn't on its own).  Nothing loads the driver again unless you do, so the TV comes back as it was.

@@ -4,7 +4,8 @@
 // URL options: ?ver=OLDER (like 2.3.2) shows the update row, ?speed=0 hides the last
 // speed test, ?sd=MS sets how long each speed test phase takes, ?v1=1 (or
 // ?v1=off for a "disabled" one) starts with a v1 boot hook to upgrade,
-// ?whatsnew=1 opens as if the app was just updated.
+// ?whatsnew=1 opens as if the app was just updated, ?drvtest=1 is a TV with a
+// new driver to test (a 2022 C2 on older firmware).
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
@@ -42,6 +43,21 @@
     status.log = [];
     status.issues = [v1 === 'off' ? "Busybox run-parts may still run that file at boot. Run 'disable' to move it out, or 'install' to upgrade." : "Run 'install' to replace the v1 hook."];
   }
+  // A TV on a kernel with a new driver to test, and the test's report
+  var dtest = p.get('drvtest');
+  var dtReport = ['```', 'LG-USB-2-ETH0 v' + ver + ' driver test', 'Model:    OLED65C2PUA', 'Firmware: 33.22.85 (webOS 24)',
+    'Kernel:   5.4.268-329.ptl4tv.2', 'Chip:     o22', 'Driver:   experimental/5.4.268-329.ptl4tv.2 (450d1655b507c61a)',
+    'Adapter:  0bda:8156 (Realtek RTL8156)', 'Result:   works', 'Loaded:   yes',
+    'After:    eth0 on r8152_oot, carrier 1, link 1000M, address yes, ping ok', 'Kernel log:',
+    '  [  412.10] usbcore: registered new interface driver r8152_oot', '  [  413.52] r8152_oot 2-1:1.0 eth1: v2.22.1 (2026/06/03)', '```'].join('\n');
+  if (dtest) {
+    status.kernel = '5.4.268-329.ptl4tv.2';
+    status.firmware = '33.22.85';
+    status.hook.module = ''; status.hook.driver = '';
+    status.adapter.driver = 'cdc_ncm';
+    status.driverOffer = 'none'; status.knownDriver = false;
+    status.driverTest = { available: true, adapterOk: true, folder: '5.4.268-329.ptl4tv.2', state: '', result: dtest === 'done' ? 'works' : '' };
+  }
   var APP_SCRIPT = '/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0/assets/lg-usb-2-eth0.sh';
   var speedDelay = +(p.get('sd') || 1400);
   window.LGU2E_DEMO = function (args, cb) {
@@ -54,6 +70,12 @@
     else if (/--phase down/.test(args)) { out = JSON.stringify({ downMbps: 272 }); d = speedDelay; }
     else if (/--phase up/.test(args)) { out = JSON.stringify({ upMbps: 287 }); d = speedDelay; }
     else if (/^report/.test(args)) { out = report; }
+    else if (/^test-driver --last/.test(args)) { out = '[INFO] Driver test: it works.\n\n' + dtReport; }
+    else if (/^test-driver/.test(args)) {
+      status.driverTest.state = 'running';
+      setTimeout(function () { status.driverTest.state = 'done'; status.driverTest.result = 'works'; status.adapter.driver = 'r8152_oot'; }, 4000);
+      out = '[SUCCESS] Downloaded and verified.';
+    }
     else if (/^install/.test(args)) {
       status.hook = { state: 'enabled', link: APP_SCRIPT, wait: '120', mac: '', module: '', driver: '', watch: false, wifiFallback: false, wifiFallbackOn: false, running: false, pid: '' };
       status.issues = [];
