@@ -1335,6 +1335,25 @@ test_update_app() {
     check "cleaned up the download" sh -c "! ls '$ROOT'/tmp/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
 }
 
+# webOS 26's installer can't read /tmp: the IPK goes to the developer temp folder
+test_update_app_devtemp() {
+    local app="$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0"
+    mkdir -p "$app/assets" "$ROOT/media/developer/temp"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    printf '{\n  "id": "org.ohmybahgosh.lgusb2eth0",\n  "version": "2.3.0"\n}\n' > "$app/appinfo.json"
+    mkdir -p "$STATE/rel"
+    echo "fake ipk" > "$STATE/rel/app.ipk"
+    release 2.4.0
+    echo 2.4.0 > "$STATE/appver"
+    local SCRIPT="$app/assets/lg-usb-2-eth0.sh"
+    run update -y
+    check "exit 0" rc_is 0
+    local i=0
+    while ! grep -q "Updated the app to 2.4.0" "$LOG" 2>/dev/null && [ $i -lt 30 ]; do sleep 0.2; i=$((i + 1)); done
+    check "installer reads it from the developer temp folder" grep -q "media/developer/temp/lg-usb-2-eth0-update.ipk" "$STATE/luna.log"
+    check "cleaned up the download" sh -c "! ls '$ROOT'/media/developer/temp/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
+}
+
 test_update_app_bad_checksum() {
     local app="$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0"
     mkdir -p "$app/assets" "$STATE/rel"
@@ -1630,7 +1649,7 @@ test_test_driver_checks() {
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/fc8753f.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/146ebc0.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
@@ -1649,7 +1668,7 @@ test_test_driver_checks() {
     check "tested: no new test" has "has a tested driver for your adapter"
     LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24 r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
         FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run get-driver -y
-    check "tested: get-driver downloads it" grep -q "fc8753f.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "tested: get-driver downloads it" grep -q "146ebc0.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
@@ -1666,38 +1685,38 @@ test_test_driver_k6lp() {
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run status --json
     check "offered with the adapter" has '"driverTest":{"available":true,"adapterOk":true,"folder":"4.4.84-612.40.jimna.1-k6lp"'
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "ASIX: the ASIX build" grep -q "fc8753f.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
+    check "ASIX: the ASIX build" grep -q "146ebc0.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
-    check "Realtek: the r8152 build" grep -q "fc8753f.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    check "Realtek: the r8152 build" grep -q "146ebc0.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "RTL8156: Realtek's newer driver" grep -q "fc8753f.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    check "RTL8156: Realtek's newer driver" grep -q "146ebc0.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
     # The UN7300's kernel: the kernel's own r8152 for an RTL8153
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "jcl4tv.40, RTL8153: r8152" grep -q "fc8753f.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
+    check "jcl4tv.40, RTL8153: r8152" grep -q "146ebc0.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     # webOS 22 K8 TVs: the Realtek build of their own chip
     : > "$STATE/curl.log"
     FAKE_SOC=k8lp FAKE_KERNEL=5.4.96-115.30.mole.2 run test-driver -y
-    check "mole.2 K8Lp: r8152_oot" grep -q "fc8753f.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
+    check "mole.2 K8Lp: r8152_oot" grep -q "146ebc0.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
     # webOS 24 K24 TVs on a 5.4.268 223 kernel
     : > "$STATE/curl.log"
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-223.29.okapi.5 run test-driver -y
-    check "okapi.5 K24: r8152_oot" grep -q "fc8753f.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "okapi.5 K24: r8152_oot" grep -q "146ebc0.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
     # paparoa.pine.2 has a tested r8152, but not for an RTL8156: the build to test is offered
     : > "$STATE/curl.log"
     FAKE_SOC=k8hp FAKE_KERNEL=5.4.268-294.17.paparoa.pine.2 run test-driver -y
-    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "fc8753f.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
+    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "146ebc0.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # An adapter no driver has: the new one takes it as it loads (no cdc_ncm
@@ -1826,7 +1845,54 @@ test_new_chip_drivers() {
     check "C2, LAN7850 with no driver: lan78xx to test" dt_json "true true"
 }
 
+# 2022 UQ LCDs (LM21AN): no USB network drivers at all.  Realtek's driver
+# doesn't need usbnet, so it's offered; nothing for ASIX yet
+test_lm21an_drivers() {
+    add_builtin
+    add_unclaimed 1-1 0bda 8153
+    FAKE_SOC=lm21an FAKE_KERNEL=5.4.96-934.mlt4tv.17 run status --json
+    check "RTL8153: a driver to test" dt_json "true true"
+    check "the newer Realtek driver first" has '"folder":"5.4.96-934.mlt4tv.17"'
+    remove_usb 1-1
+    add_unclaimed 1-2 17ef a387
+    FAKE_SOC=lm21an FAKE_KERNEL=5.4.96-934.16.1.mirima.1 run status --json
+    check "a 5.4-only Realtek id" dt_json "true true"
+    remove_usb 1-2
+    add_unclaimed 1-3 0b95 1790
+    FAKE_SOC=lm21an FAKE_KERNEL=5.4.96-934.mlt4tv.17 run status --json
+    check "ASIX: nothing yet" dt_json "true false"
+}
+
+# webOS 26 only loads modules LG signed: nothing is offered or loaded, and
+# status and the report say why.  Its modules live in /usr/lib/modules.
+test_webos26_signed_modules() {
+    add_builtin
+    mkdir -p "$SYS/module/module/parameters"
+    echo Y > "$SYS/module/module/parameters/sig_enforce"
+    mkdir -p "$ROOT/usr/lib/modules/6.12.44-67.18.qilian.5"
+    echo "kernel/drivers/net/usb/r8152.ko" > "$ROOT/usr/lib/modules/6.12.44-67.18.qilian.5/modules.builtin"
+    add_unclaimed 1-1 0b95 1790
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run status --json
+    check "says signing is enforced" has '"sigEnforced":true'
+    check "nothing offered" offer_is none
+    check "nothing to test" dt_json "false false"
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run status
+    check "status explains" has "only loads drivers signed by LG"
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run test-driver -y
+    check "test-driver explains" has "only loads drivers signed by LG"
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run get-driver -y
+    check "get-driver explains" has "only loads drivers signed by LG"
+    fake_ko "$SB/x.ko" ax88179_178a 6.12.44-67.18.qilian.5
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run install -y --module "$SB/x.ko"
+    check "install --module refused" has "only loads drivers signed by LG"
+    FAKE_SOC=k26 FAKE_KERNEL=6.12.44-67.18.qilian.5 run report
+    check "report says so" has "Module signing: enforced"
+    check "built-ins from /usr/lib/modules" has "Built in: r8152"
+}
+
 t report test_report
+t webos26_signed_modules test_webos26_signed_modules
+t lm21an_drivers test_lm21an_drivers
 t new_chip_drivers test_new_chip_drivers
 t driver_after_firmware_update test_driver_after_firmware_update
 t report_builtin_driver test_report_builtin_driver
@@ -1856,6 +1922,7 @@ t update_check test_update_check
 t update_script test_update_script
 t update_script_bad_checksum test_update_script_bad_checksum
 t update_app test_update_app
+t update_app_devtemp test_update_app_devtemp
 t update_app_bad_checksum test_update_app_bad_checksum
 t hook_is_link_to_copy test_hook_is_link_to_copy
 t install_keeps_settings test_install_keeps_settings

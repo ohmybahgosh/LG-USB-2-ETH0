@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.16"
+VERSION="2.5.0"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/fc8753f2b52dc44df09da01aed115de3dcd4e627/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/146ebc052ff102923dd94250365bab7f875fe89f/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -401,6 +401,20 @@ sys_write() {
     if [ -n "$LGU2E_SYSWRITE" ]; then "$LGU2E_SYSWRITE" "$1" "$2"; else printf '%s' "$2" > "$1"; fi
 }
 
+# The running kernel's modules folder: /lib/modules, or /usr/lib/modules
+# on webOS 26
+mod_dir() {
+    for _md in "${LGU2E_ROOT}/lib/modules/$(uname -r)" "${LGU2E_ROOT}/usr/lib/modules/$(uname -r)"; do
+        [ -d "$_md" ] && { echo "$_md"; return 0; }
+    done
+    echo "${LGU2E_ROOT}/lib/modules/$(uname -r)"
+}
+
+# The kernel only loads modules LG signed (the 2026 models' webOS 26
+# kernels), so no added driver can load, whoever built it
+sig_enforced() { [ "$(sysval "$SYS_MODULES/module/parameters/sig_enforce")" = Y ]; }
+SIG_MSG="This kernel only loads drivers signed by LG (the 2026 models' webOS 26 kernels enforce it), so no added driver can load here.  Only the TV's built-in drivers work."
+
 # The kernel a .ko file was built for (its vermagic), read without modinfo
 module_kernel() {
     tr -c '[:alnum:]_=.+ -' '\n' < "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1
@@ -488,6 +502,8 @@ load_module() {
     [ -r "$MODULE" ] && _mk=$(module_kernel "$MODULE")
     if [ -d "$SYS_MODULES/$_m" ]; then
         echo "Module $_m already loaded."
+    elif sig_enforced; then
+        echo "Not loading $MODULE: $SIG_MSG"
     elif [ ! -r "$MODULE" ]; then
         echo "Module file $MODULE is missing. Skipping it."
     elif ! module_fits "$MODULE"; then
@@ -1059,7 +1075,8 @@ tv_info() {
         TV_MODEL=$(echo "$INFO" | json_get modelName)
         [ -n "$FIRMWARE" ] || FIRMWARE=$(echo "$INFO" | json_get firmwareVersion)
     fi
-    # LG's marketing names: 7.x is webOS 22, 8.x webOS 23, 9.x webOS 24, 10.x webOS 25
+    # LG's marketing names: 7.x is webOS 22, 8.x webOS 23, 9.x webOS 24, 10.x webOS 25,
+    # 11.x webOS 26
     case "$WEBOS_RELEASE" in
         [1-6].*) WEBOS_NAME="webOS ${WEBOS_RELEASE%%.*}" ;;
         [7-9].*|1[0-9].*) WEBOS_NAME="webOS $((${WEBOS_RELEASE%%.*} + 15))" ;;
@@ -1095,6 +1112,7 @@ module_name() {
 # Fill DRIVER from MODULE, and check both
 resolve_driver() {
     [ -n "$MODULE" ] || return 0
+    sig_enforced && error_exit "$SIG_MSG"
     [ -r "$MODULE" ] || error_exit "Module file $MODULE does not exist."
     if [ -z "$DRIVER" ]; then
         DRIVER=$(module_name "$MODULE")
@@ -1199,6 +1217,7 @@ download_help() {
 get_driver() {
     preflight
     _k=$(uname -r)
+    if sig_enforced; then info "$SIG_MSG"; return 0; fi
     _kd=$(pick_driver "$_k") || {
         info "No known better driver for kernel $_k."
         echo "If someone has built one for this exact kernel, install it with --module /full/path/driver.ko."
@@ -1296,6 +1315,7 @@ driver_offer() {
         fi
         echo active; return
     fi
+    sig_enforced && { echo none; return; }
     _okd=$(pick_driver "$(uname -r)") || { echo none; return; }
     # Only when the module supports a plugged-in adapter
     # shellcheck disable=SC2086 # split the fields on purpose
@@ -1308,6 +1328,7 @@ driver_offer() {
 # aliases): Realtek's r8152 v2.22.1 as DonZoomik patched it (r8152_oot, the
 # same as his), and the kernel's own r8152 and ax88179_178a of 4.4 kernels
 R8152_IDS="045e:07ab,045e:07c6,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,2357:0601"
+R8152_54_IDS="045e:07ab,045e:07c6,045e:0927,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,17ef:721e,17ef:a387,2357:0601"
 AX88179_IDS="04e8:a100,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00"
 # The kernel's own aqc111, dm9601 and lan78xx, built for kernels that leave
 # them out.  Older kernels' copies know fewer adapters.
@@ -1589,7 +1610,11 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.268-294.24.papikonda.2 k24 lan78xx.ko adc995220f60b5dc3102e0f91f2aa8f3860d807ebe3c6506971ec16257f9903b
 5.4.268-329.ptl4tv.5 - aqc111.ko f0ae71e08989869d421ed95805a4289882dabcbddcfe5be9e385a4251f55538e
 5.4.268-329.ptl4tv.5 - dm9601.ko 96d1aa4303097d31b900334363cff4712473efad7a37946ec2365c0a5d0c4f98
-5.4.268-329.ptl4tv.5 - lan78xx.ko 24ef5be91a809b1e7f80c7ab5a90aac2d5e910fed1a92820b5891445addc8627"
+5.4.268-329.ptl4tv.5 - lan78xx.ko 24ef5be91a809b1e7f80c7ab5a90aac2d5e910fed1a92820b5891445addc8627
+5.4.96-934.mlt4tv.17 - r8152_oot.ko af1ae12bbffb42b2f4fe342309e92a5cab781fc59a605c6e9e89521b712cb964
+5.4.96-934.mlt4tv.17 - r8152.ko ace00688f2b7d63545921a64e48c7d123581d1b06ed98f636a054b7ad2652615
+5.4.96-934.16.1.mirima.1 - r8152_oot.ko fc28abb1bc27b03fd332c384b2e037bd7f897d5779fe4976c02decf593f9882a
+5.4.96-934.16.1.mirima.1 - r8152.ko b7d038d7ffd13ae02ce09ce1f0fe8225c63b13cbab33df1d3e7980dd9ec8ec39"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -1626,7 +1651,7 @@ driver_rows() {
         fi
         case "$_xfile" in
             r8152_oot.ko) _xi=$R8152_OOT_IDS ;;
-            r8152.ko) _xi=$R8152_IDS ;;
+            r8152.ko) case "$1" in 4.4.*) _xi=$R8152_IDS ;; *) _xi=$R8152_54_IDS ;; esac ;;
             aqc111.ko) _xi=$AQC111_IDS ;;
             dm9601.ko) case "$1" in 4.4.*) _xi=$DM9601_44_IDS ;; *) _xi=$DM9601_IDS ;; esac ;;
             lan78xx.ko)
@@ -1754,6 +1779,7 @@ test_driver() {
         drvtest_show
         confirm "Try it once more?" || return 0
     fi
+    if sig_enforced; then info "$SIG_MSG"; return 0; fi
     _x=$(experimental_driver "$_k") || {
         info "No new driver to test for kernel $_k${_soc:+ ($_soc chip)} yet."
         pick_driver "$_k" > /dev/null && echo "It does have a tested one: run get-driver, or use Faster driver in the app."
@@ -2298,11 +2324,11 @@ show_status() {
     # Drivers built into the kernel have no .ko file and often no /sys/module
     # folder, so lsmod never shows them: modules.builtin lists them, and a
     # registered USB driver has a folder under /sys/bus/usb/drivers
-    _bif="${LGU2E_ROOT}/lib/modules/$(uname -r)/modules.builtin"
+    _bif="$(mod_dir)/modules.builtin"
     for _m in r8152 $_hd r8152_oot ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
         case " $_seen " in *" $_m "*) continue ;; esac
         _seen="$_seen $_m"
-        _ko=$(find "${LGU2E_ROOT}/lib/modules/$(uname -r)" -name "$_m.ko*" 2>/dev/null | head -n 1)
+        _ko=$(find "$(mod_dir)" -name "$_m.ko*" 2>/dev/null | head -n 1)
         if grep -q "/$_m\.ko\$" "$_bif" 2>/dev/null; then
             _list="$_list $_m(built in)"
         elif [ -d "$SYS_MODULES/$_m" ]; then
@@ -2313,7 +2339,7 @@ show_status() {
             _list="$_list $_m(file)"
         fi
     done
-    if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found in the kernel, /sys/module or /lib/modules"; fi
+    if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found in the kernel, /sys/module or the modules folder"; fi
 
     _hm=$(hook_setting MODULE)
     if [ -n "$_hm" ]; then
@@ -2370,6 +2396,9 @@ show_status() {
             status_note "$_usb uses the generic $_ud driver. A better driver is known for this kernel and adapter: run 'get-driver'."
         fi ;;
     esac
+    if sig_enforced && { [ -z "$_usb" ] || [ -n "$(hook_setting MODULE)" ]; }; then
+        status_note "$SIG_MSG"
+    fi
     if [ -z "$_usb" ] && [ -z "$_hd" ] && [ "$(driver_offer)" = available ]; then
         status_note "Your adapter has no driver on this TV, but one is known for this kernel and adapter: run 'get-driver'."
     fi
@@ -2495,7 +2524,7 @@ show_json() {
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
         "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
-    printf '"kernelAtSetup":%s,' "$(js "$(hook_setting KERNEL)")"
+    printf '"kernelAtSetup":%s,"sigEnforced":%s,' "$(js "$(hook_setting KERNEL)")" "$(jb "$(sig_enforced && echo 1)")"
     printf '"realtek":{"r8152":%s,"result":%s},' \
         "$(jb "$([ -d "$USB_DRIVERS/r8152" ] && echo 1)")" "$(js "$(cut -d' ' -f1 "$REALTEK_STATE" 2>/dev/null)")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
@@ -2731,7 +2760,11 @@ update_now() {
 update_app() {
     case "$LATEST_SHA" in *[!0-9a-f]*|'') error_exit "The release has no checksum for the app.  Nothing changed." ;; esac
     case "$LATEST_IPK" in https://*.ipk) ;; *) error_exit "Unexpected download link in the release: $LATEST_IPK" ;; esac
-    _ipk="$RUN_DIR/lg-usb-2-eth0-update.ipk"
+    # webOS 26's installer can't read the IPK from /tmp, so it goes where
+    # the developer tools put theirs, when the TV has that folder
+    _ipkd=$RUN_DIR
+    [ -d "${LGU2E_ROOT}/media/developer/temp" ] && _ipkd="${LGU2E_ROOT}/media/developer/temp"
+    _ipk="$_ipkd/lg-usb-2-eth0-update.ipk"
     info "Downloading $LATEST_IPK"
     fetch "$_ipk.part" "$LATEST_IPK" || { rm -f "$_ipk.part"; error_exit "Download failed.  Nothing changed."; }
     _got=$(file_sha "$_ipk.part")
@@ -2817,11 +2850,12 @@ show_report() {
     echo "Model:   ${TV_MODEL:-unknown}"
     echo "webOS:   $WEBOS_NAME (${WEBOS_RELEASE:-unknown}), firmware ${FIRMWARE:-unknown}"
     echo "Kernel:  $(uname -r) ($(uname -m))"
+    sig_enforced && echo "Module signing: enforced (only LG-signed drivers load)"
     # The chip, and the USB network drivers built into the kernel (they have
     # no .ko file, so they only show up in modules.builtin)
     _soc=$(tv_soc)
     [ -n "$_soc" ] && echo "Chip:    $_soc"
-    _bi=$(grep -E '/net/usb/' "${LGU2E_ROOT}/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null | sed 's#.*/##; s#\.ko$##' | tr '\n' ' ')
+    _bi=$(grep -E '/net/usb/' "$(mod_dir)/modules.builtin" 2>/dev/null | sed 's#.*/##; s#\.ko$##' | tr '\n' ' ')
     echo "Built in: ${_bi:-unknown}"
     drvtest_settle
     [ -f "$DRVTEST_FILE" ] && echo "Driver test: $(drvtest_get result) (experimental/$(drvtest_get folder))"

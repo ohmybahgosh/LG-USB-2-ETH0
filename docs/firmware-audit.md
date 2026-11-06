@@ -31,8 +31,11 @@ Last run: November 6, 2026, on the latest US firmware for each model, plus LG's 
 | OLED65G4SUB | 2024 | 33.31.69 | 25 | o24 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65G5WUA | 2025 | 33.31.69 | 25 | o24n | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65C5PUA (and 65QNED9MAUA, same file) | 2025 | 33.31.69 | 25 | o22n3 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED55G6WUA (and the 2026 C6) | 2026 | 43.11.81 | 26 | o26 | `6.12.44-347` | r8152, r8153_ecm, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED65B6GUA | 2026 | 43.21.88 | 26 | k26 | `6.12.44-67.18.qilian.5` | r8152, asix |
+| 65QNED7SBUA | 2026 | 43.21.87 | 26 | k25lpnlm | `6.12.44-67.18.qilian.5` | asix only |
 | OLED65C2PUA | 2022 | 43.21.94 | 26 | o22 | `6.12.44-352` | r8152, r8153_ecm, asix, ax88179_178a, cdc_ether, cdc_ncm |
-| OLED65C4PUA | 2024 | 43.21.96 | 26 | o22n2 | `6.12.44-352` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED65C4PUA | 2024 | 43.21.96 | 26 | o22n2 | `6.12.44-352` | r8152, r8153_ecm, asix, ax88179_178a, cdc_ether, cdc_ncm |
 
 ## What it tells us
 
@@ -46,7 +49,10 @@ Last run: November 6, 2026, on the latest US firmware for each model, plus LG's 
 - **Older Realtek-chip LCD TVs have only the ASIX AX8817x driver.**  The 2020 UN7300 (K6LP) and 2022 NANO75 (K8LP) have no `r8152`, no `ax88179_178a` and no `cdc_ncm`.  An adapter needs a module built for them.
   - The UN7300's current firmware reports `4.4.84-612.40.jimna.1`, not the `4.4.84-612.jcl4tv.40` that OCT0PUSCRIME's driver was built for.  That kernel name may come from older firmware, so his module may not load after an update.  A report from a UN7300 on 04.64.00 would settle it.  For that kernel, and K6Lp's `4.4.84-612.21.6.jardine.2`, there are now Realtek and ASIX drivers to test, built with the TV's own config: see [driver-build.md](driver-build.md).
 - **LG's own OLED chips (O18 to O22N2) have everything built in** on webOS 4.5 to 25.  Adapters work out of the box there.  Only the driver version decides how fast.
-- **webOS 26 moves to kernel 6.12** (`6.12.44-352`), whose built-in `r8152` handles RTL8153 and RTL8156 properly.  Root is patched there though, so it doesn't help rooted TVs: see the warning in the README.
+- **webOS 26 moves to kernel 6.12, and on the 2026 models it only loads drivers LG signed.**  Their kernels (`6.12.44-347` and `6.12.44-67.18.qilian.5`) have `MODULE_SIG_FORCE=y`, so no added driver can load, even as root: what's built in is all there is.  The 2022 to 2025 OLEDs' webOS 26 kernel (`6.12.44-352`) has module signing off, but that firmware can't be rooted.  Where the built-in drivers are enough, adapters work once the TV is rooted:
+  - LG's own chips (the 2022 to 2025 OLEDs on `6.12.44-352`, and the 2026 C6 and G6 on `6.12.44-347`) have everything built in.  Their `r8152` handles RTL8153 and RTL8156 properly, and `r8153_ecm` is there too.
+  - The 2026 B6 (K26) has `r8152` and `asix` but no `ax88179_178a`, so AX88179 adapters get nothing.  The 2026 QNED7S (K25LpNLM) has only `asix`: no Realtek and no AX88179.  Neither can be fixed with a driver.
+  - Root: webOS 26 firmware released after October 10, 2026 (like 43.21.84) is patched, per the [EPK archive's rooting guide](https://tv.slada.sk/guides/rooting-guide).  Earlier webOS 26 firmware, like the 2026 models' launch firmware, can still be rooted.
 
 ## How it works
 

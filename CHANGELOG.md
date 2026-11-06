@@ -2,16 +2,22 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.5.0] - 2026-11-06
 
 ### Added
 
 - **After a firmware update, Faster driver switches to the new kernel's driver in one press.**  A firmware update can change the kernel while root survives.  The driver set up before is then built for the old kernel, so it's skipped at boot and the adapter falls back to the TV's own driver.  The script now remembers the kernel it was set up on, and when a driver is known for the new kernel and the adapter, the app's **Faster driver** row says so and one press downloads it and moves the adapter over.  When none is known yet, `status` points to **Test a new driver** if there's one to test, or asks for a report.  The report says which kernel it was set up on.
-- **Drivers to test for three more kinds of adapter: Aquantia AQC111U and AQC112 (5G and 2.5G), Davicom DM9601 and Microchip LAN7800/LAN7850.**  None of LG's kernels include these drivers, not even on its own OLED chips, so these adapters get no driver on any LG TV.  159 new modules: for the 54 kernel and chip combinations already built for (`aqc111` only on 5.4 kernels), and for `5.4.268-329.ptl4tv.5`, the C2, C3, C4 and G4's kernel.  Built from the same LG source and config with the same checks.  **Test a new driver** offers one when its adapter is plugged in, and no longer when the adapter plugged in already has a driver and none of the new ones is for it.  261 drivers are now waiting for testers.
+- **Drivers to test for three more kinds of adapter: Aquantia AQC111U and AQC112 (5G and 2.5G), Davicom DM9601 and Microchip LAN7800/LAN7850.**  None of LG's kernels include these drivers, not even on its own OLED chips, so these adapters get no driver on any LG TV.  159 new modules: for the 54 kernel and chip combinations already built for (`aqc111` only on 5.4 kernels), and for `5.4.268-329.ptl4tv.5`, the C2, C3, C4 and G4's kernel.  Built from the same LG source and config with the same checks.  **Test a new driver** offers one when its adapter is plugged in, and no longer when the adapter plugged in already has a driver and none of the new ones is for it.  265 drivers are now waiting for testers, with the LM21AN ones below.
 - **A virtual TV scenario for a firmware update** (`c2-fwupdate`): a C2 set up with a driver whose kernel then changed.
+- **Realtek drivers to test for the 2022 UQ LCDs (LM21AN chip).**  The firmware audit found LG's LM21A-family kernels have no USB network drivers at all, not even `usbnet`.  Realtek's driver doesn't need it, so `r8152_oot` (RTL8152, RTL8153, RTL8156) and the kernel's own `r8152` are built from LG's LM21AN source for both of its kernels.  ASIX and the generic drivers need `usbnet` loaded first, which comes later.
+- **webOS 26:** the script knows when the kernel only loads modules LG signed (the 2026 models' webOS 26 kernels enforce it; the 2022 to 2025 OLEDs' webOS 26 kernel doesn't).  It doesn't offer, test or load drivers there, and `status`, the report and `install --module` say why.  The JSON has `sigEnforced`.  It reads built-in drivers from `/usr/lib/modules`, where webOS 26 keeps them.
+- **The firmware audit covers webOS 26 and LG's LM21A LCDs.**  2026 OLEDs on LG's own chip have every driver built in.  The 2026 B6 lacks `ax88179_178a`, and the 2026 QNED7S has only `asix`.
 
 ### Fixed
 
+- **The in-app update is ready for webOS 26.**  Its installer can't read an IPK from `/tmp` (people hit this installing the Homebrew Channel there), so the download goes to `/media/developer/temp` when the TV has it.  The README's manual install uses that folder too.  Not tried on a webOS 26 TV yet.
+- **The README no longer says all of webOS 26 is patched.**  Only firmware released after October 10, 2026 is, per the EPK archive's rooting guide.
+- **The driver build handles LG's MediaTek (LM21A) and webOS 26 trees:** their relative include folders, a release set through `EXTRAVERSION`, and (with `SUBLEVEL_FROM_KERNEL=1`) a Makefile that says 6.12.0 for a 6.12.44 kernel.
 - **The driver build copies a driver's own header** (like `lan78xx.h` and `aqc111.h`), so drivers that have one build.
 
 ## [2.4.16] - 2026-11-06

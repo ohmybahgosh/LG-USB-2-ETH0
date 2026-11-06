@@ -607,7 +607,7 @@
                     function () { act('Update blocking off', installArgs('--no-block-updates')); });
             } else {
                 confirmThen('Block updates harder?',
-                    'A firmware update can remove root for good, and LG\'s current firmware, webOS 26 included, can\'t be rooted again.  ' +
+                    'A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  ' +
                     'It turns off webOS\'s own update check, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  ' +
                     'It starts now and at every boot, and turning it off undoes all of it.',
                     function () { act('Block updates', installArgs('--block-updates')); });

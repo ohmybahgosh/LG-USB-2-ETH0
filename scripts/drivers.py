@@ -66,7 +66,7 @@ def webos(k):
         return 'webOS 24'
     if k.startswith('5.4.96-307') or '-132.' in k:
         return 'webOS 23'
-    if '-115.' in k:
+    if '-115.' in k or '-934.' in k:
         return 'webOS 22'
     return 'other'
 
@@ -76,7 +76,7 @@ def listing(rows):
     for k, ch, f, _ in rows:
         e = kern.setdefault(k, {'chips': [], 'realtek': False, 'asix': False, 'other': set()})
         fo = folder(k, ch)
-        link = '[%s](%s/tree/main/experimental/%s)' % (CHIPS.get(ch, ch.upper()) if ch != '-' else 'LG chips', MIRROR, fo)
+        link = '[%s](%s/tree/main/experimental/%s)' % (CHIPS.get(ch, ch.upper()) if ch != '-' else ('LM21AN' if '-934.' in k else 'LG chips'), MIRROR, fo)
         if link not in e['chips']:
             e['chips'].append(link)
         e['realtek'] |= f.startswith('r8152')

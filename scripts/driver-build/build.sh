@@ -79,6 +79,21 @@ fi
 
 # The release is VERSION.PATCHLEVEL.SUBLEVEL from the source, then a suffix
 BASE=$(sed -n 's/^VERSION = //p; s/^PATCHLEVEL = //p; s/^SUBLEVEL = //p' "$SRC/Makefile" | head -n 3 | tr '\n' '.' | sed 's/\.$//')
+# LG's webOS 26 source says 6.12.0 while the TVs run 6.12.44.  With
+# SUBLEVEL_FROM_KERNEL=1 the kernel's own sublevel is used instead (the build
+# report says so); without it, a mismatch stops the build as before.
+SUBLEVEL_ARG=""
+if [ "${SUBLEVEL_FROM_KERNEL:-0}" = 1 ]; then
+    _vp=${BASE%.*}
+    case "$KERNEL" in
+        "$_vp".*)
+            _sl=${KERNEL#"$_vp".}; _sl=${_sl%%[!0-9]*}
+            if [ -n "$_sl" ] && [ "$BASE" != "$_vp.$_sl" ]; then
+                echo "note: source says $BASE, building as $_vp.$_sl (SUBLEVEL_FROM_KERNEL)" >&2
+                BASE=$_vp.$_sl SUBLEVEL_ARG=$_sl
+            fi ;;
+    esac
+fi
 case "$KERNEL" in
     "$BASE"*) LOCALVERSION=${KERNEL#"$BASE"} ;;
     *) echo "source is $BASE, kernel is $KERNEL" >&2; exit 1 ;;
@@ -123,6 +138,12 @@ esac
 # folders when this is set (DonZoomik's build does the same)
 export PKG_CONFIG_SYSROOT_DIR=/
 set -- -C "$SRC" O="$B" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" LOCALVERSION="$LOCALVERSION"
+# Some of LG's trees (the LM21A's) make the release from EXTRAVERSION alone,
+# the way LG's own build sets it, and ignore LOCALVERSION
+if grep -A1 '^filechk_kernel.release' "$SRC/Makefile" | grep -q 'echo "$(KERNELVERSION)"'; then
+    set -- -C "$SRC" O="$B" ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" LOCALVERSION= EXTRAVERSION="$LOCALVERSION"
+fi
+[ -z "$SUBLEVEL_ARG" ] || set -- "$@" SUBLEVEL="$SUBLEVEL_ARG"
 if [ "$ARCH" = arm64 ]; then
     # The 32-bit compat vDSO is built during kernel prep, and needs ARMv8
     # instructions the compat compiler doesn't use by default.  It isn't
@@ -141,6 +162,15 @@ case "$BASE" in
         export REAL_CC="${CROSS_COMPILE}gcc"
         set -- "$@" CC="$HERE/cc-no-werror" HOSTCFLAGS=-fcommon ;;
 esac
+# MediaTek (MStar) trees, like LG's LM21A chips, add include folders as
+# paths relative to the source tree, which only work in a build inside it.
+# Link those folders into the output folder so they're found there too.
+for _d in "$SRC"/arch/"$ARCH"/mach-* "$SRC/arch/$ARCH/include/mstar" "$SRC/drivers/mstar2"; do
+    [ -d "$_d" ] || continue
+    _rel=${_d#"$SRC"/}
+    mkdir -p "$B/${_rel%/*}"
+    ln -sfn "$_d" "$B/$_rel"
+done
 LOG=$WORK/build.log
 make "$@" olddefconfig > "$LOG" 2>&1 || { tail -n 5 "$LOG" >&2; exit 1; }
 python3 "$SRC/scripts/diffconfig" "$KDIR/config" "$B/.config" > "$WORK/config-differences.txt" || true
