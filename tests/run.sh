@@ -1550,6 +1550,22 @@ test_test_driver_works() {
     check "status has the result" has '"state":"done","result":"works"'
 }
 
+# Realtek mode had already moved the adapter to the kernel's own r8152 (a
+# 2024 G4 on 5.4.268-320, issue #5): the test moves it from there
+test_test_driver_from_r8152() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "6c:1f:f7:00:00:01" 0bda 8153 480
+    fake_ko "$STATE/download" r8152_oot 5.4.268-320 0bda:8153 0bda:8156
+    XDRV="https://example.test/r8152_oot.ko $(sha256sum "$STATE/download" | awk '{print $1}') r8152_oot.ko 5.4.268-320 0bda:8153,0bda:8156"
+    drvtest_file
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-320 run test-driver -y
+    check "moved from r8152" has "r8152 -> r8152_oot"
+    check "adapter on the new driver" drv eth1 r8152_oot
+    check "result works" dt_is "result=works"
+    check "report says where it was" has "Before:   r8152"
+}
+
 # The TV app starts the test and follows it through status --json
 test_test_driver_no_wait() {
     drvtest_setup
@@ -1787,6 +1803,7 @@ t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
+t test_driver_from_r8152 test_test_driver_from_r8152
 t test_driver_no_wait test_test_driver_no_wait
 t test_driver_eth0_kept test_test_driver_eth0_kept
 t test_driver_no_load test_test_driver_no_load

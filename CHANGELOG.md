@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **A driver test works when Realtek mode already moved the adapter to the kernel's own `r8152`.**  The first driver test report ([#5](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/5), a 2024 G4 on `5.4.268-320`) came back "not used": the adapter was on the TV's built-in `r8152`, working, and the test only moved adapters off the generic drivers.  Now a driver whose module lists the adapter takes it from the built-in `r8152` too, for a test and for **Faster driver**.  The test report also says which driver the adapter was on before.
+
 ## [2.4.15] - 2026-11-06
 
 ### Added

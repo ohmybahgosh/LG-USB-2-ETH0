@@ -1,7 +1,7 @@
 #!/bin/sh
 # Fake sysfs writer for the test suite (the script uses it via LGU2E_SYSWRITE).
 # Plain files can't react like sysfs, so this acts out what the kernel does:
-#   .../drivers/cdc_ncm/unbind IFACE   cdc_ncm (or cdc_ether) lets go: its network device goes away
+#   .../drivers/NAME/unbind IFACE      the driver lets go: its network device goes away
 #   .../drivers/NAME/bind IFACE        NAME takes the adapter: like r8152, it
 #                                      switches to USB configuration 1 and makes
 #                                      a new network device with the lowest free ethN
@@ -89,7 +89,7 @@ case "$1" in
         elif [ ! -e "$FAKE_STATE/cfg_fail" ]; then make_netdev "$_dev" 1.0 r8152
         fi
         exit 0 ;;
-    */drivers/cdc_ncm/unbind|*/drivers/cdc_ether/unbind)
+    */drivers/*/unbind)
         _g=${1%/unbind}; _g=${_g##*/}
         _dev=${2%%:*}
         _if=$SYS/devices/usb1/$_dev/$2

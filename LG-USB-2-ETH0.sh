@@ -557,7 +557,12 @@ takeover_ids() {
 # Sets _gd to the generic driver and _tok to the device's one-try token.
 takeover_fits() {
     _gd=$(nic_driver "$1")
-    case " $GENERIC_DRIVERS " in *" $_gd "*) ;; *) return 1 ;; esac
+    case " $GENERIC_DRIVERS " in
+        *" $_gd "*) ;;
+        # The kernel's own r8152, which Realtek mode may have moved it to:
+        # only for another driver whose module lists the adapter (below)
+        *) [ "$_gd" = r8152 ] && [ -n "$DRIVER" ] && [ "$DRIVER" != r8152 ] || return 1 ;;
+    esac
     _ifc=$(readlink -f "$NET/$1/device") || return 1
     _in=${_ifc##*/}
     _dev=${_in%%:*}
@@ -682,6 +687,9 @@ iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}';
 # detached because moving the adapter can drop the session that started it.
 drv_try() {
     _dtl=$(dmesg 2>/dev/null | wc -l)
+    _dtb=""
+    _dtn=$(find_usb_nic)
+    [ -n "$_dtn" ] && _dtb=$(nic_driver "$_dtn")
     _dte=""
     if [ -d "$SYS_MODULES/$DRIVER" ]; then
         _dtd=already
@@ -729,6 +737,7 @@ drv_try() {
         grep -E '^(kernel|chip|adapter|folder|file|sha|boot|started)=' "$DRVTEST_FILE" 2>/dev/null
         echo "state=done"
         echo "result=$_dtr"
+        echo "before=$_dtb"
         echo "loaded=$_dtd"
         [ -n "$_dte" ] && echo "insmod=$(echo "$_dte" | head -n 1)"
         echo "iface=$_dtn"
@@ -1515,6 +1524,8 @@ drvtest_report() {
     if [ "$_r" != crashed ]; then
         _ri=$(drvtest_get insmod)
         echo "Loaded:   $(drvtest_get loaded)${_ri:+ ($_ri)}"
+        _dtbf=$(drvtest_get before)
+        [ -n "$_dtbf" ] && echo "Before:   $_dtbf"
         _dls=$(drvtest_get speed)
         case "$_dls" in ''|-1|*[!0-9]*) _dls=unknown ;; *) _dls="${_dls}M" ;; esac
         echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $_dls, address $(drvtest_get address), ping $(drvtest_get ping)"
