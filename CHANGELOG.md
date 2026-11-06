@@ -2,7 +2,7 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.4.15] - 2026-11-06
 
 ### Added
 
