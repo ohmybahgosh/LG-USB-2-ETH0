@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/50ef0a5c1ba4973ae8c134aae9129001cd951147/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/a584e4cee3a4d7e0068e089b41d7c38768db62cc/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1309,7 +1309,23 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-612.21.6.jardine.2 k6hp r8152.ko dd36ef69cf25345c225452aa311b8133dccd502990ef0a58fc3851c4920d21d3
 4.4.84-612.21.6.jardine.2 k6hp ax88179_178a.ko bf0167932f63ec376d64174d8b4fb7698fc07eef95cf1f19ca9acec9252ad2da
 4.4.84-611.japoon.14 k6lp r8152.ko bd7b248ceea3045f2b60074b5cb2a9906cd41ab9b5f4c6ccc2817e0e427a90f7
-4.4.84-611.japoon.14 k6lp ax88179_178a.ko d86d63ae16110ba23867142af62c968a69f3e9230845aeefceb2ae1c325a631c"
+4.4.84-611.japoon.14 k6lp ax88179_178a.ko d86d63ae16110ba23867142af62c968a69f3e9230845aeefceb2ae1c325a631c
+5.4.268-294.15.paparoa.3 k24n r8152_oot.ko 842d39bae1ec00ddea3dd07d0fefd79af64b5040da551c5a0c5bd3be86d0aa2d
+5.4.268-294.15.paparoa.3 k24n ax88179_178a.ko 273bff897780480cc1d3cf4c0ec52c2c07b59a83eebd98ff1ad8409b4d075d90
+5.4.268-294.15.paparoa.4 k24n r8152_oot.ko e1b94bccd19f11801e5a68249da96fae0b0bb8d8615e77320235dd7b8e9ccba2
+5.4.268-294.15.paparoa.4 k24n ax88179_178a.ko 4bd531cbf8a2a48b6b3395b02c92c1aebebed77d67223e36faa7ca6f146f30cc
+5.4.268-294.15.paparoa.4 k25lp r8152_oot.ko 097fd4e6765bd1847d6ba0ed730055d323a5685a856929d67106d5a6fb4501d5
+5.4.268-294.15.paparoa.4 k25lp ax88179_178a.ko 85eed149283b7fa70e3f5275a374b51122d5d5fe8bd4169d9202af85b7a5f330
+5.4.268-294.17.paparoa.pine.2 k24 r8152_oot.ko e5c0c13999390c28cfc6def5029dc5c1fa22bf770e91bda48efac70d8a3689d6
+5.4.268-294.17.paparoa.pine.2 k24 ax88179_178a.ko 222c6eebe72a765838e6d707d26f8ab3ab4d203f012e2355d24e83eff99505c9
+5.4.268-294.17.paparoa.pine.2 k8hp r8152_oot.ko 17f217cefd9cb059e8def04ec855fe6856338761eedd13753357ef893615d899
+5.4.268-294.17.paparoa.pine.2 k8hp ax88179_178a.ko 30b0d9a6327d6d3b8b878c4ac5ec82834710797215a4445753351d1adf26ebee
+5.4.268-294.17.paparoa.pine.2 k8hpp r8152_oot.ko 4ffee4fcc9a436a4085973b16aa5f66fff5728bcdbf2183d43ba2f35920179a6
+5.4.268-294.17.paparoa.pine.2 k8hpp ax88179_178a.ko 1ac221993f50e758c8c522f558769c5fac573f06dfe8a4072b860e0b8b53ad8d
+5.4.268-294.17.paparoa.pine.2 k8lpn r8152_oot.ko 5afb498b290f7f4eea032b9e855a43f6d4ba499463cc6deb8557170f79a827b8
+5.4.268-294.17.paparoa.pine.2 k8lpn ax88179_178a.ko 38c186338c538b05532fa7c6c59c401798932507b29f3cbb2588d5746e3cf63e
+5.4.268-294.17.paparoa.pine.2 k8lpn2 r8152_oot.ko 85f6c51cc43cc590c19b877fac35b05150a1c31f0e98b1f2f1de81089f0371ae
+5.4.268-294.17.paparoa.pine.2 k8lpn2 ax88179_178a.ko 056959c684d80e008056f46fe4403271fa414815f16438785ecdd2c67c4ae431"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)

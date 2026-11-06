@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Drivers to test for the webOS 25 paparoa kernels.**  `r8152_oot` and `ax88179_178a` for `5.4.268-294.17.paparoa.pine.2` on K24, K8Hp, K8Hpp, K8LpN and K8LpN2, and for `5.4.268-294.15.paparoa.3` and `.4` on K24N and K25Lp.  Where mbenitez343's tested `r8152` already covers the adapter, that one still wins: these add RTL8156 and ASIX.
+
 ## [2.4.10] - 2026-11-05
 
 ### Added
