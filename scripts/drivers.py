@@ -31,6 +31,8 @@ MIRROR = 'https://github.com/ohmybahgosh/lg-webos-usb-drivers'
 CHIPS = {'k24': 'K24', 'k24n': 'K24N', 'k24t': 'K24T', 'k25lp': 'K25Lp', 'k8hp': 'K8Hp', 'k8hpp': 'K8Hpp',
          'k8hpt': 'K8HpT', 'k8lp': 'K8Lp', 'k8lpn': 'K8LpN', 'k8lpn2': 'K8LpN2', 'k8ap': 'K8Ap', 'k6lp': 'K6Lp',
          'k6hp': 'K6Hp'}
+# Drivers for chips other than Realtek's and ASIX's AX88179, as the list names them
+OTHER = {'aqc111.ko': 'Aquantia AQC111', 'dm9601.ko': 'Davicom DM9601', 'lan78xx.ko': 'Microchip LAN78xx'}
 START, END = '<!-- drivers:start -->', '<!-- drivers:end -->'
 ROW = re.compile(r'^([0-9][A-Za-z0-9._-]*) ([a-z0-9]+|-) ([a-z0-9_]+\.ko) ([0-9a-f]{64})$')
 
@@ -72,22 +74,25 @@ def webos(k):
 def listing(rows):
     kern = {}
     for k, ch, f, _ in rows:
-        e = kern.setdefault(k, {'chips': [], 'realtek': False, 'asix': False})
+        e = kern.setdefault(k, {'chips': [], 'realtek': False, 'asix': False, 'other': set()})
         fo = folder(k, ch)
         link = '[%s](%s/tree/main/experimental/%s)' % (CHIPS.get(ch, ch.upper()) if ch != '-' else 'LG chips', MIRROR, fo)
         if link not in e['chips']:
             e['chips'].append(link)
         e['realtek'] |= f.startswith('r8152')
         e['asix'] |= f.startswith('ax88179')
+        if f in OTHER:
+            e['other'].add(OTHER[f])
     out = []
     for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 5', 'other'):
         ks = sorted((k for k in kern if webos(k) == g), reverse=True)
         if not ks:
             continue
-        out += ['**%s**' % g, '', '| Kernel (`uname -r`) | Chips | Realtek | ASIX |', '|---|---|:-:|:-:|']
+        out += ['**%s**' % g, '', '| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |', '|---|---|:-:|:-:|---|']
         for k in ks:
             e = kern[k]
-            out.append('| `%s` | %s | %s | %s |' % (k, ', '.join(e['chips']), 'yes' if e['realtek'] else '', 'yes' if e['asix'] else ''))
+            others = ', '.join(o for o in OTHER.values() if o in e['other'])
+            out.append('| `%s` | %s | %s | %s | %s |' % (k, ', '.join(e['chips']), 'yes' if e['realtek'] else '', 'yes' if e['asix'] else '', others))
         out.append('')
     chips = {ch for _, ch, _, _ in rows if ch != '-'}
     return '\n'.join(out).rstrip() + '\n', len(rows), len(kern), len(chips)

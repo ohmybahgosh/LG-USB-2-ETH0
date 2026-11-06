@@ -2,6 +2,18 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **After a firmware update, Faster driver switches to the new kernel's driver in one press.**  A firmware update can change the kernel while root survives.  The driver set up before is then built for the old kernel, so it's skipped at boot and the adapter falls back to the TV's own driver.  The script now remembers the kernel it was set up on, and when a driver is known for the new kernel and the adapter, the app's **Faster driver** row says so and one press downloads it and moves the adapter over.  When none is known yet, `status` points to **Test a new driver** if there's one to test, or asks for a report.  The report says which kernel it was set up on.
+- **Drivers to test for three more kinds of adapter: Aquantia AQC111U and AQC112 (5G and 2.5G), Davicom DM9601 and Microchip LAN7800/LAN7850.**  None of LG's kernels include these drivers, not even on its own OLED chips, so these adapters get no driver on any LG TV.  159 new modules: for the 54 kernel and chip combinations already built for (`aqc111` only on 5.4 kernels), and for `5.4.268-329.ptl4tv.5`, the C2, C3, C4 and G4's kernel.  Built from the same LG source and config with the same checks.  **Test a new driver** offers one when its adapter is plugged in, and no longer when the adapter plugged in already has a driver and none of the new ones is for it.  261 drivers are now waiting for testers.
+- **A virtual TV scenario for a firmware update** (`c2-fwupdate`): a C2 set up with a driver whose kernel then changed.
+
+### Fixed
+
+- **The driver build copies a driver's own header** (like `lan78xx.h` and `aqc111.h`), so drivers that have one build.
+
 ## [2.4.16] - 2026-11-06
 
 ### Fixed

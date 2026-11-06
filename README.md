@@ -278,6 +278,7 @@ What decides whether this works on your TV is **whether its kernel has a driver 
 
 - **Realtek RTL8153 (gigabit) and RTL8156 (2.5G):** the most common chips.  Newer kernels may only have the generic `cdc_ncm` driver for them, which works but is slower, and some models have no Realtek driver at all.  `get-driver` may offer a better one, or `test-driver` a new one: see [Drivers](#drivers).
 - **ASIX AX88179:** works out of the box on many TVs, using the TV's own `ax88179_178a` driver, like a 2024 G4 on webOS 25 ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)).  Where the kernel has no ASIX driver, there's often one to get or test.
+- **Aquantia AQC111/AQC112, Davicom DM9601 and Microchip LAN78xx:** no LG kernel includes these drivers, so they don't work out of the box on any LG TV.  There's a driver to test for most kernels: see [More drivers on the way](#more-drivers-on-the-way).  A Realtek or ASIX adapter is the safer buy.
 - **USB 2.0 is fine.**  Many LG TVs, the C2 included, only have USB 2.0 ports.  There you'll top out around 300 Mbit/s, still about three times the built-in port.  If your TV does have a USB 3.0 port (usually the blue one), use it for more.
 
 Before buying, run `sh LG-USB-2-ETH0.sh status`: it lists which USB network drivers your kernel has.  The [firmware audit](docs/firmware-audit.md) lists them too, read straight from LG's firmware.  If you already have an adapter that isn't working, `status` tells you when the kernel sees it but has no driver for it.
@@ -318,7 +319,7 @@ Same deal: plain links, no affiliate codes.  Check the listing says RTL8156B or 
 A driver module built for your exact kernel helps in two cases:
 
 - **The adapter is on a slow generic driver.**  Many TVs give Realtek RTL8153 and RTL8156 adapters to `cdc_ncm`.  It works, but it's slower and drops out under load.  The TV's own Realtek driver is often too old to recognize newer chips, and because it's built into the kernel, it can't be swapped out.  A newer Realtek driver under a different name fixes that.
-- **The kernel has no driver for the chip at all.**  LG left the Realtek driver out of many recent kernels, and some have no ASIX driver.  There the adapter isn't detected until a module adds one.
+- **The kernel has no driver for the chip at all.**  LG left the Realtek driver out of many recent kernels, and some have no ASIX driver.  None has drivers for Aquantia, Davicom or Microchip LAN78xx chips.  There the adapter isn't detected until a module adds one.
 
 **First, Realtek mode.**  Many LG kernels already have Realtek's driver built in, from 2019's C9 to webOS 25, but it's older than the kernel change that switches a Realtek adapter to its Realtek mode.  So the adapter stays in its standard mode, where only `cdc_ncm` can use it.  Realtek mode, on by default, switches an RTL8152 or RTL8153 adapter over so the TV's own `r8152` takes it, with nothing to download.  If `r8152` doesn't take it within 5 seconds, the adapter goes back to the mode it was in, and `status` suggests a driver from below instead.  It's new and still waiting for reports from TVs, so please [send one](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml).  Turn it off with **Realtek mode** in the app or `--no-realtek-mode`.
 
@@ -367,10 +368,11 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**102 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**261 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
+| `5.4.268-329.ptl4tv.5` | 2022 to 2025 OLEDs on webOS 25 firmware 33.30 and 33.31, like the C2, C3, C4 and G4 | Aquantia, Davicom and Microchip (its Realtek driver is under [A faster driver](#a-faster-driver)) |
 | `5.4.268-329.ptl4tv.2` | 2022 to 2025 OLEDs on firmware 33.20 to 33.23 | Realtek |
 | `5.4.268-320` | OLEDs on webOS 24 firmware 23.20 to 23.25 | Realtek |
 | `5.4.96-307` | 2022 and 2023 OLEDs on firmware 03.31, 03.33 and 13.30 | Realtek |
@@ -380,70 +382,73 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 | `5.4.96-115.*` | webOS 22 TVs with K8 chips, like the 2022 NANO75 | Realtek and ASIX |
 | `4.4.84-612.*` | 2020 TVs with the K6Lp or K6Hp chip, like the UN7300 and NANO87 | Realtek and ASIX |
 
+Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Microchip LAN7800 and LAN7850) to test, and the 5.4 kernels `aqc111` (Aquantia AQC111U and AQC112, 5G and 2.5G), since no LG kernel includes them.  `test-driver` offers whichever fits the adapter plugged in.
+
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 102 drivers: 29 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
+<summary><b>All 261 drivers: 30 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
 
 <br>
 
-Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers#experimental-waiting-for-testers), with the modules, their SHA-256 and how each was built and checked.  Realtek is `r8152_oot` (RTL8152, RTL8153 and RTL8156), plus the kernel's own `r8152` (RTL8152, RTL8153) on 4.4 kernels.  ASIX is `ax88179_178a` (AX88179, AX88178A).
+Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers#experimental-waiting-for-testers), with the modules, their SHA-256 and how each was built and checked.  Realtek is `r8152_oot` (RTL8152, RTL8153 and RTL8156), plus the kernel's own `r8152` (RTL8152, RTL8153) on 4.4 kernels.  ASIX is `ax88179_178a` (AX88179, AX88178A).  Others are `aqc111`, `dm9601` and `lan78xx`.
 
 <!-- drivers:start -->
 
 **webOS 25**
 
-| Kernel (`uname -r`) | Chips | Realtek | ASIX |
-|---|---|:-:|:-:|
-| `5.4.268-329.ptl4tv.2` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.2) | yes |  |
-| `5.4.268-294.ptl4tv.24` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k25lp) | yes | yes |
-| `5.4.268-294.24.papikonda.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24), [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k25lp), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn2) | yes |  |
-| `5.4.268-294.17.paparoa.pine.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k24), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn2) | yes | yes |
-| `5.4.268-294.15.paparoa.4` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.4-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.4-k25lp) | yes | yes |
-| `5.4.268-294.15.paparoa.3` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.3-k24n) | yes | yes |
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `5.4.268-329.ptl4tv.5` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.5) |  |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-329.ptl4tv.2` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.2) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-294.ptl4tv.24` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k25lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-294.24.papikonda.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24), [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k25lp), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn2) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-294.17.paparoa.pine.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k24), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn2) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-294.15.paparoa.4` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.4-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.4-k25lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-294.15.paparoa.3` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.15.paparoa.3-k24n) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 
 **webOS 24**
 
-| Kernel (`uname -r`) | Chips | Realtek | ASIX |
-|---|---|:-:|:-:|
-| `5.4.96-223.obr4tv.29` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.obr4tv.29-k24) | yes | yes |
-| `5.4.96-223.9.oeta.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k24), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k8lpn2) | yes | yes |
-| `5.4.96-223.29.1.okapi.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.29.1.okapi.2-k24) | yes | yes |
-| `5.4.268-320` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-320) | yes |  |
-| `5.4.268-223.obr4tv.42` | [K8HpT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.obr4tv.42-k8hpt) | yes | yes |
-| `5.4.268-223.42.okapi.nmrm.2` | [K24T](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.42.okapi.nmrm.2-k24t) | yes | yes |
-| `5.4.268-223.29.okapi.pine.4` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8hp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8lpn), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8hpp) | yes | yes |
-| `5.4.268-223.29.okapi.5` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.5-k24), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.5-k8lpn2) | yes | yes |
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `5.4.96-223.obr4tv.29` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.obr4tv.29-k24) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-223.9.oeta.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k24), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k8lpn2) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-223.29.1.okapi.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.29.1.okapi.2-k24) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-320` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-320) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-223.obr4tv.42` | [K8HpT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.obr4tv.42-k8hpt) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-223.42.okapi.nmrm.2` | [K24T](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.42.okapi.nmrm.2-k24t) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-223.29.okapi.pine.4` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8hp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8lpn), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.pine.4-k8hpp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-223.29.okapi.5` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.5-k24), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.29.okapi.5-k8lpn2) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 
 **webOS 23**
 
-| Kernel (`uname -r`) | Chips | Realtek | ASIX |
-|---|---|:-:|:-:|
-| `5.4.96-307` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-307) | yes |  |
-| `5.4.96-132.50.namtok.2` | [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.50.namtok.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.50.namtok.2-k8lpn) | yes | yes |
-| `5.4.96-132.40.nameri.pine.1` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.pine.1-k8hp) | yes | yes |
-| `5.4.96-132.40.nameri.2` | [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.2-k8lpn) | yes | yes |
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `5.4.96-307` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-307) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-132.50.namtok.2` | [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.50.namtok.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.50.namtok.2-k8lpn) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-132.40.nameri.pine.1` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.pine.1-k8hp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-132.40.nameri.2` | [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-132.40.nameri.2-k8lpn) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 
 **webOS 22**
 
-| Kernel (`uname -r`) | Chips | Realtek | ASIX |
-|---|---|:-:|:-:|
-| `5.4.96-115.9.marine.1` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.9.marine.1-k8lp) | yes | yes |
-| `5.4.96-115.30.mole.2` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8hp), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8lp), [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8ap) | yes | yes |
-| `5.4.96-115.28.mirima.1` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8hp), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8lp), [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8ap) | yes | yes |
-| `5.4.96-115.28.1.22.mirima.2` | [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.1.22.mirima.2-k8ap) | yes | yes |
-| `5.4.96-115.22.meru.2` | [K8HpT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8hpt), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8lp) | yes | yes |
-| `5.4.96-115.16.mebbin.2` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.16.mebbin.2-k8lp) | yes | yes |
-| `5.4.96-115.16.mebbin.1` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.16.mebbin.1-k8lp) | yes | yes |
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `5.4.96-115.9.marine.1` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.9.marine.1-k8lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.30.mole.2` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8hp), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8lp), [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.30.mole.2-k8ap) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.28.mirima.1` | [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8hp), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8lp), [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.mirima.1-k8ap) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.28.1.22.mirima.2` | [K8Ap](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.28.1.22.mirima.2-k8ap) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.22.meru.2` | [K8HpT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8hpt), [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.16.mebbin.2` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.16.mebbin.2-k8lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.96-115.16.mebbin.1` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.16.mebbin.1-k8lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 
 **webOS 5**
 
-| Kernel (`uname -r`) | Chips | Realtek | ASIX |
-|---|---|:-:|:-:|
-| `4.4.84-612.jcl4tv.40` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) | yes |  |
-| `4.4.84-612.40.jimna.1` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6hp) | yes | yes |
-| `4.4.84-612.21.6.jardine.2` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6hp) | yes | yes |
-| `4.4.84-611.japoon.14` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-611.japoon.14-k6lp) | yes | yes |
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `4.4.84-612.jcl4tv.40` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) | yes |  | Davicom DM9601, Microchip LAN78xx |
+| `4.4.84-612.40.jimna.1` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6hp) | yes | yes | Davicom DM9601, Microchip LAN78xx |
+| `4.4.84-612.21.6.jardine.2` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6hp) | yes | yes | Davicom DM9601, Microchip LAN78xx |
+| `4.4.84-611.japoon.14` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-611.japoon.14-k6lp) | yes | yes | Davicom DM9601, Microchip LAN78xx |
 
 <!-- drivers:end -->
 
@@ -494,6 +499,8 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 25 on 2024 QNED and OLED (Paparoa), kernel `5.4.268-294.17.paparoa.pine.2` | The Realtek driver was removed.  A gigabit RTL8153 adapter works with mbenitez343's `r8152` build (stable on a QNED86, per its author), which `get-driver` offers.  Builds for RTL8156 and ASIX are [waiting for testers](#more-drivers-on-the-way).  Current firmware (33.31.75) moves these TVs to kernel `5.4.268-294.24.papikonda.2`: see the [firmware audit](docs/firmware-audit.md).  Not yet tested with LG-USB-2-ETH0, so a report helps. | [mbenitez343/lg-webos-2024-ethernet-fix](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2024 G4 (OLED65G48LW), kernel `5.4.268-329.ptl4tv.5` | An ASIX AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  Settings show the wired connection and apps play.  292 Mbit/s down over USB 2.0. | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
 | webOS 25 on a 2025 B5 (OLED55B56LA), kernel `5.4.268-294.24.papikonda.2` | No ASIX driver: an AX88179A wasn't detected at all.  dd3git's `ax88179_178a` build fixes that, and `get-driver` offers it.  A Realtek build is [waiting for testers](#more-drivers-on-the-way).  Not yet tested with LG-USB-2-ETH0, so a report helps. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185), [dd3git/lg-webos-ax88179-driver](https://github.com/dd3git/lg-webos-ax88179-driver) |
+
+**LG's 2021 to 2023 LCDs with LM21A chips** (UP, NANO, UQ and UR models, and the StanbyME Go): the [firmware audit](docs/firmware-audit.md) found no USB network drivers in their kernels at all, not even `usbnet`, so no USB adapter works on them yet.  Building one is being looked into.
 
 **Tested on your TV?**  Please [send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml), whether it worked or not.  Reports from real TVs are what this table needs most.
 

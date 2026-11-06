@@ -2,7 +2,7 @@
 
 Which USB Ethernet drivers each LG TV's kernel has, read straight from LG's own firmware files rather than from user reports.  It tells us which TVs work out of the box, which need a driver `get-driver` already offers, and which still need one built.
 
-Last run: November 5, 2026, on the latest US firmware for each model.  The raw data is in [`scripts/firmware-audit/results.tsv`](../scripts/firmware-audit/results.tsv).
+Last run: November 6, 2026, on the latest US firmware for each model, plus LG's LM21A-family LCD chips and the 2024 and 2025 OLED chips from the [EPK firmware archive](https://tv.slada.sk/).  The raw data is in [`scripts/firmware-audit/results.tsv`](../scripts/firmware-audit/results.tsv).
 
 ## Results
 
@@ -21,11 +21,24 @@ Last run: November 5, 2026, on the latest US firmware for each model.  The raw d
 | OLED65C4PUA | 2024 | 33.31.69 | 25 | o22n2 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65B4PUA (and 65QNED85TUA, same file) | 2024 | 33.31.75 | 25 | k24 | `5.4.268-294.24.papikonda.2` | asix only |
 | OLED65B5PUA | 2025 | 33.31.75 | 25 | k24n | `5.4.268-294.24.papikonda.2` | r8152, asix |
+| 75UQ9000PUD (and 2022 UQ70 to UQ90 models) | 2022 | 04.60.90 | 22 | lm21an | `5.4.96-934.mlt4tv.17` | **none, not even `usbnet`** |
+| 70UQ8000AUB | 2022 | 04.54.40 | 22 | lm21an | `5.4.96-934.16.1.mirima.1` | **none, not even `usbnet`** |
+| 2023 UR73 to UR81 (contributed firmware) | 2023 | 13.40.90 | 23 | lm21ann | `5.4.96-955.20.namtok.1` | **none, not even `usbnet`** |
+| 2023 UR73 to UR81 (contributed firmware) | 2023 | 23.25.60 | 24 | lm21ann | `5.4.268-966.8.4.okapi.pine.1` | **none, not even `usbnet`** |
+| 2023 UR73 to UR81 (contributed firmware) | 2023 | 33.22.59 | 25 | lm21ann | `5.4.268-966.15.ptl4tv.8` | **none, not even `usbnet`** |
+| 27ART10AKPL (StanbyME Go) | 2023 | 23.22.86 | 24 | lm21ut | `5.4.268-955.16.nbr4tv.nmrm.10` | **none, not even `usbnet`** |
+| OLED65G4SUB | 2024 | 03.11.20 | 24 | o24 | `5.4.96-314` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED65G4SUB | 2024 | 33.31.69 | 25 | o24 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED65G5WUA | 2025 | 33.31.69 | 25 | o24n | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| OLED65C5PUA (and 65QNED9MAUA, same file) | 2025 | 33.31.69 | 25 | o22n3 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65C2PUA | 2022 | 43.21.94 | 26 | o22 | `6.12.44-352` | r8152, r8153_ecm, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65C4PUA | 2024 | 43.21.96 | 26 | o22n2 | `6.12.44-352` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 
 ## What it tells us
 
+- **LG's LM21A-family LCD chips have no USB network drivers at all.**  The 2022 UQ (LM21AN), 2023 UR (LM21ANN) and StanbyME Go (LM21UT) kernels leave out `usbnet` itself, the core every USB Ethernet driver builds on, so no USB adapter works on them, whatever its chip.  The 2021 UP and NANO LCDs run the same chip family on 4.4 kernels.  A driver for them would have to bring `usbnet` along, so it's a bigger build than one module; LG's source for the LM21AN is published, so it's being looked into.
+- **No LG kernel has `aqc111`, `dm9601` or `lan78xx`,** not even LG's own OLED chips, so Aquantia AQC111/AQC112, Davicom DM9601 and Microchip LAN78xx adapters get no driver on any LG TV.  Builds to test are in [More drivers on the way](../README.md#more-drivers-on-the-way).
+- **The 2024 and 2025 OLED chips (O24, O24N, O22N3) run the C2's kernel,** `5.4.268-329.ptl4tv.5`, with the same config, so DonZoomik's `r8152_oot` covers the G4, G5 and C5 too.
 - **One kernel covers most LG chips on webOS 25.**  The C2, C3, C4 and the UR9000 LCD all run `5.4.268-329.ptl4tv.5`, so DonZoomik's `r8152_oot` fits all of them.  Their built-in `r8152` is too old for newer Realtek chips, which is why those adapters end up on `cdc_ncm`.
 - **2024 and 2025 Realtek-chip TVs (K24, K24N) need help.**  On current firmware the B4 and QNED85 have no Realtek driver and no ASIX AX88179 driver at all, and the B5 has only an old built-in `r8152`.  None of them has `cdc_ncm`, so a 2.5G RTL8156 adapter gets no driver on any of them.
   - dd3git's `ax88179_178a` is built for exactly this kernel, so `get-driver` already offers it on the B4 and QNED85 as well as the B5.

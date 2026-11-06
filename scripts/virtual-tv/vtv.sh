@@ -34,6 +34,8 @@ c2-new    the C2 before the faster driver: the RTL8156 on cdc_ncm, with
           Faster driver on offer (needs the lg-webos-usb-drivers clone)
 c2-test   a C2 on older firmware (kernel 5.4.268-329.ptl4tv.2), with a new
           driver to test (needs the lg-webos-usb-drivers clone)
+c2-fwupdate  a C2 set up with a driver, after a firmware update changed its
+          kernel: a driver for the new kernel on offer (needs the clone)
 c9        2019 C9 on webOS 4.5: an RTL8153 adapter, moved to the kernel's own
           r8152 by Realtek mode at boot
 c9-fresh  the same C9 before anything is set up: the adapter on cdc_ncm
@@ -158,7 +160,7 @@ boot() {
 }
 
 setup() {
-    case "$1" in c2|c2-new|c2-test|c9|c9-fresh) ;; *) echo "Unknown scenario $1.  These exist:"; scenarios; exit 1 ;; esac
+    case "$1" in c2|c2-new|c2-test|c2-fwupdate|c9|c9-fresh) ;; *) echo "Unknown scenario $1.  These exist:"; scenarios; exit 1 ;; esac
     [ -f "$REPO/webos-app/dist/index.html" ] || { echo "Build the app first: sh webos-app/build.sh" >&2; exit 1; }
     stop
     rm -rf "$DIR"
@@ -201,6 +203,22 @@ setup() {
             usb_nic eth1 1-1 cdc_ncm 00:e0:4c:68:00:01 0bda 8156 1 1
             wifi wlan0
             run "$S install -y --watch" > /dev/null
+            ;;
+        c2-fwupdate)
+            # Set up with a driver on firmware 33.20 (kernel ptl4tv.2), then a
+            # firmware update moved the kernel to ptl4tv.5: the saved driver
+            # no longer fits, and one is known for the new kernel
+            local f=drivers/5.4.268-329.ptl4tv.5/r8152_oot.ko
+            [ -f "$DRIVERS/$f" ] || { echo "$1 needs $DRIVERS/$f (set VTV_DRIVERS to a clone of lg-webos-usb-drivers)" >&2; exit 1; }
+            cp "$DRIVERS/$f" "$STATE/download"
+            tv 5.4.268-329.ptl4tv.2 o22 OLED65C2PUA 10.3.1 33.20.40 r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet
+            builtin_port eth0 lg1k_eth a8:23:fe:00:00:01
+            usb_nic eth1 1-1 cdc_ncm 00:e0:4c:68:00:01 0bda 8156 1 1
+            wifi wlan0
+            mkdir -p "$ROOT/home/root/lg-usb-2-eth0"
+            fake_ko "$ROOT/home/root/lg-usb-2-eth0/r8152_oot_old.ko" r8152_oot 5.4.268-329.ptl4tv.2 0bda:8152 0bda:8153 0bda:8156
+            run "$S install -y --module $ROOT/home/root/lg-usb-2-eth0/r8152_oot_old.ko --watch" > /dev/null
+            tv 5.4.268-329.ptl4tv.5 o22 OLED65C2PUA 10.3.1 33.30.65 r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet
             ;;
         c9|c9-fresh)
             tv 4.4.84-169.gld4tv.5 o18 OLED55C9PSA 4.9.0 05.50.00 r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet

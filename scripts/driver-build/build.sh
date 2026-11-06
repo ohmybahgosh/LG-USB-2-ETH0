@@ -89,6 +89,8 @@ case "$DRIVER" in
         NAME=${DRIVER#intree:}
         [ -f "$SRC/drivers/net/usb/$NAME.c" ] || { echo "no drivers/net/usb/$NAME.c in $SRC" >&2; exit 1; }
         FILES="$SRC/drivers/net/usb/$NAME.c"
+        # Its own header too, if it has one (lan78xx.h, aqc111.h)
+        [ -f "$SRC/drivers/net/usb/$NAME.h" ] && FILES="$FILES $SRC/drivers/net/usb/$NAME.h"
         MODULE=$NAME.ko
         DRIVER=$NAME
         ;;

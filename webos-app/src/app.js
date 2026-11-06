@@ -248,6 +248,7 @@
             available: 'built for this TV\'s kernel',
             active: h.driver || 'custom module',
             'wrong-kernel': 'built for an older kernel, not loaded',
+            replace: 'firmware updated, a driver for the new kernel is ready',
             changed: 'file changed, not loaded',
             missing: 'module file is missing'
         };
@@ -470,7 +471,7 @@
         var html = '<ul class="walk">' +
             li('ok', 'There\'s a driver built for this TV\'s kernel from LG\'s own source' + (s.adapter && s.adapter.driver ? '' : ', so your adapter could work') + ', and nobody with this kernel has tried it yet.') +
             li('', 'Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.') +
-            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156) or ASIX AX88179, whichever the new driver is for.') +
+            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.') +
             li('', 'It stays in the menu as Test a new driver, so you can do it any time.') + '</ul>';
         if (dt.adapterOk) {
             stepThen('A new driver to test', html, 'Press OK to test it now, or BACK for later.', drvtestStart);
@@ -484,7 +485,7 @@
     function drvtestStart() {
         var dt = (state && state.driverTest) || {};
         if (!dt.adapterOk) {
-            overlay('message', 'Test a new driver', 'Plug in a USB adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156) or ASIX AX88179, whichever the new driver is for.', 'Press OK or BACK to close.');
+            overlay('message', 'Test a new driver', 'Plug in a USB adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.', 'Press OK or BACK to close.');
             return;
         }
         confirmThen('Test a new driver?',
@@ -536,6 +537,20 @@
             if (!state) { return; }
             var h = state.hook;
             if (state.driverOffer === 'none') { return; }
+            // After a firmware update: the saved driver no longer fits, but one
+            // is known for the new kernel, so switch to it
+            if (state.driverOffer === 'replace') {
+                var rpage = (state.driverPage || '').replace(/^https:\/\//, '');
+                confirmThen('Switch to the driver for the new kernel?',
+                    'A firmware update changed this TV\'s kernel' + (state.kernelAtSetup ? ' (from ' + state.kernelAtSetup + ' to ' + state.kernel + ')' : '') +
+                    ', so your faster driver isn\'t loaded anymore.  This downloads the one built for the new kernel' + (rpage ? ' by ' + rpage.split('/')[1] : '') +
+                    ', checks its checksum, and uses it from now on.  The network drops for a moment while the adapter moves over.',
+                    function () {
+                        act('Driver for the new kernel', 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
+                            ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);
+                    });
+                return;
+            }
             if (h.module) {
                 confirmThen('Stop using the faster driver?', 'The boot hook stops loading it.  It stays in use until the next reboot.', function () {
                     act('Faster driver off', installArgs('--no-module'));

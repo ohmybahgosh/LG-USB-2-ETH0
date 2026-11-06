@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/ba8b39bca15440725f15143320cc7edf15a47e51/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/fc8753f2b52dc44df09da01aed115de3dcd4e627/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1262,9 +1262,20 @@ get_driver() {
     echo "  sh $0 install --module $_dest"
 }
 
+# driver_for_now: the known driver for the kernel running now that supports
+# the adapter plugged in now, as pick_driver prints it
+driver_for_now() {
+    _dfn=$(pick_driver "$(uname -r)") || return 1
+    supported_adapter "$(echo "$_dfn" | awk '{print $5}')" >/dev/null || return 1
+    echo "$_dfn"
+}
+
 # Where the faster-driver option stands, so it's only offered when it fits:
 #   active       a --module driver is set up and passes its checks
-#   wrong-kernel set up, but built for another kernel (after a firmware update)
+#   replace      set up, but built for another kernel (after a firmware
+#                update), and a driver is known for the new kernel and the
+#                adapter plugged in now
+#   wrong-kernel set up, but built for another kernel, and nothing known yet
 #   changed      set up, but the file changed since install
 #   missing      set up, but the file is gone
 #   available    not set up; a driver is known for this exact kernel and the
@@ -1275,7 +1286,10 @@ driver_offer() {
     _om=$(hook_setting MODULE)
     if [ -n "$_om" ]; then
         [ -r "$_om" ] || { echo missing; return; }
-        module_fits "$_om" || { echo wrong-kernel; return; }
+        if ! module_fits "$_om"; then
+            if driver_for_now >/dev/null; then echo replace; else echo wrong-kernel; fi
+            return
+        fi
         _os=$(hook_setting MODULE_SHA)
         if [ -n "$_os" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_om" | awk '{print $1}')" != "$_os" ]; then
             echo changed; return
@@ -1295,6 +1309,14 @@ driver_offer() {
 # same as his), and the kernel's own r8152 and ax88179_178a of 4.4 kernels
 R8152_IDS="045e:07ab,045e:07c6,04e8:a101,0955:09ff,0bda:8050,0bda:8152,0bda:8153,13b1:0041,17ef:304f,17ef:3062,17ef:3069,17ef:7205,17ef:720c,17ef:7214,2357:0601"
 AX88179_IDS="04e8:a100,0b95:178a,0b95:1790,0df6:0072,17ef:304b,2001:4a00"
+# The kernel's own aqc111, dm9601 and lan78xx, built for kernels that leave
+# them out.  Older kernels' copies know fewer adapters.
+AQC111_IDS="0b95:2790,0b95:2791,1c04:0015,20f4:e05a,2eca:c101"
+DM9601_IDS="0586:3427,07aa:9601,0a46:0268,0a46:0269,0a46:1269,0a46:6688,0a46:8515,0a46:9000,0a46:9601,0a46:9620,0a46:9621,0a46:9622,0a47:9601,0fe6:8101,0fe6:9700"
+DM9601_44_IDS="07aa:9601,0a46:0268,0a46:0269,0a46:1269,0a46:6688,0a46:8515,0a46:9000,0a46:9601,0a46:9620,0a46:9621,0a46:9622,0a47:9601,0fe6:8101,0fe6:9700"
+LAN78XX_IDS="0424:7800,0424:7801,0424:7850,07c9:0012"
+LAN78XX_596_IDS="0424:7800,0424:7801,0424:7850"
+LAN78XX_44_IDS="0424:7800,0424:7850"
 R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:1976,0b05:1d91,0bda:8050,0bda:8053,0bda:8152,0bda:8153,0bda:8155,0bda:8156,0bda:8157,0bda:815a,13b1:0041,17ef:304f,17ef:3052,17ef:3054,17ef:3057,17ef:3062,17ef:3069,17ef:3082,17ef:3098,17ef:7205,17ef:720a,17ef:720b,17ef:720c,17ef:7214,17ef:721e,17ef:8153,17ef:a359,17ef:a387,2357:0601,2baf:0012"
 
 # The untested drivers, one per line: kernel, chip ("-" for any), file and
@@ -1408,7 +1430,166 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-612.21.6.jardine.2 k6hp r8152_oot.ko 0b05d12230216382f60458f9b4966b135071ae06de4b8f47802b7447274a2f3b
 4.4.84-611.japoon.14 k6lp r8152_oot.ko 79441333217f2abaae3ff8d44eefef20e3638d0f6325172cf7077cfbacdac0fa
 4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717
-4.4.84-612.jcl4tv.40 k6lp r8152_oot.ko 8df6d54ced5d6486449310efe16dfa5e89ad28cbd6d1e479c442b15174d665d3"
+4.4.84-612.jcl4tv.40 k6lp r8152_oot.ko 8df6d54ced5d6486449310efe16dfa5e89ad28cbd6d1e479c442b15174d665d3
+4.4.84-611.japoon.14 k6lp dm9601.ko 73cd12fb3a107af4daebe5f8bb294814fb378600131a8e148682a5325bbcfc2b
+4.4.84-611.japoon.14 k6lp lan78xx.ko b8d4c68bd1a1ca0a6fe7a793f2a7f5192e01922aeb4dcc1ee20fea7c7a6d5054
+4.4.84-612.21.6.jardine.2 k6hp dm9601.ko 2a6c578c841e8ee1507b38ee40a01ff7cf56b299cbb8eb5ea89b72f542a91a92
+4.4.84-612.21.6.jardine.2 k6hp lan78xx.ko c9061bdcc193c2f36df163f66178cf7431be2ca33eddbd07cf16a8e67bddb0bd
+4.4.84-612.21.6.jardine.2 k6lp dm9601.ko 26226562ad7ddee2b58b7ecf54327b54b7d3d30d127dbb642b0a0e90655ace0b
+4.4.84-612.21.6.jardine.2 k6lp lan78xx.ko 338396de596c647ad0d6a581b4bae8c18686bf13c1c25395a8772f721caed3d5
+4.4.84-612.40.jimna.1 k6hp dm9601.ko e9e415185140fba3128d0a9f696ffe26f8899c060f9befcd606828a5b57732c2
+4.4.84-612.40.jimna.1 k6hp lan78xx.ko 5d730e46e795e2c15b8ef7ab5728eb6a98d129ad9f423c0596c1524af1376907
+4.4.84-612.40.jimna.1 k6lp dm9601.ko 90aad1fb3559b1cd9e801c6d3e88bb0d140edfc82fcf9aca969f841c977f3fe8
+4.4.84-612.40.jimna.1 k6lp lan78xx.ko 45458e28e33681ba83b4b2e310a7802f025142d3e96ef4ebb585f9ddd436d967
+4.4.84-612.jcl4tv.40 k6lp dm9601.ko ac05a0fbce0e34836879125214d967dbf5b4cddd1c686e16dbdf6a7b369fb247
+4.4.84-612.jcl4tv.40 k6lp lan78xx.ko 7b62bcea300537121ce8a6c8f12d547e27841eb80d81876eb45e9e43e105aef7
+5.4.268-223.29.okapi.5 k24 aqc111.ko 2ba31f797bce60a9ea495491d0f56b82296ebce9074168d801302c99dce97b6a
+5.4.268-223.29.okapi.5 k24 dm9601.ko 5adfbb427ac0917f5b3e92e07014a7c09a3247108d09a996c20fe809363e112d
+5.4.268-223.29.okapi.5 k24 lan78xx.ko 1d4df8cbef10eeedca9751cd11d3b93e7d7d9cf3988a1d228ef17269b0184d78
+5.4.268-223.29.okapi.5 k8lpn2 aqc111.ko d68915711bde448026de577b3bcf81951ca27ff95a7638c81c216622eb6eca9a
+5.4.268-223.29.okapi.5 k8lpn2 dm9601.ko 49bff73cec852f6fe5bb575a35a8885f7925dd5c331e4ce3b8e417b0ad5e37de
+5.4.268-223.29.okapi.5 k8lpn2 lan78xx.ko a68866ef66e5833a79abe1f54f0f639a80eec9ab23fd171c51962ac4c2e16e02
+5.4.268-223.29.okapi.pine.4 k8hp aqc111.ko 515fe0789e292ed6a7d79a3d43340a3ffda0792f2bb118d000d79001af0f9f40
+5.4.268-223.29.okapi.pine.4 k8hp dm9601.ko 3f13934f25cfd43b88e0562c966da24f8f279e0ffbff8f177d93d423736f2810
+5.4.268-223.29.okapi.pine.4 k8hp lan78xx.ko 767e5e0226d6193fa3be9e89fd6a37043b16c38c0bcbe707016b692dd2052207
+5.4.268-223.29.okapi.pine.4 k8hpp aqc111.ko 5f1132638258618804359acb6103f448e9326cd6b11c34e7f42000bffa8a2cbf
+5.4.268-223.29.okapi.pine.4 k8hpp dm9601.ko f95203496ef91d49ae0ddde00d9c36249e44eaec2f891d648dab9825a1ec1e74
+5.4.268-223.29.okapi.pine.4 k8hpp lan78xx.ko b246c42d0090b96cd658e32bff5b44e3075d033381c41a7cc6891c67c13e2b19
+5.4.268-223.29.okapi.pine.4 k8lpn aqc111.ko a960e81e0784048a590403210afcd814b798515efeb1899688b1821d48499abc
+5.4.268-223.29.okapi.pine.4 k8lpn dm9601.ko 221992e79885f70893b1c496a136f94c81be2ed79eb6da532fc923d9cbb09a35
+5.4.268-223.29.okapi.pine.4 k8lpn lan78xx.ko f512f4364f3f25751c19d7ecaef7f9c7e067f36411b0962087d926816540f59c
+5.4.268-223.42.okapi.nmrm.2 k24t aqc111.ko 69fb49663e4aa3e390fe2dbddab42560e38182d4a06b2981c7f87990949c0a3f
+5.4.268-223.42.okapi.nmrm.2 k24t dm9601.ko fe6057f50b566218dab3d810af4159f34409e740aac66e65bc3deb021236d2e6
+5.4.268-223.42.okapi.nmrm.2 k24t lan78xx.ko f8b7d05867d9c1fb8f939061011f1284128b22dc030cf646701f67745e4dda5b
+5.4.268-223.obr4tv.42 k8hpt aqc111.ko b8526dd0f7a94ac7e2a98456940c0fef27b6e80c2316879d7dda2079f99cbf01
+5.4.268-223.obr4tv.42 k8hpt dm9601.ko f98cb848aca6495979f88a04e75fd4c69e2c7c351e33dc0eb87e1742a23a354c
+5.4.268-223.obr4tv.42 k8hpt lan78xx.ko 7d3b707a8234463c614a15fc7af274777c384c541fc852f41bad154666cd56b3
+5.4.268-294.15.paparoa.3 k24n aqc111.ko 4ed37b212d41c2b5df9912eeadfa78fdc7badf8194f164b985bfb033f9afaeab
+5.4.268-294.15.paparoa.3 k24n dm9601.ko 9d29ff57ff84fc48c61b3371eafb713323ea4e6921609c481ed0bb84c0e9b0e3
+5.4.268-294.15.paparoa.3 k24n lan78xx.ko 4baec56ae0524c6e8b6520cb0033b5bed6b6eaeea615ad784886c8e59832d533
+5.4.268-294.15.paparoa.4 k24n aqc111.ko fc8b5b0685b611eb76a2916955fbc5ca30c47991b11f2335266b9b8d8bb46349
+5.4.268-294.15.paparoa.4 k24n dm9601.ko be024419496d18ecfd06af5f371dbdf19ce715a59c01ac32e34d80d6c192f373
+5.4.268-294.15.paparoa.4 k24n lan78xx.ko 846f1d0077186e4aff4bc2e8f67ccf32d698cf4ab65be8e0421cb3aa5a0b6124
+5.4.268-294.15.paparoa.4 k25lp aqc111.ko a413ae67df04d61b410e66d77414bfd4d9518b38f3b4857fa06611c861801198
+5.4.268-294.15.paparoa.4 k25lp dm9601.ko 18e4aece3ce10f4b13b2332a20bcad43eef2712d57cb8f8ad2d7ef9a94eb7cea
+5.4.268-294.15.paparoa.4 k25lp lan78xx.ko 073655cf238301bc86e6a6cae89041d8450b7f03a42e7b22b29c021aeff2760e
+5.4.268-294.17.paparoa.pine.2 k24 aqc111.ko 5b66409f73c6b0cc73e24fe102b38f3c8af58caa160e7591fbc9c926839e0e26
+5.4.268-294.17.paparoa.pine.2 k24 dm9601.ko 249ac4d3b4206d2b487c7791dcb65b4f34a94a045d686da8e5517d3c1ce61e05
+5.4.268-294.17.paparoa.pine.2 k24 lan78xx.ko 7946f663c95eef82ff74e7190aa24a0cf630796200fd1ddbd3ddf8ab99317083
+5.4.268-294.17.paparoa.pine.2 k8hp aqc111.ko 04dffc4059041228625d3811c61f6fec2ab8a24d212a6d24fe489e1a24969f2c
+5.4.268-294.17.paparoa.pine.2 k8hp dm9601.ko 7deaf7f7be9840d6febbe9dd077ce311516435bd83db77889b28454b78497d63
+5.4.268-294.17.paparoa.pine.2 k8hp lan78xx.ko f07afc3e4a5ce0b0e1ff95f7d33923ba611eddae79d586d104bac7220b298391
+5.4.268-294.17.paparoa.pine.2 k8hpp aqc111.ko c6e01634deb0793b610c4632eabff26f7e113059595c065a2a7657e81ea41222
+5.4.268-294.17.paparoa.pine.2 k8hpp dm9601.ko 412e4cf27bf3793e65072a4a0afc2c768a593f7b1f450ddfc58992208ea21827
+5.4.268-294.17.paparoa.pine.2 k8hpp lan78xx.ko ae104f27be7b0e5acf937bc9728caaac0b4a08e56c935673e38fb48a699d7431
+5.4.268-294.17.paparoa.pine.2 k8lpn aqc111.ko b2e74c7dddb761d13735ef6019dee03eef7921911fc2f6c8340727479ba246eb
+5.4.268-294.17.paparoa.pine.2 k8lpn dm9601.ko 0d99ca31d25f57e888683aa7705c76a2948e6e6397785a3b3bdb024a9718ec40
+5.4.268-294.17.paparoa.pine.2 k8lpn lan78xx.ko 8f70feb7cd8d72d312c5da934db3f48ac9e481ca3a6d9067fbececccc3f7939a
+5.4.268-294.17.paparoa.pine.2 k8lpn2 aqc111.ko f4e9ee0fe5d59f759a71fa17e2c5d9420b744014b6285bb06d82a91dce55e93b
+5.4.268-294.17.paparoa.pine.2 k8lpn2 dm9601.ko 76d061ccaa73aaac3ff71dc546cf9f6bcbd0f9b7d611d588a5f49f33e4a1c7cd
+5.4.268-294.17.paparoa.pine.2 k8lpn2 lan78xx.ko 761e34ba56ab0484e382d2d0d9f8375990b15419799e184731272ede5c64c693
+5.4.268-294.24.papikonda.2 k24n aqc111.ko c24976d3236e7d8ca36a85af2a11325ed5da870f8843a043d27478dc1f3a430d
+5.4.268-294.24.papikonda.2 k24n dm9601.ko 3cc977efb9bcb7adf5a51e1bfba651c949f3de41c65c16feadfe47dd6c575ec0
+5.4.268-294.24.papikonda.2 k24n lan78xx.ko 84e96f2297de55dca38f9041260fc5e054662e06d52a5166b0ff286d5a689363
+5.4.268-294.24.papikonda.2 k25lp aqc111.ko 1c40ec26711accbd7dca763e88fa0a9f36d443f0feb499051f6867c9f5993e5f
+5.4.268-294.24.papikonda.2 k25lp dm9601.ko cf71b9abf9fb8b92ba6419eda33858d74840ec299e00c2297f8fa8a3de9e728b
+5.4.268-294.24.papikonda.2 k25lp lan78xx.ko dd0bf7590081de65043f5471af3c5dcfdded595d648956f3080c9e26fe1cb2e2
+5.4.268-294.24.papikonda.2 k8hp aqc111.ko 3f453ed44878450fc3958842d9113317de25e1b48f8032fe82a4f14bf2d015ef
+5.4.268-294.24.papikonda.2 k8hp dm9601.ko 99d211281c84260bd21990b95650f03223d08f2a12c173a2e4c864b63f44c2e0
+5.4.268-294.24.papikonda.2 k8hp lan78xx.ko 307cb2d8792dbf6d6ad6e1e0694973b3f96a68608687a648bbd84b6e4c7e2dd3
+5.4.268-294.24.papikonda.2 k8hpp aqc111.ko 35a6931b651441dd896c4323e12e44a7d1658107053ff2d46be222b8e332505c
+5.4.268-294.24.papikonda.2 k8hpp dm9601.ko dd8c3969fc0c9fc935ca4667e8ce46794197320803fc9bc1f9e07c9ec94cfdf4
+5.4.268-294.24.papikonda.2 k8hpp lan78xx.ko 65454c3dfa97cdd95279b6444895b17d21f6a7787cc29367849c702bd25ca212
+5.4.268-294.24.papikonda.2 k8lpn aqc111.ko c3192eca5e75d1f5eca195f48e10ae435d799147077a727aca8d89e9647dead1
+5.4.268-294.24.papikonda.2 k8lpn dm9601.ko 0f95dbcc581c6008c13c9f1e411b1988a3ed7706814ab72e23758a24be57eb64
+5.4.268-294.24.papikonda.2 k8lpn lan78xx.ko 785eacd0cfc15f9af9946befb633df724b8e7e0fb18df30bd4da29e6fcfa7171
+5.4.268-294.24.papikonda.2 k8lpn2 aqc111.ko 82b0867dbc38bf7c81de5abceaa96cdcbd8aaece3f0c67554a8fc73e02dc9562
+5.4.268-294.24.papikonda.2 k8lpn2 dm9601.ko fc710ec0f8307ef29edc5c6ba74663d39013437db8901f82844daf936d0c6ec0
+5.4.268-294.24.papikonda.2 k8lpn2 lan78xx.ko b2e87da296ad272a17ca7c0953c79152dd0e2302f53bd41fd4ed7ff8636fdbd9
+5.4.268-294.ptl4tv.24 k24n aqc111.ko 031073d80a1c78b2bc2ec666be11853c37bdf2747028428189f801360700961d
+5.4.268-294.ptl4tv.24 k24n dm9601.ko 64d22e00c8f80c3dc53fed95dc996efdafb7a977af38066223378c9e47dc1a75
+5.4.268-294.ptl4tv.24 k24n lan78xx.ko 89173d9d6f8e6851d11ae70e8b086395474b5e13e58666214e1025d539a56beb
+5.4.268-294.ptl4tv.24 k25lp aqc111.ko a91fcd3da9bb1fae373db8813ca4751267fa9317ff4e32dfda79ec8e6c3eabef
+5.4.268-294.ptl4tv.24 k25lp dm9601.ko e2a678814951af79826760ba08f9b028d7f88e49c5c37fb0fd2dab48895268b4
+5.4.268-294.ptl4tv.24 k25lp lan78xx.ko 2b06dce3c6ecbcdb8ba528ce51dc04f3931add55b739c94add624643689254ce
+5.4.268-320 - aqc111.ko 7ee11e7e65bc83f6f2958b60356ed5dd731624a7ebedecdc419491b868086784
+5.4.268-320 - dm9601.ko 19e568d8ca266bac2b9a75f8ac9ae6b9ff72f87eaf45b4b337bb655ce83b6a16
+5.4.268-320 - lan78xx.ko 6deb8bac8a564a083f703653aa192e094ca1d561c40301ac750dc8dc512871cd
+5.4.268-329.ptl4tv.2 - aqc111.ko 0336bd70566e72a418c201532c300d736c3a2b080044dae7a5cebe6652b2b6bb
+5.4.268-329.ptl4tv.2 - dm9601.ko 6dc9b71cbeebb5a45f09c817777b6f4bb8db8ab4e3678635ca1b0c0ff177b3ee
+5.4.268-329.ptl4tv.2 - lan78xx.ko 14a2ef530ec8cd2e53f65ac8bce344709c773d401a4a60b6ab9fc68c63e6d824
+5.4.96-115.16.mebbin.1 k8lp aqc111.ko bc7f69bc99164229c8609153c7b561ea0c3e556772ee0a3392b7e4bace53ae16
+5.4.96-115.16.mebbin.1 k8lp dm9601.ko bad7256273b673a7ff4a6adcd3284bfaab39b23682b5c4d04c034589f3300f79
+5.4.96-115.16.mebbin.1 k8lp lan78xx.ko 85822af8786c34c7a94ece2aa2604e2e5437f98106c6385188ca82b264295d78
+5.4.96-115.16.mebbin.2 k8lp aqc111.ko 6f25c35cb1c7239ff425a9298d187745a0a835a046a24eceb48b608db69e8efd
+5.4.96-115.16.mebbin.2 k8lp dm9601.ko 3569bb3e2d1a55ed1e7c389185289a1c69f8f5bd3f5803fde989ef8b825f3399
+5.4.96-115.16.mebbin.2 k8lp lan78xx.ko 9ca6d02c6636059b0f6d08e049a733abe1b415d5c284c9f42affd160f36bb226
+5.4.96-115.22.meru.2 k8hpt aqc111.ko 973ffc27f5335f258911ad561817588fb2b47fbb5b32b1a83570f65f78dc7fdd
+5.4.96-115.22.meru.2 k8hpt dm9601.ko 4f6f678d04c671dd36d73c9f3e8099d7790d2dc3029ead27fc6eb25943f48b02
+5.4.96-115.22.meru.2 k8hpt lan78xx.ko 9cfc1d09eaa8a3d956ac65b4b0e435e731654f3301d1b2780dba9d28055957f0
+5.4.96-115.22.meru.2 k8lp aqc111.ko 28dd6d18216a0bf449f175f05aa788fd4b61caf5fa005b2cc1bacc43e9008869
+5.4.96-115.22.meru.2 k8lp dm9601.ko 82430709383f56f394b1fc746fe24231fab9c94fdb7f0b03492f90a1a8ce1d2b
+5.4.96-115.22.meru.2 k8lp lan78xx.ko 51166dd0850e4627bbdcb476476062753ee07f011a4f56119fbd771842358537
+5.4.96-115.28.1.22.mirima.2 k8ap aqc111.ko 64a8f2deee594984f1985ba43ee1ef84583c85f3f506e7feb6477f1a38c0a310
+5.4.96-115.28.1.22.mirima.2 k8ap dm9601.ko 5aafbc69ae9b9426f5817ed28a055ab2d3c47d9ec014fc65cb5385668a36747b
+5.4.96-115.28.1.22.mirima.2 k8ap lan78xx.ko 9aed686def3b4bff5af9fd8fa32b69778e64eaf2b0f921c20fa8bdba0e34f891
+5.4.96-115.28.mirima.1 k8ap aqc111.ko ae1a11527c5682d12e089f0647dc2d8f55d3b5a083e27c4ae0834d93864aca39
+5.4.96-115.28.mirima.1 k8ap dm9601.ko 40b6a146c4deb6a2f303eaefeb784c34639bd4ce62e7bdcd180f9228f58b33c5
+5.4.96-115.28.mirima.1 k8ap lan78xx.ko 94efba0e2b74815e0f0487baf25523451c0d98f67f7e29ddc9bfa4a9ff403629
+5.4.96-115.28.mirima.1 k8hp aqc111.ko f3ca2e24ce916e4dbe74f4a3d4ef9c15c8ee78e70e02826700c159e1cb991530
+5.4.96-115.28.mirima.1 k8hp dm9601.ko 907d053ba0b3b3417dc4b9a1e0f4fd0d20cd9b1c0bff4022223cca3a50ecdfa8
+5.4.96-115.28.mirima.1 k8hp lan78xx.ko 219e290044a35908eb77bdebabd3557b5fae567983871e77e333ef63c9e7ea0e
+5.4.96-115.28.mirima.1 k8lp aqc111.ko d2eab394d0f5d1d180626ec9c9b1c46cbf549e854f842efefc84fd8ecde4df57
+5.4.96-115.28.mirima.1 k8lp dm9601.ko e3c7fd6b754d970201a6b81b7ef1804f66bc92d34daf69ce49b7af40c1d9d22c
+5.4.96-115.28.mirima.1 k8lp lan78xx.ko b58cf2f43b91754ede3b3fd011238807172b1294311a663134b7d17f44212cca
+5.4.96-115.30.mole.2 k8ap aqc111.ko c7ce9091dcf9679d0a6aa7f46f5586e6450562f3ef37a8cc683a1ed1f406213b
+5.4.96-115.30.mole.2 k8ap dm9601.ko 5dbcc935982b579926c7d5cac16fbe9b8d95b277dc9f5b9dc342d1aae032248a
+5.4.96-115.30.mole.2 k8ap lan78xx.ko 2639832539720d4e275d75b87b90f1cb3cec3810a73b829d7e3c186ded8797ec
+5.4.96-115.30.mole.2 k8hp aqc111.ko 7ef145618208e885f118cf2f835c23340e6524fea5a5561ce814af14bbb5f1ef
+5.4.96-115.30.mole.2 k8hp dm9601.ko a41a7d84f56aefca359aaeb18c893b2c7e8fdad026ac0ff62a4e72b6b8b3dc3f
+5.4.96-115.30.mole.2 k8hp lan78xx.ko 5691897b2647c87dbdbfba68ec5bca8106d3080d18b6e923b048aa7438759f1a
+5.4.96-115.30.mole.2 k8lp aqc111.ko 3941ed20b06f285deae600f08fff9d954d816c15d105cd93084ad36847d2edd9
+5.4.96-115.30.mole.2 k8lp dm9601.ko cccd72d2d78ab1ea358b270ecfbf067b5e73a55751f8bd422b420d2a6d8c1434
+5.4.96-115.30.mole.2 k8lp lan78xx.ko b5ea8692e76285410326cd79d610f1066b65882f57613171bbf599b96d8ffbf0
+5.4.96-115.9.marine.1 k8lp aqc111.ko c11f870fce1349554bd819a15a6da4bd732b8f702c8e7419181ee2675f000461
+5.4.96-115.9.marine.1 k8lp dm9601.ko cb821b2386c2f502f9be494bbac40b80e2ff92523a7bb89160005e1b2e169a47
+5.4.96-115.9.marine.1 k8lp lan78xx.ko aa35f9ea8f421d75b50243ae5f3c0851781fd3e14338641371fb30b370379375
+5.4.96-132.40.nameri.2 k8hpp aqc111.ko e75b6d423ba9c5526c015a20a256c15e4cb4a1e0af4fc9874855816c8004aef0
+5.4.96-132.40.nameri.2 k8hpp dm9601.ko 8443e4d3eaf9c6bf671841539c8db06d0ece2d9359fa29f6f76c2a41ff77e4d1
+5.4.96-132.40.nameri.2 k8hpp lan78xx.ko 7215f6d6278851c20c9d09dfb55345fecaf8121f96643edb46539813b9d791ad
+5.4.96-132.40.nameri.2 k8lpn aqc111.ko 06b5b6aa9c1c0eac254f8cc341974164f1353a96eae211266237d2c30bf82996
+5.4.96-132.40.nameri.2 k8lpn dm9601.ko 1aab921f8d670d38511689ad3500bb79025690a43f9fde2a19f7c58b8de367fa
+5.4.96-132.40.nameri.2 k8lpn lan78xx.ko 242dfd9f9285713210d7fd073f5fefc6f05af141442b44d4d5308e3818abf696
+5.4.96-132.40.nameri.pine.1 k8hp aqc111.ko d947f13c31cb71a7aa839ba140c388ac337f4d674ef619bad4a89754ee7e0ac7
+5.4.96-132.40.nameri.pine.1 k8hp dm9601.ko 43ae2d91aabcfe31d3ac3c0b5e2a10a77c39da52ff700f363572786db68b5492
+5.4.96-132.40.nameri.pine.1 k8hp lan78xx.ko 4728e0d519081d4f2615fc96b2cc2f7b0ce10ac9bc6fa24fb0bb71efa29bea04
+5.4.96-132.50.namtok.2 k8hpp aqc111.ko f22e2d0cba9180b11c851cdde07844d1f19ae0ace95b771ab19b7282bb025805
+5.4.96-132.50.namtok.2 k8hpp dm9601.ko cb36350991efca8a99f77a0a809634b88b5ded4df74a8f876b9bc49978187ba3
+5.4.96-132.50.namtok.2 k8hpp lan78xx.ko de465d71ee9ac3401e5793079538e5ee967bb2fd01de80bfb4e3366da5ebc398
+5.4.96-132.50.namtok.2 k8lpn aqc111.ko ab2a8133491e4f0818258256987d325256591e23036b821e195b67f606a2f898
+5.4.96-132.50.namtok.2 k8lpn dm9601.ko 077f8ead0ab7681d551ff795e1ef385f1563227018a32483c0c92d11a37865de
+5.4.96-132.50.namtok.2 k8lpn lan78xx.ko 8ec11b54bc11cfbe2dc52b37e972415afc6942ad8d49795d8cd45e3d8625504d
+5.4.96-223.29.1.okapi.2 k24 aqc111.ko 9e5f83367336e0145eccc701964535b0052493db00e2bf9950f29b4a831c26ab
+5.4.96-223.29.1.okapi.2 k24 dm9601.ko dfad8626a029ba28bee99e53e34dcc49cdefc6f1378fb652090c00dea3dc2196
+5.4.96-223.29.1.okapi.2 k24 lan78xx.ko 4e2d0d9f7fe13bf9af12e83273a26d9a9c1ecc605eaadccf255b3a02cdd69cd0
+5.4.96-223.9.oeta.2 k24 aqc111.ko f627fac3ac757b7dc6cd89accafeca7495a663e35dea43ffa5544a60a211e76b
+5.4.96-223.9.oeta.2 k24 dm9601.ko eceb6623534d571f869ebadaababebf1da7fdfa246603a233c5bf47d869280a0
+5.4.96-223.9.oeta.2 k24 lan78xx.ko e8957ab53f3c096be2da072be2a2ce5e36e2834c55f606c0921864dc3c7f8b06
+5.4.96-223.9.oeta.2 k8lpn2 aqc111.ko 71a506d1d4489d63cc2590b9dcfd52cee957e53908d37455e5a6a41478cf1cd9
+5.4.96-223.9.oeta.2 k8lpn2 dm9601.ko f21b48577009efc08fec44470addbd40a76ce2e2568ed1ba2679f94d4a19c17d
+5.4.96-223.9.oeta.2 k8lpn2 lan78xx.ko b952a368eeb4b71eeca34e0ad12d2fd324258e1c6f1e8ead14804701fb707ec7
+5.4.96-223.obr4tv.29 k24 aqc111.ko 69d383bff92f0658d48e559784bf188841879605194f8a8e5bd0c144ed44ce41
+5.4.96-223.obr4tv.29 k24 dm9601.ko d6fadeb8edb4c32a68293dcd96e17585927668fa0d1dfe398a5a200c249c9380
+5.4.96-223.obr4tv.29 k24 lan78xx.ko 0e82f33bda11df7a4398daaa2d8ff2dac12dafb9fba46f7b63b56519b81e2d6f
+5.4.96-307 - aqc111.ko dcfdfac6dc301cc247e681be19c4a2c3c5bd0cb192292b44f0d04712260a8684
+5.4.96-307 - dm9601.ko 57e5252eac265b8b1d442c2c3b629087d1b2b28252a61783abe6ca274171d556
+5.4.96-307 - lan78xx.ko a59a9d2af8d2a673e5dd7d228cd78b1b0d8420fb2a44ff50591d00f77d947ee8
+5.4.268-294.24.papikonda.2 k24 aqc111.ko 3959879213f72638e546da73dffc50678700238912a56f33d5112cbfeb198daf
+5.4.268-294.24.papikonda.2 k24 dm9601.ko d682e31c6b36b29bd80dca2a65a3af88cbc0ac61d2c97f32d72af44cd306f121
+5.4.268-294.24.papikonda.2 k24 lan78xx.ko adc995220f60b5dc3102e0f91f2aa8f3860d807ebe3c6506971ec16257f9903b
+5.4.268-329.ptl4tv.5 - aqc111.ko f0ae71e08989869d421ed95805a4289882dabcbddcfe5be9e385a4251f55538e
+5.4.268-329.ptl4tv.5 - dm9601.ko 96d1aa4303097d31b900334363cff4712473efad7a37946ec2365c0a5d0c4f98
+5.4.268-329.ptl4tv.5 - lan78xx.ko 24ef5be91a809b1e7f80c7ab5a90aac2d5e910fed1a92820b5891445addc8627"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -1446,6 +1627,14 @@ driver_rows() {
         case "$_xfile" in
             r8152_oot.ko) _xi=$R8152_OOT_IDS ;;
             r8152.ko) _xi=$R8152_IDS ;;
+            aqc111.ko) _xi=$AQC111_IDS ;;
+            dm9601.ko) case "$1" in 4.4.*) _xi=$DM9601_44_IDS ;; *) _xi=$DM9601_IDS ;; esac ;;
+            lan78xx.ko)
+                case "$1" in
+                    4.4.*) _xi=$LAN78XX_44_IDS ;;
+                    5.4.96-*) _xi=$LAN78XX_596_IDS ;;
+                    *) _xi=$LAN78XX_IDS ;;
+                esac ;;
             *) _xi=$AX88179_IDS ;;
         esac
         _xo="$_xo$EXPERIMENTAL_URL/$_xf/$_xfile $_xs $_xfile $_xf $_xi
@@ -1478,6 +1667,9 @@ drv_adapters() {
         r8152_oot.ko) echo "Realtek RTL8152, RTL8153 or RTL8156" ;;
         r8152.ko) echo "Realtek RTL8152 or RTL8153" ;;
         ax88179_178a.ko) echo "ASIX AX88179" ;;
+        aqc111.ko) echo "Aquantia AQC111U or AQC112 (5G or 2.5G)" ;;
+        dm9601.ko) echo "Davicom DM9601" ;;
+        lan78xx.ko) echo "Microchip LAN7800 or LAN7850" ;;
         *) echo "${1%.ko}" ;;
     esac
 }
@@ -1588,6 +1780,8 @@ EOF
         case "$_xfor" in
             *RTL8156*) _xfor=$(echo "$_xfor" | sed 's/Realtek RTL8152 or RTL8153, or //; s/, or Realtek RTL8152 or RTL8153//') ;;
         esac
+        # Like a C2: a tested driver for Realtek adapters, new ones for others
+        pick_driver "$_k" > /dev/null && echo "It does have a tested one for other adapters: run get-driver with one of those plugged in, or use Faster driver in the app."
         error_exit "Plug in a USB adapter with a chip the new driver is for first: $_xfor."
     }
     # shellcheck disable=SC2086 # split the fields on purpose
@@ -1764,6 +1958,7 @@ write_hook() {
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
+        echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
     _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
@@ -1978,7 +2173,9 @@ known_nic_id() {
         0b95:1790|0b95:178a|0b95:1780) echo "ASIX AX88179/178A" ;;
         0b95:7720|0b95:772a|0b95:772b|0b95:7e2b|0b95:1720|05ac:1402) echo "ASIX AX88772/88172" ;;
         0424:7500|0424:7505|0424:9500|0424:ec00) echo "Microchip/SMSC" ;;
-        0424:7800|0424:7801|0424:7850) echo "Microchip LAN78xx" ;;
+        0424:7800|0424:7801|0424:7850|07c9:0012) echo "Microchip LAN78xx" ;;
+        2eca:c101|0b95:2790|0b95:2791|1c04:0015|20f4:e05a) echo "Aquantia AQC111/112" ;;
+        0a46:9601|0a46:6688|0a46:0268|0a46:8515|0a46:9000|0fe6:8101|0fe6:9700|07aa:9601|0a47:9601) echo "Davicom DM9601" ;;
         2357:0601|2357:0602) echo "TP-Link (Realtek)" ;;
         045e:07ab|045e:07c6|045e:0927|13b1:0041|0b05:1976|17ef:3052|17ef:3054|17ef:3069|17ef:3082|17ef:720c|17ef:7214|17ef:721e|17ef:a387|04e8:a101|0955:09ff) echo "OEM Realtek" ;;
         *) return 1 ;;
@@ -2125,7 +2322,22 @@ show_status() {
         else
             _hk=$(module_kernel "$_hm")
             if ! module_fits "$_hm"; then
-                status_issue "The driver module is built for kernel $_hk, but the TV now runs $(uname -r), probably after a firmware update. It won't be loaded. Run 'get-driver' to see if there's one for the new kernel."
+                _hw=$(hook_setting KERNEL)
+                _hx="The driver module is built for kernel ${_hk:-unknown}, but the TV now runs $(uname -r)"
+                if [ -n "$_hw" ] && [ "$_hw" != "$(uname -r)" ]; then
+                    _hx="$_hx (it was $_hw when you set it up, so a firmware update changed it)"
+                else
+                    _hx="$_hx, probably after a firmware update"
+                fi
+                _hx="$_hx.  It won't be loaded, so the adapter stays on the TV's own driver."
+                if _hr=$(driver_for_now); then
+                    _hx="$_hx  A driver is known for the new kernel and your adapter: run 'get-driver', then 'install --module $DRIVER_DIR/$(echo "$_hr" | awk '{print $3}')'."
+                elif pick_experimental "$(uname -r)" >/dev/null; then
+                    _hx="$_hx  There's a new driver to test for this kernel: run 'test-driver'."
+                else
+                    _hx="$_hx  No driver is known for this kernel yet.  Run 'report' and open an issue, so one can be built."
+                fi
+                status_issue "$_hx"
             fi
             _hs=$(hook_setting MODULE_SHA)
             if [ -n "$_hs" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_hm" | awk '{print $1}')" != "$_hs" ]; then
@@ -2283,6 +2495,7 @@ show_json() {
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
         "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
+    printf '"kernelAtSetup":%s,' "$(js "$(hook_setting KERNEL)")"
     printf '"realtek":{"r8152":%s,"result":%s},' \
         "$(jb "$([ -d "$USB_DRIVERS/r8152" ] && echo 1)")" "$(js "$(cut -d' ' -f1 "$REALTEK_STATE" 2>/dev/null)")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
@@ -2293,12 +2506,16 @@ show_json() {
     # A driver to test: only when no tested one fits (or is set up already)
     drvtest_settle
     _xa=0 _xok=0 _xfo=""
-    if [ "$(driver_offer)" = none ] && _x=$(experimental_driver "$(uname -r)"); then
+    case "$(driver_offer)" in none|wrong-kernel) _xn=1 ;; *) _xn=0 ;; esac
+    if [ "$_xn" = 1 ] && _x=$(experimental_driver "$(uname -r)"); then
         _xa=1
         # shellcheck disable=SC2086 # split the fields on purpose
         set -- $_x
         _xfo=$4
         pick_experimental "$(uname -r)" > /dev/null && _xok=1
+        # Not when the adapter plugged in already has a driver and none of
+        # these is for it: nothing to gain from a test then
+        if [ "$_xok" = 0 ] && [ -n "$(find_usb_nic)" ] && [ "$(drvtest_get state)" != running ] && [ -z "$(drvtest_get result)" ]; then _xa=0; fi
     fi
     printf '"driverTest":{"available":%s,"adapterOk":%s,"folder":%s,"state":%s,"result":%s},' \
         "$(jb "$_xa")" "$(jb "$_xok")" "$(js "$_xfo")" "$(js "$(drvtest_get state)")" "$(js "$(drvtest_get result)")"
@@ -2617,6 +2834,8 @@ show_report() {
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
         [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
+        _hk=$(hook_setting KERNEL)
+        [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ] && _h="$_h, set up on kernel $_hk"
     fi
     echo "Hook:    $_h"
     echo "Interfaces:"
@@ -2688,9 +2907,12 @@ main_menu() {
         echo "u) Check for updates"
         # Only offered when a driver is known for this exact kernel and adapter
         _offer=$(driver_offer)
-        case "$_offer" in available) echo "9) Get the faster driver for this TV" ;; esac
+        case "$_offer" in
+            available) echo "9) Get the faster driver for this TV" ;;
+            replace) echo "9) Get the driver for the TV's new kernel" ;;
+        esac
         _xoffer=0
-        if [ "$_offer" != available ] && experimental_driver "$(uname -r)" > /dev/null; then
+        if { [ "$_offer" = none ] || [ "$_offer" = wrong-kernel ]; } && experimental_driver "$(uname -r)" > /dev/null; then
             _xoffer=1
             echo "t) Test a new driver for this TV"
         fi
@@ -2707,7 +2929,7 @@ main_menu() {
             8) show_report ;;
             s|S) speed_test ;;
             u|U) update_now ;;
-            9) if [ "$_offer" = available ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
+            9) if [ "$_offer" = available ] || [ "$_offer" = replace ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
             t|T) if [ "$_xoffer" = 1 ]; then test_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
             *) echo "Pick one of the numbers shown." ;;
