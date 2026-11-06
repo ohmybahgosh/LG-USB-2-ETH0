@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Status now lists drivers built into the kernel.**  "USB network drivers on this kernel" only counted drivers with a `/sys/module` folder or a `.ko` file, so a built-in `r8152` (like on a 2019 C9) was missing and looked absent, the same way it never shows in `lsmod`.  Built-in drivers now show as `(built in)`, from `modules.builtin` or the kernel's registered USB drivers, and the report's "Drivers loaded" line counts them too.  Thanks to RenderedKnave on r/webos for pointing it out.
+
 ## [2.4.12] - 2026-11-05
 
 ### Added

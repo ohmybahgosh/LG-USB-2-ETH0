@@ -820,6 +820,24 @@ test_report_builtin_driver() {
     check "lists the built-in driver" has "Drivers loaded: ax88179_178a"
 }
 
+# A Realtek driver built into the kernel, with no adapter on it (like r8152 on
+# a 2019 C9, whose RTL8153 lands on cdc_ncm): lsmod doesn't show it, status must
+test_status_builtin_driver() {
+    add_builtin
+    mkdir -p "$SYS/bus/usb/drivers/r8152"
+    add_usb eth1 1-1 cdc_ncm 1 "00:e0:4c:68:00:01"
+    run status
+    check "registered driver counts as built in" has "r8152(built in)"
+    local k
+    k=$ROOT/lib/modules/$(uname -r)
+    mkdir -p "$k"
+    printf '%s\n' kernel/drivers/net/usb/cdc_ncm.ko > "$k/modules.builtin"
+    run status
+    check "modules.builtin counts too" has "cdc_ncm(built in)"
+    run report
+    check "report lists it" has "Drivers loaded: r8152"
+}
+
 t help test_help
 t status_clean test_status_clean
 t apply_swaps test_apply_swaps
@@ -1658,6 +1676,7 @@ test_driver_offer_states() {
 
 t report test_report
 t report_builtin_driver test_report_builtin_driver
+t status_builtin_driver test_status_builtin_driver
 t status_updated_to test_status_updated_to
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot

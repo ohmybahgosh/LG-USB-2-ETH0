@@ -2016,16 +2016,25 @@ show_status() {
     _list=""
     _hd=$(hook_setting DRIVER)
     _seen=""
+    # Drivers built into the kernel have no .ko file and often no /sys/module
+    # folder, so lsmod never shows them: modules.builtin lists them, and a
+    # registered USB driver has a folder under /sys/bus/usb/drivers
+    _bif="${LGU2E_ROOT}/lib/modules/$(uname -r)/modules.builtin"
     for _m in r8152 $_hd r8152_oot ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
         case " $_seen " in *" $_m "*) continue ;; esac
         _seen="$_seen $_m"
-        if [ -d "$SYS_MODULES/$_m" ]; then
+        _ko=$(find "${LGU2E_ROOT}/lib/modules/$(uname -r)" -name "$_m.ko*" 2>/dev/null | head -n 1)
+        if grep -q "/$_m\.ko\$" "$_bif" 2>/dev/null; then
+            _list="$_list $_m(built in)"
+        elif [ -d "$SYS_MODULES/$_m" ]; then
             _list="$_list $_m(loaded)"
-        elif [ -n "$(find "/lib/modules/$(uname -r)" -name "$_m.ko*" 2>/dev/null | head -n 1)" ]; then
+        elif [ -d "$USB_DRIVERS/$_m" ] && [ -z "$_ko" ]; then
+            _list="$_list $_m(built in)"
+        elif [ -n "$_ko" ]; then
             _list="$_list $_m(file)"
         fi
     done
-    if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found under /sys/module or /lib/modules"; fi
+    if [ -n "$_list" ]; then echo "  ${_list# }"; else echo "  none found in the kernel, /sys/module or /lib/modules"; fi
 
     _hm=$(hook_setting MODULE)
     if [ -n "$_hm" ]; then
@@ -2539,10 +2548,11 @@ show_report() {
     _list=""
     for _m in r8152 r8152_oot $(hook_setting DRIVER) ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
         case " $_list " in *" $_m "*) continue ;; esac
-        [ -d "$SYS_MODULES/$_m" ] && _list="$_list $_m"
+        { [ -d "$SYS_MODULES/$_m" ] || [ -d "$USB_DRIVERS/$_m" ]; } && _list="$_list $_m"
     done
-    # A driver built into the kernel may have no /sys/module folder, so also
-    # list the ones the USB adapters are using right now.
+    # A driver built into the kernel may have no /sys/module folder (it still
+    # has one under /sys/bus/usb/drivers), so also list the ones the USB
+    # adapters are using right now.
     for _rp in "$NET"/*; do
         _rn=${_rp##*/}
         is_usb_nic "$_rn" || continue
