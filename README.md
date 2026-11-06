@@ -522,6 +522,8 @@ It doesn't touch webOS's update service itself.  Overriding that, as some people
 
 **Can I use two adapters?**  Yes.  Pin the one you want with `--mac`.  Without it, the first adapter with a cable in wins.
 
+**`lsmod` doesn't list `r8152`.  Does my TV not have it?**  Not necessarily.  Many LG kernels build it in, and `lsmod` only lists drivers loaded as modules.  `status` marks built-in drivers `(built in)`, and the report's "Built in" line lists them.  In the [firmware audit](docs/firmware-audit.md), these kernels have `r8152` built in: `4.4.84-169.gld4tv.5` (2019 TVs like the C9), `4.4.84-219.jcl4tvmr.6` (the 2020 CX), `4.4.84-229.kcl4tv.6` (2021 TVs), `5.4.96-307`, `5.4.268-320`, `5.4.268-329.ptl4tv.2`, `5.4.268-294.ptl4tv.24` (K24N) and `5.4.268-294.24.papikonda.2` (K24N, K8Hp, K8Hpp, K8LpN, K8LpN2).  Even so, an RTL8152 or RTL8153 adapter often lands on the generic `cdc_ncm` driver.  Many have a Realtek mode and a standard one, and LG's `r8152` is older than the kernel change that switches them to Realtek mode, so it can't claim one left in standard mode.  `status` says when that's what happened.
+
 **My TV needs a driver nobody has built yet.  Can you build one?**  Maybe: [open an issue](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new/choose) with your TV model, firmware version, `uname -r` and adapter.  The app's **Report for GitHub** button grabs most of that.  [docs/driver-build.md](docs/driver-build.md) shows how it's done.
 
 **Does it work on non-LG webOS devices?**  It's written for LG TVs with the Homebrew Channel.  It may work elsewhere, but that isn't tested.

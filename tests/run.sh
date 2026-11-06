@@ -159,7 +159,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -818,6 +818,45 @@ test_report_builtin_driver() {
     run report
     check "exit 0" rc_is 0
     check "lists the built-in driver" has "Drivers loaded: ax88179_178a"
+}
+
+# realtek_adapter: an RTL8153 that a 4.4 kernel left in its standard mode
+# (USB configuration 2), on cdc_ncm, with r8152 built in, like on a C9
+realtek_adapter() {
+    add_builtin
+    mkdir -p "$SYS/bus/usb/drivers/r8152"
+    add_usb eth1 1-1 cdc_ncm 1 "00:e0:4c:68:00:01" 0bda 8153 480
+    echo 2 > "$SYS/devices/usb1/1-1/bConfigurationValue"
+    echo 2 > "$SYS/devices/usb1/1-1/bNumConfigurations"
+}
+
+test_realtek_mode_off() {
+    realtek_adapter
+    run apply -y
+    check "adapter is eth0" is eth0 usb:1-1
+    check "configuration untouched" sh -c "! grep -q bConfigurationValue '$STATE/syswrite.log' 2>/dev/null"
+    check "still on cdc_ncm" drv eth0 cdc_ncm
+    run status
+    check "status explains" has "in its standard USB mode"
+}
+
+test_realtek_mode_on() {
+    realtek_adapter
+    LGU2E_REALTEK_MODE=1 run apply -y
+    check "switched" has "switching it from USB configuration 2 to its Realtek mode"
+    check "now on r8152" has "Now on r8152."
+    check "adapter is eth0" is eth0 usb:1-1
+    check "on r8152" drv eth0 r8152
+}
+
+test_realtek_mode_fallback() {
+    realtek_adapter
+    touch "$STATE/cfg_fail"
+    LGU2E_REALTEK_MODE=1 run apply -y
+    check "puts it back" has "Putting it back in USB configuration 2"
+    check "adapter is eth0" is eth0 usb:1-1
+    check "back on cdc_ncm" drv eth0 cdc_ncm
+    check "configuration 2" sh -c "[ \"\$(cat '$SYS/devices/usb1/1-1/bConfigurationValue')\" = 2 ]"
 }
 
 # A Realtek driver built into the kernel, with no adapter on it (like r8152 on
@@ -1677,6 +1716,9 @@ test_driver_offer_states() {
 t report test_report
 t report_builtin_driver test_report_builtin_driver
 t status_builtin_driver test_status_builtin_driver
+t realtek_mode_off test_realtek_mode_off
+t realtek_mode_on test_realtek_mode_on
+t realtek_mode_fallback test_realtek_mode_fallback
 t status_updated_to test_status_updated_to
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot

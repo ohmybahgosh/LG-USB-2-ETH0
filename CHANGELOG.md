@@ -2,6 +2,14 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Status explains why a Realtek adapter is on the generic driver when the kernel has `r8152`.**  Many LG kernels build `r8152` in, from 2019's C9 to webOS 25, but it's older than the kernel change that switches Realtek adapters to their Realtek mode.  So the adapter stays in its standard mode, where only `cdc_ncm` or `cdc_ether` can use it, and `status` now says so.
+- **Realtek mode, off for now.**  The script can switch such an adapter to its Realtek USB configuration so the built-in `r8152` takes it, once per plug-in, and switch it back if `r8152` doesn't take it within 5 seconds.  It stays off until it's confirmed on a TV.
+- **A FAQ on built-in drivers**, listing the kernels in the firmware audit with `r8152` built in.
+
 ## [2.4.13] - 2026-11-06
 
 ### Fixed

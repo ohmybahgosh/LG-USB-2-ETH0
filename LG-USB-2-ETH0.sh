@@ -204,6 +204,10 @@ WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
 NET_CHECK=${LGU2E_NET_CHECK:-30}
+# Realtek mode: on kernels before 5.11, switch a Realtek adapter that the
+# kernel left in its standard NCM or ECM mode back to its Realtek mode, so a
+# built-in r8152 takes it.  Off until it's confirmed on a TV.
+REALTEK_MODE=${LGU2E_REALTEK_MODE:-0}
 
 sysval() { [ -r "$1" ] && IFS= read -r _v < "$1" 2>/dev/null && printf '%s\n' "$_v"; }
 
@@ -496,7 +500,7 @@ load_module() {
 # True when any interface of USB device $1 is bound to $DRIVER
 on_driver() {
     for _i in "$USB_DEVS/$1"/*:*; do
-        [ "$(nic_driver_path "$_i")" = "$DRIVER" ] && return 0
+        [ "$(nic_driver_path "$_i")" = "${2:-$DRIVER}" ] && return 0
     done
     return 1
 }
@@ -561,7 +565,55 @@ takeover_fits() {
     [ "$_gd" = cdc_ncm ]
 }
 
+# Realtek mode.  Many Realtek adapters have a Realtek-only USB configuration
+# (the first) and a standard NCM or ECM one.  Kernels before 5.11 pick the
+# standard one, so cdc_ncm or cdc_ether takes the adapter even when r8152 is
+# built in (like on a 2019 C9, kernel 4.4), and r8152 can't claim it in that
+# mode.  Newer kernels switch it back on their own; this does the same.  One
+# try per plug-in, and if r8152 doesn't take it within 5 s, the adapter goes
+# back to the configuration it was in.  Only with REALTEK_MODE=1 and no
+# driver module of our own (take_over handles those).
+realtek_mode() {
+    [ "$REALTEK_MODE" = 1 ] || return 0
+    [ -z "$DRIVER" ] || return 0
+    [ -d "$USB_DRIVERS/r8152" ] || return 0
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        is_usb_nic "$_n" || continue
+        _gd=$(nic_driver "$_n")
+        case " $GENERIC_DRIVERS " in *" $_gd "*) ;; *) continue ;; esac
+        _ifc=$(readlink -f "$NET/$_n/device") || continue
+        _in=${_ifc##*/}
+        _dev=${_in%%:*}
+        _vid=$(sysval "$USB_DEVS/$_dev/idVendor"); _pid=$(sysval "$USB_DEVS/$_dev/idProduct")
+        case "$_vid:$_pid" in 0bda:8152|0bda:8153) ;; *) continue ;; esac
+        _cfg=$(sysval "$USB_DEVS/$_dev/bConfigurationValue")
+        [ -n "$_cfg" ] && [ "$_cfg" != 1 ] || continue
+        _ncf=$(sysval "$USB_DEVS/$_dev/bNumConfigurations")
+        case "$_ncf" in ''|*[!0-9]*) continue ;; esac
+        [ "$_ncf" -ge 2 ] || continue
+        _tok="cfg:$(sysval "$USB_DEVS/$_dev/busnum"):$(sysval "$USB_DEVS/$_dev/devnum"):$_vid:$_pid"
+        grep -qx "$_tok" "$TAKEOVER_STATE" 2>/dev/null && continue
+        echo "$_tok" >> "$TAKEOVER_STATE"
+        echo "USB $_n ($_dev, $_vid:$_pid): $_gd -> r8152, switching it from USB configuration $_cfg to its Realtek mode (1)"
+        if ! sys_write "$USB_DEVS/$_dev/bConfigurationValue" 1 2>/dev/null; then
+            echo "Could not switch it. Leaving it as it is."
+            continue
+        fi
+        _t=0
+        while [ "$_t" -lt 5 ] && ! on_driver "$_dev" r8152; do sleep 1; _t=$((_t + 1)); done
+        if on_driver "$_dev" r8152; then
+            echo "Now on r8152."
+            continue
+        fi
+        echo "r8152 did not take it. Putting it back in USB configuration $_cfg."
+        sys_write "$USB_DEVS/$_dev/bConfigurationValue" "$_cfg" 2>/dev/null
+    done
+    return 0
+}
+
 take_over() {
+    realtek_mode
     [ -n "$DRIVER" ] || return 0
     if [ ! -d "$USB_DRIVERS/$DRIVER" ]; then
         echo "Driver $DRIVER is not loaded, so the adapter stays on its current driver."
@@ -1879,6 +1931,9 @@ apply_now() {
     if [ -n "$DRIVER" ]; then
         rm -f "$TAKEOVER_STATE"
         run_detached "load_module; take_over; wait_for_nic; swap_in"
+    elif [ "$REALTEK_MODE" = 1 ]; then
+        rm -f "$TAKEOVER_STATE"
+        run_detached "realtek_mode; wait_for_nic; swap_in"
     else
         run_detached swap_in
     fi
@@ -2056,8 +2111,12 @@ show_status() {
     _ud=""
     [ -n "$_usb" ] && _ud=$(nic_driver "$_usb")
     case "$_ud" in cdc_ncm|cdc_ether)
+        _ui=$(readlink -f "$NET/$_usb/device" 2>/dev/null); _ui=${_ui##*/}; _ui=${_ui%%:*}
         if [ -n "$_hd" ]; then
             status_note "$_usb is still on $_ud, not $_hd. Run 'apply', or check $LOG_FILE."
+        elif [ -d "$USB_DRIVERS/r8152" ] && [ "$(sysval "$USB_DEVS/$_ui/idVendor")" = 0bda ] \
+            && [ -n "$(sysval "$USB_DEVS/$_ui/bConfigurationValue")" ] && [ "$(sysval "$USB_DEVS/$_ui/bConfigurationValue")" != 1 ]; then
+            status_note "This kernel has r8152, but your Realtek adapter is in its standard USB mode, where only the generic $_ud driver can use it.  Kernels this old don't switch it to its Realtek mode on their own."
         elif [ "$(driver_offer)" = available ]; then
             status_note "$_usb uses the generic $_ud driver. A better driver is known for this kernel and adapter: run 'get-driver'."
         fi ;;

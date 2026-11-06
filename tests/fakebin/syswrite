@@ -9,7 +9,10 @@
 #   .../usb/devices/DEV/authorized 0|1 the adapter is unplugged and plugged
 #                                      back in software: it comes back on
 #                                      cdc_ncm, with the same device number
+#   .../usb/devices/DEV/bConfigurationValue N   a new USB configuration: 1
+#                                      comes back on r8152, others on cdc_ncm
 #   anything else                      written as a plain file
+# $FAKE_STATE/cfg_fail: nothing takes the adapter in configuration 1.
 # $FAKE_STATE/bind_fail makes binds to drivers other than cdc_ncm fail.
 # $FAKE_STATE/no_dhcp_after_move: after a bind to another driver, webOS
 # never gives eth0 its address back (its IPv4 line in $FAKE_STATE/addr goes).
@@ -65,6 +68,25 @@ case "$1" in
         else
             make_netdev "$_dev" 1.0 cdc_ncm
             [ -e "$FAKE_STATE/dhcp_on_generic" ] && echo "2: eth0 inet 192.168.1.42/24" > "$FAKE_STATE/addr"
+        fi
+        exit 0 ;;
+    */bConfigurationValue)
+        # A new USB configuration: the adapter's interfaces go and come back.
+        # Configuration 1 is Realtek's own, which r8152 takes (unless
+        # $FAKE_STATE/cfg_fail); any other is the standard one, for cdc_ncm.
+        _dev=${1%/bConfigurationValue}; _dev=${_dev##*/}
+        _u=$SYS/devices/usb1/$_dev
+        for _l in "$NET"/*; do
+            case "$(readlink "$_l")" in "$_u"/*)
+                cat "$_l/address" > "$FAKE_STATE/mac_$_dev"
+                rm -f "$_l" ;;
+            esac
+        done
+        rm -rf "$_u/$_dev":*
+        rm -f "$SYS/bus/usb/drivers"/*/"$_dev":*
+        printf '%s' "$2" > "$_u/bConfigurationValue"
+        if [ "$2" != 1 ]; then make_netdev "$_dev" "$2.0" cdc_ncm
+        elif [ ! -e "$FAKE_STATE/cfg_fail" ]; then make_netdev "$_dev" 1.0 r8152
         fi
         exit 0 ;;
     */drivers/cdc_ncm/unbind|*/drivers/cdc_ether/unbind)
