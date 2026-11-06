@@ -9,7 +9,11 @@
 // shot:FILE.png (a full-size screenshot), and focus:ACTION (focus the row
 // with that data-action, like a user scrolling to it).  --keep uses the
 // virtual TV as it is instead of setting it up again.  --width 960 sets
-// the MP4's width (default 960, the README size).
+// the MP4's width (default 960, the README size), --fps its frame rate
+// (default 30), --trim the seconds to wait while the app loads before
+// recording starts (default 1.5), and --gif FILE also writes a GIF like the
+// README's.  Frames come from Chromium's screencast, sharp and only when
+// the screen changes, like scripts/screenshots/record-tv.js on a real TV.
 // Needs Playwright (npm i playwright) and ffmpeg.
 'use strict';
 const { execFileSync, spawn } = require('child_process');
@@ -28,6 +32,9 @@ const SCENARIO = arg('scenario', 'c2');
 const STEPS = arg('steps', 'wait:3000');
 const MP4 = arg('mp4', '') && path.resolve(arg('mp4'));
 const WIDTH = Number(arg('width', 960));
+const FPS = Number(arg('fps', 30));
+const TRIM = Number(arg('trim', 1.5));
+const GIF = arg('gif', '') && path.resolve(arg('gif'));
 const PORT = Number(arg('port', 8731));
 const VTV = path.join(__dirname, 'vtv.sh');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,12 +47,23 @@ const KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'Arro
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'vtv-rec-'));
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
-    viewport: { width: 1920, height: 1080 },
-    recordVideo: MP4 ? { dir: work, size: { width: 1920, height: 1080 } } : undefined
+    viewport: { width: 1920, height: 1080 }
   });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => console.error('app error: ' + e.message));
   await page.goto('http://127.0.0.1:' + PORT + '/');
+  await page.waitForTimeout(TRIM * 1000);
+  const frames = [];
+  const cdp = await ctx.newCDPSession(page);
+  if (MP4 || GIF) {
+    cdp.on('Page.screencastFrame', (f) => {
+      const n = String(frames.length).padStart(5, '0');
+      fs.writeFileSync(path.join(work, n + '.jpg'), Buffer.from(f.data, 'base64'));
+      frames.push([n, f.metadata.timestamp]);
+      cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
+    });
+    await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
+  }
   for (const step of STEPS.trim().split(/\s+/)) {
     const [name, n] = step.split('*');
     const times = Number(n || 1);
@@ -72,14 +90,31 @@ const KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'Arro
       await page.waitForTimeout(450);
     }
   }
-  const video = MP4 ? await page.video().path() : '';
+  if (MP4 || GIF) { await cdp.send('Page.stopScreencast'); await page.waitForTimeout(300); }
   await ctx.close();
   await browser.close();
   server.kill();
+  // Frames only come when the screen changes: show each for as long as it was up
+  let video = '';
+  if (frames.length) {
+    const list = path.join(work, 'list.txt');
+    fs.writeFileSync(list, frames.map(([n, t], i) => {
+      const d = i + 1 < frames.length ? frames[i + 1][1] - t : 0.6;
+      return `file '${path.join(work, n + '.jpg')}'\nduration ${d.toFixed(4)}\n`;
+    }).join('') + `file '${path.join(work, frames[frames.length - 1][0] + '.jpg')}'\n`);
+    video = path.join(work, 'master.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-vf', 'fps=30,format=yuv420p',
+      '-c:v', 'libx264', '-crf', '18', '-an', video]);
+  }
   if (MP4) {
-    execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', '0.4', '-i', video, '-vf', 'fps=12,scale=' + WIDTH + ':-2:flags=lanczos',
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', video, '-vf', 'fps=' + FPS + ',scale=' + WIDTH + ':-2:flags=lanczos',
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '24', '-preset', 'slow', '-movflags', '+faststart', '-an', MP4]);
     console.log('wrote ' + MP4);
+  }
+  if (GIF) {
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', video, '-vf',
+      'fps=15,scale=' + WIDTH + ':-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', GIF]);
+    console.log('wrote ' + GIF);
   }
   fs.rmSync(work, { recursive: true, force: true });
 })().catch((e) => { console.error(e); process.exit(1); });

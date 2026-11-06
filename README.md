@@ -195,7 +195,7 @@ To undo everything, press **Turn everything off** in the TV app (do this before 
 It runs the same script underneath, as root through the Homebrew Channel.  It works with the remote's arrows and OK, or the Magic Remote pointer.
 
 <p align="center">
-  <img src="assets/app-tv.gif" width="100%" alt="The TV app on an LG C2: scrolling the menu, opening the Wi-Fi as a backup confirmation and the Report for GitHub QR code, then back to the top" />
+  <img src="assets/app-tv.gif" width="100%" alt="The TV app on the virtual TV, set up as a 2019 C9 with an RTL8153 adapter on the TV's own r8152 through Realtek mode: scrolling the menu, opening the Wi-Fi as a backup confirmation and the Report for GitHub QR code, then back to the top" />
 </p>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found, like a cable that only connects at 100 Mbit/s.
@@ -644,7 +644,7 @@ The tests cover swapping and reverting, Wi-Fi and tethering being left alone, MA
 
 - **The TV app** is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).
 - **Screenshots** come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).
-- **The recording** at the top of the TV app section is from a real TV: open the app on the TV, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
+- **The recording** at the top of the TV app section is from the virtual TV (below), as a C9 in Realtek mode: `node scripts/virtual-tv/record.js --scenario c9 --steps 'wait:1300 down wait:1400 down*2 wait:400 ok wait:2800 back wait:700 down*4 wait:400 ok wait:3800 back wait:700 up*8 wait:1300' --gif assets/app-tv.gif`.  To record a real TV instead, open the app on it, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
 - **The virtual TV** runs the TV app on your computer against the real script, with no TV: `scripts/virtual-tv/vtv.sh setup c9` builds a made-up TV (a fake `/sys` and TV commands, from the test suite's fakes), and `node scripts/virtual-tv/server.js` serves the app at `http://127.0.0.1:8730/`, where its commands run on that TV under busybox `sh`.  `node scripts/virtual-tv/record.js --scenario c9 --steps 'wait:3000 down*2 ok wait:2000 back' --mp4 out.mp4` records it headless, with the remote's keys.  `vtv.sh list` shows the TVs: a C2 on the faster driver, and a C9 whose RTL8153 Realtek mode moves to the kernel's own `r8152`.
 - **The banner** is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
 - **The firmware audit:** `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has ([docs/firmware-audit.md](docs/firmware-audit.md)).
