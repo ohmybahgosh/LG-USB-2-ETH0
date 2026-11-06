@@ -1,0 +1,7 @@
+#!/bin/sh
+# The virtual TV's uname: an ARM TV with the scenario's kernel
+case "$1" in
+    -r) echo "$FAKE_KERNEL" ;;
+    -m) echo aarch64 ;;
+    *) busybox uname "$@" ;;
+esac

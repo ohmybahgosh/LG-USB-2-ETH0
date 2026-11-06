@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A virtual TV for development** (`scripts/virtual-tv/`): the TV app on your computer, with its commands running the real script on a made-up TV (a C2 or a C9), and headless recordings with the remote's keys.  No TV needed to try the app or record it.
+
 ## [2.4.14] - 2026-11-06
 
 ### Added

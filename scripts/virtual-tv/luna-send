@@ -1,0 +1,9 @@
+#!/bin/sh
+# The virtual TV's luna-send: the test suite's fake, plus the TV's model and
+# firmware (from vtv.sh's scenario)
+case "$*" in
+    *getSystemInfo*)
+        printf '{"modelName":"%s","firmwareVersion":"%s","returnValue":true}\n' "$VTV_MODEL" "$VTV_FIRMWARE"
+        exit 0 ;;
+esac
+exec "$(dirname "$(readlink -f "$0")")/../../tests/fakebin/luna-send" "$@"

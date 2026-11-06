@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: ShellCheck the script (POSIX sh, like the TV)
-        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh tests/check-promote.sh
+        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh tests/check-promote.sh scripts/virtual-tv/luna-send scripts/virtual-tv/uname
       - name: ShellCheck the test suite
-        run: shellcheck tests/run.sh
+        run: shellcheck tests/run.sh scripts/virtual-tv/vtv.sh
       - name: Script parses under dash and busybox sh
         run: |
           sudo apt-get update -qq

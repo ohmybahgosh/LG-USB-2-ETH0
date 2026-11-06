@@ -5,7 +5,8 @@
 #   Releases (https://releases.test/...): serves $FAKE_STATE/rel/NAME.
 #   Speed test (URLs with __down or __up): answers -w with a fixed transfer
 #   of 25 MB in 0.5 s per request (400 Mbit/s per stream), a 12 ms connect,
-#   and a "colo: TST" header for -D -.
+#   and a "colo: TST" header for -D -.  $FAKE_STATE/speed_time (seconds per
+#   transfer) and $FAKE_STATE/colo change those.
 printf 'curl %s\n' "$*" >> "$FAKE_STATE/curl.log"
 out="" fmt="" url="" dump=""
 while [ $# -gt 0 ]; do
@@ -25,12 +26,12 @@ if [ -s "$FAKE_STATE/curl_404" ]; then
 fi
 case "$url" in
     *__down*|*__up*)
-        [ "$dump" = - ] && printf 'HTTP/2 200\r\ncolo: TST\r\n\r\n'
+        [ "$dump" = - ] && printf 'HTTP/2 200\r\ncolo: %s\r\n\r\n' "$(cat "$FAKE_STATE/colo" 2>/dev/null || echo TST)"
         case "$url" in *__up*) cat > /dev/null ;; esac
         sleep 0.2
         case "$fmt" in
             *time_connect*) printf '0.013 0.001\n' ;;
-            *size_*) printf '25000000 0.500' ;;
+            *size_*) printf '25000000 %s' "$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)" ;;
         esac
         exit 0 ;;
 esac
