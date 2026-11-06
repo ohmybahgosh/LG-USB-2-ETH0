@@ -1515,7 +1515,9 @@ drvtest_report() {
     if [ "$_r" != crashed ]; then
         _ri=$(drvtest_get insmod)
         echo "Loaded:   $(drvtest_get loaded)${_ri:+ ($_ri)}"
-        echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $(drvtest_get speed)M, address $(drvtest_get address), ping $(drvtest_get ping)"
+        _dls=$(drvtest_get speed)
+        case "$_dls" in ''|-1|*[!0-9]*) _dls=unknown ;; *) _dls="${_dls}M" ;; esac
+        echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $_dls, address $(drvtest_get address), ping $(drvtest_get ping)"
         if grep -q '^dmesg=' "$DRVTEST_FILE" 2>/dev/null; then
             echo "Kernel log:"
             sed -n 's/^dmesg=/  /p' "$DRVTEST_FILE"

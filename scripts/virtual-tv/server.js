@@ -41,7 +41,9 @@ function luna(body, res) {
   if (req.uri !== HBC_EXEC) { send({ returnValue: true }); return; }
   const cmd = String((req.params || {}).command || '');
   execFile(VTV, ['exec', cmd], { maxBuffer: 16 << 20, timeout: 120000 }, (err, stdout, stderr) => {
-    send({ returnValue: true, exitCode: err ? (err.code || 1) : 0, stdoutString: stdout, stderrString: stderr });
+    // Paths as they are on a TV: without the virtual TV's folder
+    const tv = (t) => String(t).split(path.join(DIR, 'root')).join('');
+    send({ returnValue: true, exitCode: err ? (err.code || 1) : 0, stdoutString: tv(stdout), stderrString: tv(stderr) });
   });
 }
 

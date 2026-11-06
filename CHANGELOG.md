@@ -7,6 +7,12 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Added
 
 - **A virtual TV for development** (`scripts/virtual-tv/`): the TV app on your computer, with its commands running the real script on a made-up TV (a C2 or a C9), and headless recordings with the remote's keys.  No TV needed to try the app or record it.
+- **Clips of the TV app in the README**: Faster driver, Test a new driver, Realtek mode and Switch now, and new screenshots, all from the virtual TV (`scripts/virtual-tv/make-media.sh`).
+
+### Fixed
+
+- **The app only shows Realtek mode for adapters it can help** (Realtek RTL8152 and RTL8153), not for every adapter on a kernel with `r8152`.
+- **A driver test report says "link unknown"** instead of "link M" when the adapter hadn't reported its speed yet.
 
 ## [2.4.14] - 2026-11-06
 

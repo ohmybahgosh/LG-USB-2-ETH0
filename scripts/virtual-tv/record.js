@@ -7,12 +7,13 @@
 //
 // Steps: up, down, left, right, ok, back (each can take *N), wait:MS,
 // shot:FILE.png (a full-size screenshot), and focus:ACTION (focus the row
-// with that data-action, like a user scrolling to it).  --keep uses the
+// with that data-action; for screenshots only, since OK still acts on the
+// row the arrows last moved to).  --keep uses the
 // virtual TV as it is instead of setting it up again.  --width 960 sets
 // the MP4's width (default 960, the README size), --fps its frame rate
 // (default 30), --trim the seconds to wait while the app loads before
 // recording starts (default 1.5), and --gif FILE also writes a GIF like the
-// README's.  Frames come from Chromium's screencast, sharp and only when
+// README's (--gif-width sets its width).  Frames come from Chromium's screencast, sharp and only when
 // the screen changes, like scripts/screenshots/record-tv.js on a real TV.
 // Needs Playwright (npm i playwright) and ffmpeg.
 'use strict';
@@ -35,6 +36,7 @@ const WIDTH = Number(arg('width', 960));
 const FPS = Number(arg('fps', 30));
 const TRIM = Number(arg('trim', 1.5));
 const GIF = arg('gif', '') && path.resolve(arg('gif'));
+const GIF_WIDTH = Number(arg('gif-width', WIDTH));
 const PORT = Number(arg('port', 8731));
 const VTV = path.join(__dirname, 'vtv.sh');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -113,7 +115,7 @@ const KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'Arro
   }
   if (GIF) {
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', video, '-vf',
-      'fps=15,scale=' + WIDTH + ':-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', GIF]);
+      'fps=15,scale=' + GIF_WIDTH + ':-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', GIF]);
     console.log('wrote ' + GIF);
   }
   fs.rmSync(work, { recursive: true, force: true });

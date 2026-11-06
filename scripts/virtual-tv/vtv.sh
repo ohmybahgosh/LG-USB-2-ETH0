@@ -12,7 +12,8 @@
 #   scripts/virtual-tv/vtv.sh list             the scenarios
 #
 # The TV lives in $VTV_DIR (default ~/.cache/lg-virtual-tv) and is rebuilt
-# by every setup.  The TV app comes from webos-app/dist (webos-app/build.sh).
+# by every setup.  VTV_LATEST=2.9.0 makes the newest release look newer,
+# so the app offers an update.  The TV app comes from webos-app/dist (webos-app/build.sh).
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -22,11 +23,17 @@ ROOT=$DIR/root
 SYS=$DIR/sys
 STATE=$DIR/state
 APP=/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0
+# A clone of lg-webos-usb-drivers, for the real driver files the downloads get
+DRIVERS=${VTV_DRIVERS:-$REPO/../lg-webos-usb-drivers}
 
 scenarios() {
     cat <<'EOF'
 c2        2022 C2 on webOS 25: an RTL8156 adapter on the faster driver (r8152_oot),
           with plug and unplug, Wi-Fi as a backup and update blocking on
+c2-new    the C2 before the faster driver: the RTL8156 on cdc_ncm, with
+          Faster driver on offer (needs the lg-webos-usb-drivers clone)
+c2-test   a C2 on older firmware (kernel 5.4.268-329.ptl4tv.2), with a new
+          driver to test (needs the lg-webos-usb-drivers clone)
 c9        2019 C9 on webOS 4.5: an RTL8153 adapter, moved to the kernel's own
           r8152 by Realtek mode at boot
 c9-fresh  the same C9 before anything is set up: the adapter on cdc_ncm
@@ -113,7 +120,13 @@ tv() {
 # run 'COMMAND': on the virtual TV, as root, the way the Homebrew Channel's
 # exec service runs the app's commands
 run() {
+    # The app sees TV paths (server.js takes the folder out of every answer),
+    # so put it back for the app and for driver files in /home/root
+    # The app sees TV paths (server.js takes the folder out of every answer),
+    # so put it back for the app and for driver files in /home/root
     local cmd=${1//$APP/$ROOT$APP}
+    cmd=$(printf '%s' "$cmd" | sed "s#'/home/root/#'$ROOT/home/root/#g")
+    cmd=${cmd//\'\/home\/root\//\'$ROOT\/home\/root\/}
     env -i HOME="$ROOT/home/root" PATH="$DIR/fakebin:$DIR/bb" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SYSWRITE="$DIR/fakebin/syswrite" FAKE_STATE="$STATE" \
         FAKE_KERNEL="$(cat "$DIR/kernel")" FAKE_SOC="$(cat "$DIR/soc")" VTV_MODEL="$(cat "$DIR/model")" VTV_FIRMWARE="$(cat "$DIR/firmware")" \
@@ -145,7 +158,7 @@ boot() {
 }
 
 setup() {
-    case "$1" in c2|c9|c9-fresh) ;; *) echo "Unknown scenario $1.  These exist:"; scenarios; exit 1 ;; esac
+    case "$1" in c2|c2-new|c2-test|c9|c9-fresh) ;; *) echo "Unknown scenario $1.  These exist:"; scenarios; exit 1 ;; esac
     [ -f "$REPO/webos-app/dist/index.html" ] || { echo "Build the app first: sh webos-app/build.sh" >&2; exit 1; }
     stop
     rm -rf "$DIR"
@@ -155,16 +168,17 @@ setup() {
     # busybox, as on the TV, with the test suite's fake TV commands first
     busybox --install -s "$DIR/bb" 2>/dev/null || for a in $(busybox --list); do ln -s "$(command -v busybox)" "$DIR/bb/$a"; done
     for f in "$REPO"/tests/fakebin/*; do ln -s "$f" "$DIR/fakebin/${f##*/}"; done
-    rm -f "$DIR/fakebin/luna-send" "$DIR/fakebin/uname"
+    rm -f "$DIR/fakebin/luna-send" "$DIR/fakebin/uname" "$DIR/fakebin/syswrite"
     ln -s "$HERE/luna-send" "$DIR/fakebin/luna-send"
     ln -s "$HERE/uname" "$DIR/fakebin/uname"
+    ln -s "$HERE/syswrite" "$DIR/fakebin/syswrite"
     printf '127.0.0.1 localhost\n' > "$ROOT/etc/hosts"
     cp -R "$REPO/webos-app/dist/." "$ROOT$APP/"
     chmod 755 "$ROOT$APP/assets/lg-usb-2-eth0.sh"
     # The version in dist is the newest release, so the app offers no update
     mkdir -p "$STATE/rel"
     printf '{"id":"org.ohmybahgosh.lgusb2eth0","version":"%s","ipkUrl":"https://releases.test/x.ipk","sha256":"0"}\n' \
-        "$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$ROOT$APP/assets/lg-usb-2-eth0.sh")" > "$STATE/rel/org.ohmybahgosh.lgusb2eth0.manifest.json"
+        "${VTV_LATEST:-$(sed -n 's/^VERSION="\(.*\)"$/\1/p' "$ROOT$APP/assets/lg-usb-2-eth0.sh")}" > "$STATE/rel/org.ohmybahgosh.lgusb2eth0.manifest.json"
     local S="sh $APP/assets/lg-usb-2-eth0.sh"
     case "$1" in
         c2)
@@ -175,6 +189,18 @@ setup() {
             mkdir -p "$ROOT/home/root/lg-usb-2-eth0"
             fake_ko "$ROOT/home/root/lg-usb-2-eth0/r8152_oot.ko" r8152_oot 5.4.268-329.ptl4tv.5 0bda:8152 0bda:8153 0bda:8156
             run "$S install -y --module $ROOT/home/root/lg-usb-2-eth0/r8152_oot.ko --watch --wifi-fallback --block-updates" > /dev/null
+            ;;
+        c2-new|c2-test)
+            # Downloads (get-driver, test-driver) get the real file
+            local k=5.4.268-329.ptl4tv.5 f=drivers/5.4.268-329.ptl4tv.5/r8152_oot.ko fw=33.30.65
+            if [ "$1" = c2-test ]; then k=5.4.268-329.ptl4tv.2 f=experimental/5.4.268-329.ptl4tv.2/r8152_oot.ko fw=33.20.40; fi
+            [ -f "$DRIVERS/$f" ] || { echo "$1 needs $DRIVERS/$f (set VTV_DRIVERS to a clone of lg-webos-usb-drivers)" >&2; exit 1; }
+            cp "$DRIVERS/$f" "$STATE/download"
+            tv "$k" o22 OLED65C2PUA 10.3.1 "$fw" r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet
+            builtin_port eth0 lg1k_eth a8:23:fe:00:00:01
+            usb_nic eth1 1-1 cdc_ncm 00:e0:4c:68:00:01 0bda 8156 1 1
+            wifi wlan0
+            run "$S install -y --watch" > /dev/null
             ;;
         c9|c9-fresh)
             tv 4.4.84-169.gld4tv.5 o18 OLED55C9PSA 4.9.0 05.50.00 r8152 asix ax88179_178a cdc_ether cdc_ncm usbnet

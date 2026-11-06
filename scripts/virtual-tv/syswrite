@@ -1,0 +1,9 @@
+#!/bin/sh
+# The virtual TV's sysfs writer: the test suite's fake, and then a gigabit
+# link on any wired network device that a driver change just made
+"$(dirname "$(readlink -f "$0")")/../../tests/fakebin/syswrite" "$@"
+rc=$?
+for d in "$LGU2E_SYSFS"/class/net/eth*; do
+    [ -e "$d/speed" ] || { echo 1000 > "$d/speed"; echo full > "$d/duplex"; }
+done 2>/dev/null
+exit $rc

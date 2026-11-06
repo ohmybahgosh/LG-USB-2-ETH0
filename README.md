@@ -214,12 +214,20 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshots/app-home.png" alt="Status screen: USB adapter is eth0, Realtek RTL8156 on r8152_oot, 1000 Mbit/s link over USB 2.0, with switches for Run at every boot, Faster driver, Follow plug and unplug, Wi-Fi as a backup and Block updates harder" /></td>
-    <td width="50%"><img src="assets/screenshots/app-speed.png" alt="Speed test result: 272 Mbit/s download, 287 Mbit/s upload, 7 ms latency, over eth0 to Cloudflare" /></td>
+    <td width="50%"><img src="assets/screenshots/app-home.png" alt="Status screen: USB adapter is eth0, Realtek RTL8156 on r8152_oot, 1000 Mbit/s link over USB 2.0, the last speed test, with switches for Run at every boot, Faster driver, Follow plug and unplug, Wi-Fi as a backup and Block updates harder" /></td>
+    <td width="50%"><img src="assets/screenshots/app-speed.png" alt="Speed test result: 280 Mbit/s download, 280 Mbit/s upload, 12 ms latency, over eth0 to Cloudflare" /></td>
   </tr>
   <tr>
     <td align="center"><b>Status at a glance</b></td>
     <td align="center"><b>Speed test</b></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-realtek.png" alt="A 2019 C9 with an RTL8153 adapter: Realtek mode is on, and the adapter is on the TV's own r8152 driver" /></td>
+    <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Realtek mode</b></td>
+    <td align="center"><b>Report for GitHub</b></td>
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/app-drvtest-offer.png" alt="A new driver to test: the app says a driver has been built for this TV's kernel from LG's own source, that it's only loaded until the next restart, and that the adapter is one it supports.  Press OK to test it now, or BACK for later." /></td>
@@ -230,16 +238,37 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
     <td align="center"><b>Its result, ready to send</b></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/app-report.png" alt="Report for GitHub: a QR code that opens a filled-in compatibility report, next to the report text with MAC addresses masked" /></td>
     <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to the latest version, with the version you have, downloads and installs" /></td>
+    <td width="50%"><img src="assets/screenshots/app-upgrade-1.png" alt="Upgrading from v1: the app found the old boot hook and walks through replacing it, step by step" /></td>
   </tr>
   <tr>
-    <td align="center"><b>Report for GitHub</b></td>
     <td align="center"><b>Updates</b></td>
+    <td align="center"><b>Upgrading from v1</b></td>
   </tr>
 </table>
 
-<sub>The recording above is from a real LG C2.  The screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
+<b>In motion</b>
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/clip-faster-driver.gif" alt="Faster driver: pressing it, the confirmation, the download and checks, then the adapter moving from cdc_ncm to r8152_oot" /></td>
+    <td width="50%"><img src="assets/screenshots/clip-test-driver.gif" alt="Test a new driver: the offer when the app opens, the test running, and the result with its report QR code" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Faster driver</b></td>
+    <td align="center"><b>Test a new driver</b></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/clip-realtek-mode.gif" alt="Realtek mode on a C9: turning it off with its confirmation, and on again" /></td>
+    <td width="50%"><img src="assets/screenshots/clip-switch-now.gif" alt="Switch now on a C9 before setup: Realtek mode moves the RTL8153 to r8152, and the adapter becomes eth0" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Realtek mode</b></td>
+    <td align="center"><b>Switch now</b></td>
+  </tr>
+</table>
+
+<sub>The recording above, the clips and most screenshots are from the <a href="scripts/virtual-tv/">virtual TV</a>: the app and the real script, on a made-up C2 with an RTL8156 adapter and a C9 with an RTL8153.  The update and v1 upgrade screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>.</sub>
 
 </details>
 
@@ -643,9 +672,9 @@ CI runs ShellCheck and the whole suite under all three shells on every push, bui
 The tests cover swapping and reverting, Wi-Fi and tethering being left alone, MAC pinning, rename retries and rollback, the SSH session warning, the boot hook with and without an adapter, a late adapter, `--watch` hotplug, disable and enable, upgrading from v1, `--module` checks, moving an adapter to a new driver and falling back when that fails, `get-driver` refusing unknown kernels and bad checksums, falling back to the mirror and picking the driver by chip and adapter, `test-driver` (a driver that works, one that doesn't load, and one that froze the TV), keeping the faster driver after standby, the Wi-Fi fallback (and leaving Wi-Fi alone when it's already on), blocking updates with and without the Homebrew Channel's block (and undoing only its own changes), flagging a 100 Mbit/s or half-duplex link, the speed test, updates (refusing a bad checksum, for the app and the plain script, and what's new after one), and the report.  A fake `curl`, `luna-send`, `nyx-cmd`, `insmod` and `iptables` stand in for the network and the TV's services.
 
 - **The TV app** is in `webos-app/`.  `webos-app/build.sh` builds the IPK and its Homebrew Channel manifest (it needs `ares-package` from `@webos-tools/cli`).
-- **Screenshots** come from the built app running in a desktop browser with made-up data.  After changing the app, `sh webos-app/build.sh && node scripts/screenshots/take.js` takes them again (it needs Playwright and ffmpeg).
-- **The recording** at the top of the TV app section is from the virtual TV (below), as a C9 in Realtek mode: `node scripts/virtual-tv/record.js --scenario c9 --steps 'wait:1300 down wait:1400 down*2 wait:400 ok wait:2800 back wait:700 down*4 wait:400 ok wait:3800 back wait:700 up*8 wait:1300' --gif assets/app-tv.gif`.  To record a real TV instead, open the app on it, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
-- **The virtual TV** runs the TV app on your computer against the real script, with no TV: `scripts/virtual-tv/vtv.sh setup c9` builds a made-up TV (a fake `/sys` and TV commands, from the test suite's fakes), and `node scripts/virtual-tv/server.js` serves the app at `http://127.0.0.1:8730/`, where its commands run on that TV under busybox `sh`.  `node scripts/virtual-tv/record.js --scenario c9 --steps 'wait:3000 down*2 ok wait:2000 back' --mp4 out.mp4` records it headless, with the remote's keys.  `vtv.sh list` shows the TVs: a C2 on the faster driver, and a C9 whose RTL8153 Realtek mode moves to the kernel's own `r8152`.
+- **Screenshots, clips and the recording** come from the virtual TV (below): after changing the app, `sh webos-app/build.sh && sh scripts/virtual-tv/make-media.sh` makes them all again.  The update and v1 upgrade screenshots come from the built app with made-up data: `node scripts/screenshots/take.js` (it needs Playwright and ffmpeg).
+- **A real TV** can be recorded too, open the app on it, forward its web inspector over SSH (`ssh -N -L 19998:127.0.0.1:9998 root@TV`), and run `node scripts/screenshots/record-tv.js`.  It only opens the Wi-Fi backup and report boxes, closes them with BACK, and changes nothing.
+- **The virtual TV** runs the TV app on your computer against the real script, with no TV: `scripts/virtual-tv/vtv.sh setup c9` builds a made-up TV (a fake `/sys` and TV commands, from the test suite's fakes), and `node scripts/virtual-tv/server.js` serves the app at `http://127.0.0.1:8730/`, where its commands run on that TV under busybox `sh`.  `node scripts/virtual-tv/record.js --scenario c9 --steps 'wait:3000 down*2 ok wait:2000 back' --mp4 out.mp4` records it headless, with the remote's keys.  `vtv.sh list` shows the TVs: C2s with and without the faster driver and with a driver to test, and C9s before and after Realtek mode moves their RTL8153 to the kernel's own `r8152`.
 - **The banner** is `scripts/banner/banner.html`, made from the app icon and the status screenshot: `node scripts/banner/make.js` renders it to `assets/banner.webp`.
 - **The firmware audit:** `scripts/firmware-audit/audit.sh` unpacks an LG firmware file and lists the USB network drivers its kernel has ([docs/firmware-audit.md](docs/firmware-audit.md)).
 - **Driver builds:** `scripts/driver-build/build.sh` builds a driver for one kernel from LG's source and checks it ([docs/driver-build.md](docs/driver-build.md)).

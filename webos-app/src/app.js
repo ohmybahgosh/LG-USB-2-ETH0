@@ -225,11 +225,13 @@
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
-        // Realtek mode: only on kernels with their own r8152, or when it's
-        // been turned off (so it can be turned back on)
+        // Realtek mode: on kernels with their own r8152, or when it's been
+        // turned off (so it can be turned back on)
         var rt = s.realtek || {};
         var rtBtn = document.querySelector('[data-action="realtek"]');
-        rtBtn.style.display = (rt.r8152 || h.realtekMode === false) ? '' : 'none';
+        // Only for adapters it can help: Realtek RTL8152 and RTL8153
+        var rtFits = rt.r8152 && /^0bda:815[23]$/.test((s.adapter || {}).id || '');
+        rtBtn.style.display = (rtFits || rt.result || h.realtekMode === false) ? '' : 'none';
         $('tog-realtek').className = 'tog' + (h.realtekMode !== false ? ' on' : '');
         $('realtek-hint').textContent = rt.result === 'ok' ? 'your adapter is on the TV\'s own r8152' :
             rt.result === 'failed' ? 'r8152 didn\'t take your adapter' : 'uses the TV\'s own Realtek driver';
