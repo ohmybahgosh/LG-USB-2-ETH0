@@ -45,7 +45,7 @@
   }
   // A TV on a kernel with a new driver to test, and the test's report
   var dtest = p.get('drvtest');
-  var dtReport = ['```', 'LG-USB-2-ETH0 v' + ver + ' driver test', 'Model:    OLED65C2PUA', 'Firmware: 33.22.85 (webOS 24)',
+  var dtReport = ['```', 'LG-USB-2-ETH0 v' + ver + ' driver test', 'Model:    OLED65C2PUA', 'Firmware: 33.22.85 (webOS 25)',
     'Kernel:   5.4.268-329.ptl4tv.2', 'Chip:     o22', 'Driver:   experimental/5.4.268-329.ptl4tv.2 (450d1655b507c61a)',
     'Adapter:  0bda:8156 (Realtek RTL8156)', 'Result:   works', 'Loaded:   yes',
     'After:    eth0 on r8152_oot, carrier 1, link 1000M, address yes, ping ok', 'Kernel log:',

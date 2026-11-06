@@ -90,6 +90,14 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
     <td align="center"><b>Report for GitHub</b></td>
     <td align="center"><b>Updates</b></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-drvtest-offer.png" alt="A new driver to test: the app says a driver has been built for this TV's kernel from LG's own source, that it's only loaded until the next restart, and that the adapter is one it supports.  Press OK to test it now, or BACK for later." /></td>
+    <td width="50%"><img src="assets/screenshots/app-drvtest-result.png" alt="Driver test: it works.  A QR code that opens a filled-in driver test report on GitHub, next to the report text: model, firmware, kernel, chip, driver, adapter, result and the link it got." /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>A new driver to test</b></td>
+    <td align="center"><b>Its result, ready to send</b></td>
+  </tr>
 </table>
 
 <sub>The recording above is from a real LG C2.  The screenshots use made-up data from <a href="scripts/screenshots/">scripts/screenshots</a>, matching a C2 with an RTL8156 adapter.</sub>
@@ -108,7 +116,7 @@ The easiest way in.  It runs the same script underneath, as root through the Hom
 **Or install the IPK yourself:** download `org.ohmybahgosh.lgusb2eth0_*.ipk` from the [latest release](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest) and install it with `ares-install`, or copy it to `/tmp` on the TV and run this, with the file name you downloaded:
 
 ```sh
-luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.5_all.ipk"}'
+luna-send -n 1 luna://com.webos.appInstallService/dev/install '{"id":"org.ohmybahgosh.lgusb2eth0","ipkUrl":"/tmp/org.ohmybahgosh.lgusb2eth0_2.4.11_all.ipk"}'
 ```
 
 Already set up with the script over SSH?  Open the app and it picks up your settings.  Its boot hook links to the copy of the script inside the app, so the app and the hook always run the same version.
@@ -151,7 +159,7 @@ Run `sh LG-USB-2-ETH0.sh` with no arguments for a menu.
 <summary>What <code>status</code> looks like once it's working</summary>
 
 ```
-=== LG-USB-2-ETH0 v2.4.5 status ===
+=== LG-USB-2-ETH0 v2.4.11 status ===
 Model:     OLED65C2PUA
 webOS:     webOS 25 (10.x), firmware 33.x
 Kernel:    aarch64, 5.4.x
@@ -352,7 +360,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 
 ### More drivers on the way
 
-We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all, Realtek and ASIX drivers for 2020 TVs with the K6Lp chip (like the UN7300) and 2022 TVs with K8 chips (like the NANO75), which have neither, Realtek ones for every chip that runs the webOS 25 kernel `5.4.268-294.24.papikonda.2`, and Realtek and ASIX ones for Realtek-chip TVs on webOS 23 and 24 (including 2022 OLEDs updated to webOS 24) and 2020 K6Hp TVs (like the NANO87).  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
+We now build drivers from LG's own kernel source too, the same way DonZoomik built his.  Realtek drivers are built for four more kernels, including 2024 and 2025 K24 TVs that have no Realtek driver at all, Realtek and ASIX drivers for 2020 TVs with the K6Lp chip (like the UN7300) and 2022 TVs with K8 chips (like the NANO75), which have neither, Realtek ones for every chip that runs the webOS 25 kernel `5.4.268-294.24.papikonda.2`, Realtek and ASIX ones for the webOS 25 paparoa kernels, and Realtek and ASIX ones for Realtek-chip TVs on webOS 23 and 24 (including 2022 OLEDs updated to webOS 24) and 2020 K6Hp TVs (like the NANO87).  They're offered once someone with that TV has tried one: [docs/driver-build.md](docs/driver-build.md) lists them.
 
 **Help test one.**  If your TV runs one of those kernels, the app shows a **Test a new driver** row, or run:
 

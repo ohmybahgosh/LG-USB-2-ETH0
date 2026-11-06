@@ -72,6 +72,18 @@ function savePng(raw, name) {
   await shot('?v1=1', 'app-upgrade-1.png', enter(1, 500));
   await shot('?v1=1', 'app-upgrade-2.png', enter(2, 500));
   await shot('?v1=1', 'app-upgrade-3.png', enter(3, 2500));
+  // A TV with a new driver to test: the notice the app opens with, and the
+  // result of a test, with its report QR code
+  await shot('?drvtest=1', 'app-drvtest-offer.png', async () => {
+    await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+    await page.reload(); await page.waitForTimeout(1200);
+  });
+  await shot('?drvtest=done', 'app-drvtest-result.png', async () => {
+    await page.evaluate(() => { try { localStorage.setItem('lgu2e.drvtestOffered', '5.4.268-329.ptl4tv.2'); } catch (e) {} });
+    await page.reload(); await page.waitForTimeout(800);
+    await page.evaluate(() => document.querySelector('[data-action="drvtest"]').click());
+    await page.waitForTimeout(900);
+  });
   await browser.close();
 
   // The GIF: move down to Speed test, run it, close it, open the report
