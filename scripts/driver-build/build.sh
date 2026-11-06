@@ -14,7 +14,7 @@
 #                the TV's package on opensource.lge.com)
 #   DRIVER       r8152: Realtek's r8152 v2.22.1 as DonZoomik/webos-r8152
 #                patched it, built as r8152_oot so it can sit next to the
-#                built-in driver (5.x kernels).
+#                built-in driver (on 4.4 kernels with r8152-4.4.patch too).
 #                intree:NAME: drivers/net/usb/NAME.c from LG's own source,
 #                like intree:ax88179_178a or intree:r8152, for kernels that
 #                leave it out
@@ -97,6 +97,7 @@ case "$DRIVER" in
         D=$DRIVER_SRC/realtek-r8152-v2.22.1
         FILES="$D/r8152.c $D/compatibility.h $D/Makefile $DRIVER_SRC/outputs/tv_abi_checks.h"
         MODULE=r8152_oot.ko
+        OOT=1
         ;;
     *) echo "unknown driver $DRIVER" >&2; exit 1 ;;
 esac
@@ -110,6 +111,11 @@ cp "$KDIR/config" "$B/.config"
 # shellcheck disable=SC2086
 cp $FILES "$M/"
 [ -f "$M/Makefile" ] || echo "obj-m := ${MODULE%.ko}.o" > "$M/Makefile"
+# Realtek's v2.22.1 driver needs a few back-ports for 4.4 kernels (2020
+# TVs): r8152-4.4.patch adds them, and changes nothing on newer kernels
+case "${OOT:-0}:$BASE" in
+    1:4.*) patch -s -d "$M" -p1 < "$HERE/r8152-4.4.patch" ;;
+esac
 
 # LG's Makefiles only use the source tree's own path for their include
 # folders when this is set (DonZoomik's build does the same)

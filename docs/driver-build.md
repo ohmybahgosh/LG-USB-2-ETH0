@@ -42,7 +42,7 @@ Their firmware carries the kernel as a U-Boot image around a self-unpacking zIma
 
 ## Built so far
 
-The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it can sit next to an old built-in `r8152`.  It covers RTL8152, RTL8153 (gigabit) and RTL8156 (2.5 gigabit) adapters.  The 32-bit ones are the kernel's own `r8152` (RTL8152 and RTL8153) and `ax88179_178a` (ASIX AX88179), which LG leaves out of those kernels.
+The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it can sit next to an old built-in `r8152`.  It covers RTL8152, RTL8153 (gigabit) and RTL8156 (2.5 gigabit) adapters.  The 32-bit ones are the kernel's own `r8152` (RTL8152 and RTL8153) and `ax88179_178a` (ASIX AX88179), which LG leaves out of those kernels, plus `r8152_oot` ported back to 4.4 for RTL8156.
 
 | Kernel | TVs (from the firmware archive) | LG source used | Struct offsets |
 | --- | --- | --- | --- |
@@ -53,6 +53,8 @@ The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r815
 
 | `4.4.84-612.40.jimna.1`, K6Lp chip only | 2020 TVs with the K6Lp chip (like the UN7300) on current firmware 04.64, 22 files | webOS 5.0 JKHP 2.0 (UN7310), `kernel-1.0.0-612.21` | unchecked |
 | `4.4.84-612.21.6.jardine.2`, K6Lp chip only | 2020 TVs with the K6Lp chip on firmware 03.21, 21 files | the same, which is `612.21.6.jardine.3`, one step from this kernel | unchecked |
+| `4.4.84-612.jcl4tv.40`, K6Lp | the kernel in OCT0PUSCRIME's webOS 5 build, `r8152` and `r8152_oot` | webOS 5.0 JKHP 2.0 (UN7310), `kernel-1.0.0-612.21` | unchecked |
+| `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2` (K6Lp, K6Hp), `4.4.84-611.japoon.14` (K6Lp), `r8152_oot` | the same 2020 TVs, for RTL8156 adapters | the same, with `r8152-4.4.patch` | unchecked |
 
 | `5.4.268-294.24.papikonda.2`, per chip: K24N, K25Lp, K8Hp, K8Hpp, K8LpN, K8LpN2 | 2023 to 2025 LCDs and OLEDs with those Realtek chips on firmware 33.31, about 64 files | webOS25 WH ReNew (B4), `kernel-294.ptl4tv.2` | unchecked |
 | `5.4.268-294.ptl4tv.24`, K24N and K25Lp (with `ax88179_178a` for K25Lp) | 2025 TVs on firmware 33.30, 18 files | the same | unchecked |
@@ -82,7 +84,7 @@ The webOS 22 K8 ones matter as much: those kernels have only `asix` built in, so
 - **Firmware 23.xx is webOS 24**, not webOS 23: the platform version inside each EPK says so (9.x is webOS 24, 8.x webOS 23, 7.x webOS 22).  The first webOS 24 firmware (03.1x and 23.20) runs 223 kernels on 5.4.96, later ones on 5.4.268.
 - **LG hasn't published every kernel.**  Its webOS 24 packages all hold `kernel-223.obr4tv.4` on 5.4.96, so the 223 kernels on 5.4.268 are built from the webOS 25 source (294), the nearest 5.4.268 tree.  LG's own header changes between those branches are config-gated or prototype-only for what a USB network driver uses, and `build.sh` now lists any config option the source adds or changes that a kernel header uses (here only `GENERIC_IRQ_IPI`, which these drivers never touch).
 - **Some firmware can't be read without LG's keys.**  epk2extract has no AES key for the 8K OLEDs (o228k, o22n8k, o22n28k), LG's 2020 e60, the 2022 projectors (PF510Q, PU700R) and 2017's h15, so neither the archive's index nor this audit can see their kernels.  The 8K OLEDs probably run the same kernel names as their 4K siblings, so `test-driver` would still find a build if `uname -r` matches one.
-- **TVs with LG's own chips on kernel 4.4 already have both drivers.**  The 2020 CX (`4.4.84-219.jcl4tvmr.6`, o20 and o208k) and 2021 TVs on `4.4.84-229.kcl4tv.6` (e60n) build `r8152` and `ax88179_178a` into the kernel, so there's nothing to add there.  DonZoomik's `r8152` v2.22.1 (for RTL8156) doesn't compile on 4.4 without porting.
+- **TVs with LG's own chips on kernel 4.4 already have both drivers.**  The 2020 CX (`4.4.84-219.jcl4tvmr.6`, o20 and o208k) and 2021 TVs on `4.4.84-229.kcl4tv.6` (e60n) build `r8152` and `ax88179_178a` into the kernel, so there's nothing to add there.  DonZoomik's `r8152` v2.22.1 (for RTL8156) doesn't compile on 4.4 as it is: `r8152-4.4.patch` adds three functions 4.4 lacks (`netif_trans_update`, `in_compat_syscall`, `skb_queue_len_lockless`) and skips the compat ioctl LG's 32-bit kernels can't use.  `build.sh` applies it for `r8152` on any 4.x kernel.
 - **Some LG source trees ship already configured** (a `.config` and generated headers in the tree, like the webOS 5.0 JO package), which a separate build folder refuses.  Move them aside first.
 - **LG's packages are laid out differently each year.**  webOS 25 packages have `soc_*/linux-and-kdriver_*.tar.gz` (LG's chips) or `soc_*/kernel-*.tar.gz` (Realtek's).  The webOS 23 C2 package has `chipset/SIC_O22_webOS23.zip`, with the kernel inside `kdriver.tar` as `kdriver/kernel/linux-5.4-lg115x.tgz`.
 
@@ -91,7 +93,15 @@ The webOS 22 K8 ones matter as much: those kernels have only `asix` built in, so
 - Testers for each driver above.
 - `5.4.96-115.16.mebbin.2` on K8Hp, which only one firmware file in the archive has.
 - K6Lp's `4.4.84-612.35.jasper.2` (one firmware file, chip unknown).
-- An `r8152` with RTL8156 support for 4.4 kernels, which needs Realtek's driver ported back.
+
+## When a driver works
+
+A driver test report whose result is `works` starts the "Promote a tested driver" Action.  It reads the driver's folder, file and SHA-256 prefix from the report, moves that row from `EXPERIMENTAL_DRIVERS` to `TESTED_DRIVERS` in `LG-USB-2-ETH0.sh` (`scripts/drivers.py promote`), updates the README list, runs the checks and the tests, and opens a pull request that links the report.  Once it's merged, `get-driver` offers that driver and `test-driver` stops asking for it.  To do the same by hand:
+
+```sh
+python3 scripts/drivers.py promote report.txt
+python3 scripts/drivers.py check
+```
 
 ## Testing one
 

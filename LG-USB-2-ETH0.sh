@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/a584e4cee3a4d7e0068e089b41d7c38768db62cc/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/ba8b39bca15440725f15143320cc7edf15a47e51/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -407,7 +407,7 @@ module_kernel() {
 # mirror is a byte-for-byte copy in ohmybahgosh/lg-webos-usb-drivers, also at
 # a fixed commit, tried only if the author's download fails.
 known_driver() {
-    _kdo=$(known_exact "$1"; known_by_soc "$1"; [ -n "${LGU2E_TEST_DRIVER:-}" ] && echo "$LGU2E_TEST_DRIVER")
+    _kdo=$(known_exact "$1"; known_by_soc "$1"; tested_driver "$1"; [ -n "${LGU2E_TEST_DRIVER:-}" ] && echo "$LGU2E_TEST_DRIVER")
     [ -n "$_kdo" ] || return 1
     echo "$_kdo"
 }
@@ -1231,6 +1231,12 @@ R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:
 # SHA-256.  A chip-specific one is in <kernel>-<chip> in the mirror's
 # experimental folder, others in <kernel>.  One kernel name can run on
 # several chips with different configs, so most are built per chip.
+# Drivers built here that a tester has reported working, in the same
+# "kernel chip file sha256" form as EXPERIMENTAL_DRIVERS below and from the
+# same mirror commit.  get-driver offers them like any other known driver.
+# scripts/drivers.py promote moves a row here from a driver test report.
+TESTED_DRIVERS=""
+
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.268-320 - r8152_oot.ko 952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -1325,7 +1331,14 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.268-294.17.paparoa.pine.2 k8lpn r8152_oot.ko 5afb498b290f7f4eea032b9e855a43f6d4ba499463cc6deb8557170f79a827b8
 5.4.268-294.17.paparoa.pine.2 k8lpn ax88179_178a.ko 38c186338c538b05532fa7c6c59c401798932507b29f3cbb2588d5746e3cf63e
 5.4.268-294.17.paparoa.pine.2 k8lpn2 r8152_oot.ko 85f6c51cc43cc590c19b877fac35b05150a1c31f0e98b1f2f1de81089f0371ae
-5.4.268-294.17.paparoa.pine.2 k8lpn2 ax88179_178a.ko 056959c684d80e008056f46fe4403271fa414815f16438785ecdd2c67c4ae431"
+5.4.268-294.17.paparoa.pine.2 k8lpn2 ax88179_178a.ko 056959c684d80e008056f46fe4403271fa414815f16438785ecdd2c67c4ae431
+4.4.84-612.40.jimna.1 k6lp r8152_oot.ko c9cba7d0ad937c35ec6d32b9165575cc55522e44a5cef129222ff1c4f9ef03a2
+4.4.84-612.40.jimna.1 k6hp r8152_oot.ko 92543de3d18db3a39577ddd82118694e14a51eeed6f85e88e16b62192deb3eba
+4.4.84-612.21.6.jardine.2 k6lp r8152_oot.ko 78b6123ade80de24ee125f30d87a92a5a7aff351537cb29ba3e5f7793295849e
+4.4.84-612.21.6.jardine.2 k6hp r8152_oot.ko 0b05d12230216382f60458f9b4966b135071ae06de4b8f47802b7447274a2f3b
+4.4.84-611.japoon.14 k6lp r8152_oot.ko 79441333217f2abaae3ff8d44eefef20e3638d0f6325172cf7077cfbacdac0fa
+4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717
+4.4.84-612.jcl4tv.40 k6lp r8152_oot.ko 8df6d54ced5d6486449310efe16dfa5e89ad28cbd6d1e479c442b15174d665d3"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -1334,6 +1347,23 @@ experimental_driver() {
         echo "$LGU2E_TEST_EXPERIMENTAL"
         return 0
     fi
+    driver_rows "$1" "$EXPERIMENTAL_DRIVERS"
+}
+
+# tested_driver KERNEL: the drivers built here that a tester reported
+# working, for that kernel (and this TV's chip), as known_driver lines
+tested_driver() {
+    _tt=${LGU2E_TEST_TESTED:-$TESTED_DRIVERS}
+    [ -n "$_tt" ] || return 0
+    driver_rows "$1" "$_tt" | while read -r _tu _ts _tf _tfo _ti; do
+        echo "$_tu $_ts $_tf https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/$_tfo $_ti $_tu"
+    done
+    return 0
+}
+
+# driver_rows KERNEL TABLE: "url sha256 file folder ids" for the rows of a
+# "kernel chip file sha256" table that are for KERNEL and this TV's chip
+driver_rows() {
     _xo="" _xc="" _xcr=0
     while read -r _xk _xch _xfile _xs; do
         [ "$_xk" = "$1" ] || continue
@@ -1351,7 +1381,7 @@ experimental_driver() {
         _xo="$_xo$EXPERIMENTAL_URL/$_xf/$_xfile $_xs $_xfile $_xf $_xi
 "
     done <<EOF
-$EXPERIMENTAL_DRIVERS
+$2
 EOF
     [ -n "$_xo" ] || return 1
     printf '%s' "$_xo"
@@ -1480,6 +1510,10 @@ test_driver() {
         done <<EOF
 $_x
 EOF
+        # A kernel with both Realtek builds: name the adapters once
+        case "$_xfor" in
+            *RTL8156*) _xfor=$(echo "$_xfor" | sed 's/Realtek RTL8152 or RTL8153, or //; s/, or Realtek RTL8152 or RTL8153//') ;;
+        esac
         error_exit "Plug in a USB adapter with a chip the new driver is for first: $_xfor."
     }
     # shellcheck disable=SC2086 # split the fields on purpose

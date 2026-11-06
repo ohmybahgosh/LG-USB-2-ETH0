@@ -2,6 +2,19 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **RTL8156 (2.5 gigabit) drivers to test for 2020 TVs on kernel 4.4.**  Realtek's r8152 v2.22.1, ported back to 4.4 (`scripts/driver-build/r8152-4.4.patch`), as `r8152_oot` for `4.4.84-612.40.jimna.1` and `4.4.84-612.21.6.jardine.2` on K6Lp and K6Hp, and for `4.4.84-611.japoon.14` on K6Lp.  The kernel's own `r8152` still wins for RTL8152 and RTL8153 adapters.
+- **Drivers to test for `4.4.84-612.jcl4tv.40` on K6Lp** (the kernel in OCT0PUSCRIME's webOS 5 build): `r8152` and `r8152_oot`.
+- **Drivers people report working move to `get-driver` on their own.**  When a driver test report says it works, a GitHub Action moves that driver from the list to test to a new list of tested drivers (`TESTED_DRIVERS`), runs the checks and opens a pull request for review.
+- **A check that the driver lists agree.**  `scripts/drivers.py check` (run in CI) makes sure the script's tables, the mirror's `SHA256SUMS`, the README's driver list and its badge all match.  `scripts/drivers.py update` rewrites the README list and badge from the script.
+
+### Changed
+
+- The app and `test-driver` name RTL8156 among the adapters a driver may be for.
+
 ## [2.4.11] - 2026-11-05
 
 ### Added

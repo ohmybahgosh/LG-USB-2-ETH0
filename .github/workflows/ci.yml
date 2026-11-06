@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: ShellCheck the script (POSIX sh, like the TV)
-        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh
+        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh tests/check-promote.sh
       - name: ShellCheck the test suite
         run: shellcheck tests/run.sh
       - name: Script parses under dash and busybox sh
@@ -35,6 +35,19 @@ jobs:
         run: python3 tests/check-issue-forms.py
       - name: Build the AI knowledge base (checks it still works)
         run: sh scripts/ai-context.sh /tmp/lg-usb-2-eth0-for-ai.md
+
+  drivers:
+    name: Driver lists
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: The README's list, its counts and the badge match the script, and every SHA-256 matches the mirror
+        run: python3 scripts/drivers.py check
+      - name: Promoting a tested driver moves only that row
+        run: |
+          url=$(sed -n 's/^EXPERIMENTAL_URL="\(.*\)"$/\1/p' LG-USB-2-ETH0.sh)
+          curl -fsSL -o "$RUNNER_TEMP/SHA256SUMS" "$url/SHA256SUMS"
+          tests/check-promote.sh "$RUNNER_TEMP/SHA256SUMS"
 
   test:
     name: Tests (${{ matrix.shell }})

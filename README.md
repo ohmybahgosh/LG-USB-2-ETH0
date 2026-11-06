@@ -336,7 +336,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**95 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**102 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -352,11 +352,13 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 95 drivers: 28 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
+<summary><b>All 102 drivers: 29 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
 
 <br>
 
-Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers#experimental-waiting-for-testers), with the modules, their SHA-256 and how each was built and checked.  Realtek is `r8152_oot` (RTL8152, RTL8153 and RTL8156) on 5.4 kernels and the kernel's own `r8152` (RTL8152, RTL8153) on 4.4 ones.  ASIX is `ax88179_178a` (AX88179, AX88178A).
+Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers#experimental-waiting-for-testers), with the modules, their SHA-256 and how each was built and checked.  Realtek is `r8152_oot` (RTL8152, RTL8153 and RTL8156), plus the kernel's own `r8152` (RTL8152, RTL8153) on 4.4 kernels.  ASIX is `ax88179_178a` (AX88179, AX88178A).
+
+<!-- drivers:start -->
 
 **webOS 25**
 
@@ -407,9 +409,12 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 
 | Kernel (`uname -r`) | Chips | Realtek | ASIX |
 |---|---|:-:|:-:|
+| `4.4.84-612.jcl4tv.40` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) | yes |  |
 | `4.4.84-612.40.jimna.1` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6hp) | yes | yes |
 | `4.4.84-612.21.6.jardine.2` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6lp), [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.21.6.jardine.2-k6hp) | yes | yes |
 | `4.4.84-611.japoon.14` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-611.japoon.14-k6lp) | yes | yes |
+
+<!-- drivers:end -->
 
 </details>
 

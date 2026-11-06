@@ -1,0 +1,71 @@
+name: Promote a tested driver
+
+# When a driver test report says the driver works, open a pull request that
+# moves it from the drivers waiting for testers to the tested ones, so
+# get-driver and Faster driver offer it.  Nothing is merged or released
+# without a person: review the pull request, merge it, then tag a release.
+#
+# The issue body is only read by scripts/drivers.py, which picks a row that's
+# already in the script by folder, file and SHA-256.  Nothing from the issue
+# is copied into the code.
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: promote-driver-${{ github.event.issue.number }}
+
+jobs:
+  promote:
+    if: contains(github.event.issue.labels.*.name, 'driver-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Move the driver, if the report says it works
+        id: promote
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s\n' "$BODY" > "$RUNNER_TEMP/report.txt"
+          set +e
+          python3 scripts/drivers.py promote "$RUNNER_TEMP/report.txt" > "$RUNNER_TEMP/out.txt"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/out.txt"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Check the change
+        if: steps.promote.outputs.rc == '0'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq busybox dash
+          python3 scripts/drivers.py check
+          tests/run.sh busybox
+      - name: Open a pull request
+        if: steps.promote.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          b="promote-driver-$N"
+          what=$(tail -n 1 "$RUNNER_TEMP/out.txt")
+          if gh pr view "$b" > /dev/null 2>&1; then
+            echo "A pull request for #$N is already open."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$b"
+          git commit -am "Offer a tested driver, from #$N" -m "$what"
+          git push -f origin "$b"
+          gh pr create --head "$b" --title "Offer a tested driver (from #$N)" --body "Driver test report #$N says it works.
+
+          $what
+
+          The tests and \`scripts/drivers.py check\` passed.  Check the report, merge, then tag a release so it reaches TVs."
+          gh issue comment "$N" --body "Thanks for testing!  It worked, so it's on its way to being offered to everyone with that TV: see the pull request for this report.  It reaches TVs with the next release."

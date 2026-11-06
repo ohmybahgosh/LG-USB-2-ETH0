@@ -460,7 +460,7 @@
         var html = '<ul class="walk">' +
             li('ok', 'There\'s a driver built for this TV\'s kernel from LG\'s own source' + (s.adapter && s.adapter.driver ? '' : ', so your adapter could work') + ', and nobody with this kernel has tried it yet.') +
             li('', 'Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.') +
-            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153, and on newer TVs RTL8156), or ASIX AX88179 on 2020 TVs with the K6Lp chip.') +
+            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156) or ASIX AX88179, whichever the new driver is for.') +
             li('', 'It stays in the menu as Test a new driver, so you can do it any time.') + '</ul>';
         if (dt.adapterOk) {
             stepThen('A new driver to test', html, 'Press OK to test it now, or BACK for later.', drvtestStart);
@@ -474,7 +474,7 @@
     function drvtestStart() {
         var dt = (state && state.driverTest) || {};
         if (!dt.adapterOk) {
-            overlay('message', 'Test a new driver', 'Plug in a USB adapter with a chip the new driver is for first: Realtek (RTL8152, RTL8153, and on newer TVs RTL8156), or ASIX AX88179 on 2020 TVs with the K6Lp chip.', 'Press OK or BACK to close.');
+            overlay('message', 'Test a new driver', 'Plug in a USB adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156) or ASIX AX88179, whichever the new driver is for.', 'Press OK or BACK to close.');
             return;
         }
         confirmThen('Test a new driver?',

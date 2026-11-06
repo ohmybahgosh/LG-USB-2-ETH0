@@ -1,0 +1,49 @@
+--- a/compatibility.h
++++ b/compatibility.h
+@@ -695,3 +695,26 @@
+ };
+ 
+ #endif /* LINUX_COMPATIBILITY_H */
++
++/* Back-ports for 4.4 kernels (LG's 2020 TVs), added by LG-USB-2-ETH0 */
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
++#ifndef netif_trans_update
++static inline void lgu2e_netif_trans_update(struct net_device *dev)
++{
++	dev->trans_start = jiffies;
++}
++#define netif_trans_update lgu2e_netif_trans_update
++#endif
++#endif
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
++#ifdef CONFIG_COMPAT
++#define in_compat_syscall() is_compat_task()
++#else
++#define in_compat_syscall() 0
++#endif
++#endif
++#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
++#ifndef skb_queue_len_lockless
++#define skb_queue_len_lockless(list) READ_ONCE((list)->qlen)
++#endif
++#endif
+--- a/r8152.c
++++ b/r8152.c
+@@ -32608,12 +32608,17 @@
+ 	int	ret;
+ 	bool    compat = in_compat_syscall();
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0) && !defined(CONFIG_COMPAT)
++	/* LG-USB-2-ETH0: 32-bit 4.4 kernels have no compat ioctls */
++	myptr = (struct rtltool_cmd *)ifr->ifr_data;
++#else
+ 	if (compat) {
+ 		struct compat_ifreq *ifr32 = (struct compat_ifreq *)ifr;
+ 		myptr = (struct rtltool_cmd *)compat_ptr(ifr32->ifr_data);
+ 	} else {
+ 		myptr = (struct rtltool_cmd *)ifr->ifr_data;
+ 	}
++#endif
+ 
+ 	if (copy_from_user(&my_cmd, myptr, sizeof(my_cmd)))
+ 		return -EFAULT;
