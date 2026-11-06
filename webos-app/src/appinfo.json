@@ -1,6 +1,6 @@
 {
     "id": "org.ohmybahgosh.lgusb2eth0",
-    "version": "2.4.13",
+    "version": "2.4.14",
     "vendor": "OhMyBahGosh",
     "type": "web",
     "main": "index.html",

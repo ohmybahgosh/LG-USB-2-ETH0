@@ -84,7 +84,7 @@ case "$1" in
         done
         rm -rf "$_u/$_dev":*
         rm -f "$SYS/bus/usb/drivers"/*/"$_dev":*
-        printf '%s' "$2" > "$_u/bConfigurationValue"
+        printf '%s\n' "$2" > "$_u/bConfigurationValue"
         if [ "$2" != 1 ]; then make_netdev "$_dev" "$2.0" cdc_ncm
         elif [ ! -e "$FAKE_STATE/cfg_fail" ]; then make_netdev "$_dev" 1.0 r8152
         fi

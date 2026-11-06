@@ -225,6 +225,14 @@
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
+        // Realtek mode: only on kernels with their own r8152, or when it's
+        // been turned off (so it can be turned back on)
+        var rt = s.realtek || {};
+        var rtBtn = document.querySelector('[data-action="realtek"]');
+        rtBtn.style.display = (rt.r8152 || h.realtekMode === false) ? '' : 'none';
+        $('tog-realtek').className = 'tog' + (h.realtekMode !== false ? ' on' : '');
+        $('realtek-hint').textContent = rt.result === 'ok' ? 'your adapter is on the TV\'s own r8152' :
+            rt.result === 'failed' ? 'r8152 didn\'t take your adapter' : 'uses the TV\'s own Realtek driver';
         var u = s.updates || {};
         $('updates-hint').textContent = u.hbcBlock === false ?
             (bootOn && h.blockUpdates ? 'also covers the Homebrew Channel\'s block, which is off' : 'the Homebrew Channel\'s block is off too') :
@@ -551,6 +559,16 @@
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.watch;
             act(on ? 'Stop following plug and unplug' : 'Follow plug and unplug', installArgs(on ? '--no-watch' : '--watch'));
+        },
+        realtek: function () {
+            if (!state) { return; }
+            if (state.hook.realtekMode !== false) {
+                confirmThen('Turn Realtek mode off?',
+                    'Your Realtek adapter stays on the generic driver, which works but is slower.  It takes effect from the next boot.',
+                    function () { act('Realtek mode off', installArgs('--no-realtek-mode')); });
+            } else {
+                act('Realtek mode', installArgs('--realtek-mode'));
+            }
         },
         wifi: function () {
             if (!state) { return; }

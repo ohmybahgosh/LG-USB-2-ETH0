@@ -173,7 +173,7 @@ run_hook() {
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 \
-        $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
+        LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
 
@@ -832,17 +832,18 @@ realtek_adapter() {
 
 test_realtek_mode_off() {
     realtek_adapter
-    run apply -y
+    LGU2E_REALTEK_MODE=0 run apply -y
     check "adapter is eth0" is eth0 usb:1-1
     check "configuration untouched" sh -c "! grep -q bConfigurationValue '$STATE/syswrite.log' 2>/dev/null"
     check "still on cdc_ncm" drv eth0 cdc_ncm
-    run status
+    LGU2E_REALTEK_MODE=0 run status
     check "status explains" has "in its standard USB mode"
+    check "says how to turn it on" has "install --realtek-mode"
 }
 
 test_realtek_mode_on() {
     realtek_adapter
-    LGU2E_REALTEK_MODE=1 run apply -y
+    run apply -y
     check "switched" has "switching it from USB configuration 2 to its Realtek mode"
     check "now on r8152" has "Now on r8152."
     check "adapter is eth0" is eth0 usb:1-1
@@ -857,6 +858,29 @@ test_realtek_mode_fallback() {
     check "adapter is eth0" is eth0 usb:1-1
     check "back on cdc_ncm" drv eth0 cdc_ncm
     check "configuration 2" sh -c "[ \"\$(cat '$SYS/devices/usb1/1-1/bConfigurationValue')\" = 2 ]"
+    run status
+    check "status says it was tried" has "Realtek mode was tried"
+    run report
+    check "report shows the result" has "Realtek mode: failed 0bda:8153"
+}
+
+# The setting is saved, the boot hook uses it, and --no-realtek-mode leaves
+# the adapter alone at boot
+test_realtek_mode_setting() {
+    realtek_adapter
+    run install -y
+    check "on by default" has "its Realtek mode, so the kernel's own r8152 takes it"
+    check "saved on" grep -q '^REALTEK_MODE="1"' "$CONF"
+    run_hook
+    check "boot switches it" wait_log "Now on r8152."
+    check "on r8152 after boot" drv eth0 r8152
+    run status --json
+    check "json shows it on" has '"realtekMode":true'
+    check "json shows the result" has '"result":"ok"'
+    run install -y --no-realtek-mode
+    check "saved off" grep -q '^REALTEK_MODE="0"' "$CONF"
+    run report
+    check "report says off" has "no-realtek-mode"
 }
 
 # A Realtek driver built into the kernel, with no adapter on it (like r8152 on
@@ -1719,6 +1743,7 @@ t status_builtin_driver test_status_builtin_driver
 t realtek_mode_off test_realtek_mode_off
 t realtek_mode_on test_realtek_mode_on
 t realtek_mode_fallback test_realtek_mode_fallback
+t realtek_mode_setting test_realtek_mode_setting
 t status_updated_to test_status_updated_to
 t takeover_apply test_takeover_apply
 t takeover_boot test_takeover_boot

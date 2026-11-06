@@ -2,12 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.4.14] - 2026-11-06
 
 ### Added
 
-- **Status explains why a Realtek adapter is on the generic driver when the kernel has `r8152`.**  Many LG kernels build `r8152` in, from 2019's C9 to webOS 25, but it's older than the kernel change that switches Realtek adapters to their Realtek mode.  So the adapter stays in its standard mode, where only `cdc_ncm` or `cdc_ether` can use it, and `status` now says so.
-- **Realtek mode, off for now.**  The script can switch such an adapter to its Realtek USB configuration so the built-in `r8152` takes it, once per plug-in, and switch it back if `r8152` doesn't take it within 5 seconds.  It stays off until it's confirmed on a TV.
+- **Realtek mode: the TV's own Realtek driver, with nothing to download.**  Many LG kernels build `r8152` in, from 2019's C9 to webOS 25, but none of them can switch a Realtek adapter to its Realtek USB mode, so the adapter stays in its standard mode on the generic `cdc_ncm` or `cdc_ether` driver.  Now an RTL8152 or RTL8153 adapter left there is switched over so `r8152` takes it, at boot, with `apply`, and with `--watch` when it's plugged in.  Once per plug-in, and if `r8152` doesn't take it within 5 seconds, it goes back to the mode it was in and `status` suggests a driver from `get-driver` or `test-driver` instead.  On by default, except with `--module`.  Turn it off with **Realtek mode** in the app or `--no-realtek-mode`.  It's new and hasn't been reported on a TV yet.
+- **`status` explains** when a Realtek adapter is in its standard mode on a kernel that has `r8152`, and the report shows how Realtek mode went.
 - **A FAQ on built-in drivers**, listing the kernels in the firmware audit with `r8152` built in.
 
 ## [2.4.13] - 2026-11-06

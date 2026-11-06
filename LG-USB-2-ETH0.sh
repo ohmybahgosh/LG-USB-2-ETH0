@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.4.13"
+VERSION="2.4.14"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -90,7 +90,7 @@ WIFI_FALLBACK=0
 BLOCK_UPDATES=0
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_BLOCK=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_BLOCK=0 SET_RTK=0
 JSON=0
 PHASE=""
 CHECK_ONLY=0
@@ -172,8 +172,12 @@ Options:
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
                      it reaches by IP.  Updates can remove root for good
+  --no-realtek-mode  Don't switch Realtek adapters to their Realtek mode.
+                     By default, a Realtek RTL8152 or RTL8153 adapter that
+                     the kernel left on the generic driver is switched over
+                     to the kernel's own r8152, when it has one
   --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-block-updates
-                     Turn that setting off again
+                     Turn that setting off again (--realtek-mode turns it on)
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
   --phase PHASE      With speedtest: run only ping, down or up
@@ -204,10 +208,11 @@ WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
 NET_CHECK=${LGU2E_NET_CHECK:-30}
-# Realtek mode: on kernels before 5.11, switch a Realtek adapter that the
-# kernel left in its standard NCM or ECM mode back to its Realtek mode, so a
-# built-in r8152 takes it.  Off until it's confirmed on a TV.
-REALTEK_MODE=${LGU2E_REALTEK_MODE:-0}
+# Realtek mode (on unless --no-realtek-mode): switch a Realtek adapter the
+# kernel left in its standard NCM or ECM mode to its Realtek mode, so the
+# kernel's own r8152 takes it.  How the last try went is kept for status.
+REALTEK_MODE=${REALTEK_MODE:-${LGU2E_REALTEK_MODE:-1}}
+REALTEK_STATE=${RUN_DIR:-/tmp}/lg-usb-2-eth0.realtek
 
 sysval() { [ -r "$1" ] && IFS= read -r _v < "$1" 2>/dev/null && printf '%s\n' "$_v"; }
 
@@ -571,8 +576,9 @@ takeover_fits() {
 # built in (like on a 2019 C9, kernel 4.4), and r8152 can't claim it in that
 # mode.  Newer kernels switch it back on their own; this does the same.  One
 # try per plug-in, and if r8152 doesn't take it within 5 s, the adapter goes
-# back to the configuration it was in.  Only with REALTEK_MODE=1 and no
-# driver module of our own (take_over handles those).
+# back to the configuration it was in, and status suggests a driver from
+# get-driver or test-driver instead.  Only with REALTEK_MODE=1 and no driver
+# module of our own (take_over handles those).
 realtek_mode() {
     [ "$REALTEK_MODE" = 1 ] || return 0
     [ -z "$DRIVER" ] || return 0
@@ -604,9 +610,11 @@ realtek_mode() {
         while [ "$_t" -lt 5 ] && ! on_driver "$_dev" r8152; do sleep 1; _t=$((_t + 1)); done
         if on_driver "$_dev" r8152; then
             echo "Now on r8152."
+            echo "ok $_vid:$_pid" > "$REALTEK_STATE"
             continue
         fi
         echo "r8152 did not take it. Putting it back in USB configuration $_cfg."
+        echo "failed $_vid:$_pid" > "$REALTEK_STATE"
         sys_write "$USB_DEVS/$_dev/bConfigurationValue" "$_cfg" 2>/dev/null
     done
     return 0
@@ -1102,6 +1110,7 @@ use_hook_driver() {
         _saved_sha=$(hook_setting MODULE_SHA)
     fi
     if [ "$SET_MAC" = 0 ] && [ "$(hook_state)" = enabled ]; then PIN_MAC=$(hook_setting PIN_MAC); fi
+    if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     [ -n "$MODULE" ] || return 0
     resolve_driver
     # Check against the checksum saved at install, not the file as it is now
@@ -1677,6 +1686,7 @@ settings_ok() {
     case "$WATCH" in 0|1) ;; *) return 1 ;; esac
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
+    case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
@@ -1694,6 +1704,7 @@ load_settings() {
     if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
     if [ "$SET_WIFI" = 0 ]; then _v=$(hook_setting WIFI_FALLBACK); [ -n "$_v" ] && WIFI_FALLBACK=$_v; fi
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
+    if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     return 0
 }
@@ -1739,6 +1750,7 @@ write_hook() {
         echo "WATCH=\"$WATCH\""
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
+        echo "REALTEK_MODE=\"$REALTEK_MODE\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
     _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
@@ -1789,7 +1801,7 @@ run_detached() {
         echo "The change still finishes on the TV. Wi-Fi is the safe way in."
         confirm "Go ahead?" || { echo "Cancelled. Nothing changed."; return 1; }
     fi
-    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"; MODULE_SHA=\"$MODULE_SHA\"
+    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"; MODULE_SHA=\"$MODULE_SHA\"; REALTEK_MODE=\"$REALTEK_MODE\"
 LOG_FILE=\"$LOG_FILE\"; RUN_DIR=\"$RUN_DIR\"
 $CORE
 $_what"
@@ -1840,6 +1852,7 @@ install_fix() {
     info "At every boot the hook will:"
     echo "  1. Wait up to ${WAIT_SECS}s in the background for a USB Ethernet adapter${PIN_MAC:+ with MAC $PIN_MAC}"
     [ -n "$MODULE" ] && echo "     (after loading $MODULE, and moving the adapter from cdc_ncm to $DRIVER)"
+    [ -z "$MODULE" ] && [ "$REALTEK_MODE" = 1 ] && [ -d "$USB_DRIVERS/r8152" ] && echo "     (switching a Realtek adapter left on the generic driver to its Realtek mode, so the kernel's own r8152 takes it)"
     echo "  2. If one shows up, rename the built-in port to $PARK_NAME and the adapter to eth0"
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
@@ -1865,7 +1878,8 @@ install_fix() {
         echo "Update blocking is off again.  The Homebrew Channel's own block is unchanged."
     fi
     if [ "$APPLY_NOW" = 1 ]; then
-        run_detached swap_in
+        rm -f "$TAKEOVER_STATE"
+        run_detached "realtek_mode; wait_for_nic; swap_in"
     else
         echo "It takes effect at the next reboot. Run 'apply' to switch now."
     fi
@@ -2116,7 +2130,17 @@ show_status() {
             status_note "$_usb is still on $_ud, not $_hd. Run 'apply', or check $LOG_FILE."
         elif [ -d "$USB_DRIVERS/r8152" ] && [ "$(sysval "$USB_DEVS/$_ui/idVendor")" = 0bda ] \
             && [ -n "$(sysval "$USB_DEVS/$_ui/bConfigurationValue")" ] && [ "$(sysval "$USB_DEVS/$_ui/bConfigurationValue")" != 1 ]; then
-            status_note "This kernel has r8152, but your Realtek adapter is in its standard USB mode, where only the generic $_ud driver can use it.  Kernels this old don't switch it to its Realtek mode on their own."
+            if [ "$(cut -d' ' -f1 "$REALTEK_STATE" 2>/dev/null)" = failed ]; then
+                _rx=""
+                if [ "$(driver_offer)" = available ]; then _rx="  A driver is known for this kernel and adapter: run 'get-driver'."
+                elif pick_experimental "$(uname -r)" >/dev/null; then _rx="  There's a new driver to test for this kernel: run 'test-driver'."
+                fi
+                status_note "Realtek mode was tried, but the kernel's r8152 didn't take your adapter, so it's back on the generic $_ud driver.$_rx"
+            elif [ "$REALTEK_MODE" = 0 ] || [ "$(hook_setting REALTEK_MODE)" = 0 ]; then
+                status_note "This kernel has r8152, but your Realtek adapter is in its standard USB mode, where only the generic $_ud driver can use it.  Realtek mode switches it over: install --realtek-mode, then apply."
+            else
+                status_note "This kernel has r8152, but your Realtek adapter is in its standard USB mode, where only the generic $_ud driver can use it.  Run 'apply' (or reboot) and Realtek mode switches it over."
+            fi
         elif [ "$(driver_offer)" = available ]; then
             status_note "$_usb uses the generic $_ud driver. A better driver is known for this kernel and adapter: run 'get-driver'."
         fi ;;
@@ -2240,11 +2264,14 @@ show_json() {
     printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"blockUpdates":%s,"running":%s,"pid":%s},' \
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"blockUpdates":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
+        "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
+    printf '"realtek":{"r8152":%s,"result":%s},' \
+        "$(jb "$([ -d "$USB_DRIVERS/r8152" ] && echo 1)")" "$(js "$(cut -d' ' -f1 "$REALTEK_STATE" 2>/dev/null)")"
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
     printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverPage":%s,"driverDownloaded":%s,"autobindHook":%s,' \
@@ -2576,6 +2603,7 @@ show_report() {
         [ "$(hook_setting WATCH)" = 1 ] && _h="$_h, watch"
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
+        [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
     fi
     echo "Hook:    $_h"
     echo "Interfaces:"
@@ -2620,6 +2648,7 @@ show_report() {
         case " $_list " in *" $_m "*) ;; *) _list="$_list $_m" ;; esac
     done
     echo "Drivers loaded:${_list:- none}"
+    [ -f "$REALTEK_STATE" ] && echo "Realtek mode: $(cat "$REALTEK_STATE" 2>/dev/null)"
     echo "Default route: $(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')"
     _sp=$(speed_summary)
     [ -n "$_sp" ] && echo "Speed:   $_sp"
@@ -2703,6 +2732,8 @@ while [ $# -gt 0 ]; do
         --no-wifi-fallback) WIFI_FALLBACK=0; SET_WIFI=1 ;;
         --block-updates) BLOCK_UPDATES=1; SET_BLOCK=1 ;;
         --no-block-updates) BLOCK_UPDATES=0; SET_BLOCK=1 ;;
+        --realtek-mode) REALTEK_MODE=1; SET_RTK=1 ;;
+        --no-realtek-mode) REALTEK_MODE=0; SET_RTK=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
         --file)
             shift
