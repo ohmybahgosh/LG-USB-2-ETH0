@@ -5,11 +5,11 @@
 **Make a USB Ethernet adapter the TV's `eth0` on rooted LG webOS TVs, safely and at every boot.**
 
 [![CI](https://github.com/ohmybahgosh/LG-USB-2-ETH0/actions/workflows/ci.yml/badge.svg)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/ohmybahgosh/LG-USB-2-ETH0?sort=semver)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest)
+[![Release](https://ohmybahgosh.dev/badges/lg-usb-2-eth0-release.svg)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Listed in awesome-webos](https://img.shields.io/badge/listed%20in-awesome--webos-fc60a8)](https://github.com/tolgakurtuluss/awesome-webos)
 [![Project page](https://img.shields.io/badge/ohmybahgosh.dev-project%20page-3ddc97)](https://ohmybahgosh.dev/lg-usb-2-eth0/)
-[![GitHub stars](https://img.shields.io/github/stars/ohmybahgosh/LG-USB-2-ETH0?style=social)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
+[![GitHub stars](https://ohmybahgosh.dev/badges/lg-usb-2-eth0-stars.svg)](https://github.com/ohmybahgosh/LG-USB-2-ETH0/stargazers)
 
 <img src="assets/banner.webp" width="100%" alt="LG-USB-2-ETH0 for rooted LG webOS TVs: make a USB Ethernet adapter the TV's eth0, two to three times the built-in port, from a TV app on the remote.  Homebrew Channel app, Realtek and ASIX drivers, Wi-Fi as a backup, undo in one press.  Next to it, the app's status screen on a TV and its icon on the home screen." />
 
