@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.3] - 2026-11-06
+
+### Added
+
+- **The first driver built here that a tester reported working:** the K6Lp `r8152` for kernel `4.4.84-612.jcl4tv.40`, on a 2020 UN7300 (55UN7300AUD) with a Cable Matters RTL8153 adapter ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)): gigabit link and online on the first test.  It moves to **Faster driver**, so `get-driver` and the app offer it to every UN7300 on that kernel.  298 drivers are still waiting for testers.
+
 ## [2.6.2] - 2026-11-06
 
 ### Added

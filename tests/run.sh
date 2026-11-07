@@ -1697,20 +1697,26 @@ test_test_driver_k6lp() {
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
     check "RTL8156: Realtek's newer driver" grep -q "f3f9d3c.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
-    # The UN7300's kernel: the kernel's own r8152 for an RTL8153
+    # The UN7300's kernel: its r8152 for an RTL8153 was reported working
+    # (issue #6), so it's offered as a known driver, not a test
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
+    FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run status --json
+    check "jcl4tv.40, RTL8153: r8152 is a known driver" has '"driverPage":"https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp"'
+    # An RTL8156 still gets Realtek's newer driver to test
+    remove_usb 1-1
+    add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "jcl4tv.40, RTL8153: r8152" grep -q "f3f9d3c.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
-    # A TV whose nyx-cmd doesn't name the chip (issue #6): the firmware's
-    # machine name does
+    check "jcl4tv.40, RTL8156: r8152_oot" grep -q "f3f9d3c.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    # A TV whose nyx-cmd doesn't name the chip when the app runs the script
+    # (issue #6): the firmware's machine name does
     mkdir -p "$ROOT/etc/prefs/properties" && echo k6lp > "$ROOT/etc/prefs/properties/machineName"
     : > "$STATE/curl.log"
     FAKE_SOC='' FAKE_KERNEL=4.4.84-612.jcl4tv.40 run status --json
     check "no nyx chip: offered from machineName" has '"driverTest":{"available":true'
     FAKE_SOC='' FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "no nyx chip: jcl4tv.40 r8152" grep -q "f3f9d3c.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
+    check "no nyx chip: jcl4tv.40 r8152_oot" grep -q "f3f9d3c.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
     rm -f "$ROOT/etc/prefs/properties/machineName"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156

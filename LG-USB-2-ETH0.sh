@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.2"
+VERSION="2.6.3"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1421,7 +1421,7 @@ R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:
 # "kernel chip file sha256" form as EXPERIMENTAL_DRIVERS below and from the
 # same mirror commit.  get-driver offers them like any other known driver.
 # scripts/drivers.py promote moves a row here from a driver test report.
-TESTED_DRIVERS=""
+TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.268-320 - r8152_oot.ko 952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0
@@ -1523,7 +1523,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-612.21.6.jardine.2 k6lp r8152_oot.ko 78b6123ade80de24ee125f30d87a92a5a7aff351537cb29ba3e5f7793295849e
 4.4.84-612.21.6.jardine.2 k6hp r8152_oot.ko 0b05d12230216382f60458f9b4966b135071ae06de4b8f47802b7447274a2f3b
 4.4.84-611.japoon.14 k6lp r8152_oot.ko 79441333217f2abaae3ff8d44eefef20e3638d0f6325172cf7077cfbacdac0fa
-4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717
 4.4.84-612.jcl4tv.40 k6lp r8152_oot.ko 8df6d54ced5d6486449310efe16dfa5e89ad28cbd6d1e479c442b15174d665d3
 4.4.84-611.japoon.14 k6lp dm9601.ko 73cd12fb3a107af4daebe5f8bb294814fb378600131a8e148682a5325bbcfc2b
 4.4.84-611.japoon.14 k6lp lan78xx.ko b8d4c68bd1a1ca0a6fe7a793f2a7f5192e01922aeb4dcc1ee20fea7c7a6d5054

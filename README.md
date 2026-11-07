@@ -292,6 +292,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
 | TP-Link UE306 V1.6 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)) | ASIX AX88179 (`0b95:1790`) | 2020 UN7300 (55UN7300PUF), webOS 5, USB 2.0 port | Works with OCT0PUSCRIME's `ax88179_178a` build from `get-driver`, since that kernel has no ASIX driver.  228 Mbit/s down, 325 up |
 | TP-Link UE306 ([Reddit](https://www.reddit.com/r/webos/s/mNSsjbQGqN)) | ASIX AX88179 | 2024 C4 (OLED65C46LA), USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver.  About 300 Mbit/s, and webOS now shows "wired network connected" |
+| Cable Matters USB Ethernet ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)) | Realtek RTL8153 (`0bda:8153`) | 2020 UN7300 (55UN7300AUD), webOS 5 | Works with the K6Lp `r8152` build from `get-driver`, since that kernel has no Realtek driver.  Gigabit link, online on the first test |
 | ASIX AX88179 adapter ([#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2)) | ASIX AX88179/178A (`0b95:1790`) | 2024 G4 (OLED65G48LW), webOS 25, USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver.  292 Mbit/s down, 51 up |
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
@@ -335,6 +336,7 @@ These are known to work on a real TV.  Most are built for one exact kernel, and 
 | `r8152_oot` (Realtek v2.22.1) | Kernel `5.4.268-329.ptl4tv.5` on webOS 25: the 2022 C2, 2023 C3 and UR9000, and 2024 C4 and G4.  RTL8153 and RTL8156 adapters. | [DonZoomik](https://github.com/DonZoomik/webos-r8152) |
 | `r8152` (v1.10.11) | 2024 QNED and OLED on webOS 25, where LG removed the Realtek driver, on kernel `5.4.268-294.17.paparoa.pine.2`.  Gigabit RTL8152 and RTL8153 adapters, not 2.5G ones. | [mbenitez343](https://github.com/mbenitez343/lg-webos-2024-ethernet-fix) |
 | `ax88179_178a` (ASIX v1.19.0) | 2020 TVs on webOS 5 (UN7300, kernel `4.4.84-612.jcl4tv.40`), which have no ASIX driver.  Tested with a TP-Link UE306 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)). | [OCT0PUSCRIME](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) |
+| `r8152` (from LG's source) | 2020 TVs on webOS 5 with the K6Lp chip (UN7300), kernel `4.4.84-612.jcl4tv.40`, which have no Realtek driver.  Gigabit RTL8152 and RTL8153 adapters.  Tested with a Cable Matters RTL8153 ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) |
 | `ax88179_178a` (from LG's source) | Kernel `5.4.268-294.24.papikonda.2` on webOS 25: the 2025 B5, and the 2024 B4 and QNED85, none of which has an AX88179 driver.  Tested by its author on a B5. | [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) |
 | `r8152`, `ax88179_178a` | TVs with the Realtek K5Lp chip on kernel 4.4.84, picked by chip.  Gigabit Realtek and ASIX adapters.  Not yet tested with this app. | [throwaway96](https://github.com/throwaway96/webos-kernel-drivers) |
 
@@ -369,7 +371,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**299 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**298 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -389,13 +391,19 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 299 drivers: 38 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
+<summary><b>All 298 drivers: 38 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
 
 <br>
 
 Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers#experimental-waiting-for-testers), with the modules, their SHA-256 and how each was built and checked.  Realtek is `r8152_oot` (RTL8152, RTL8153 and RTL8156), plus the kernel's own `r8152` (RTL8152, RTL8153) on 4.4 kernels.  ASIX is `ax88179_178a` (AX88179, AX88178A).  Others are `aqc111`, `dm9601` and `lan78xx`.
 
 <!-- drivers:start -->
+
+**Reported working, now offered by get-driver: webOS 5**
+
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `4.4.84-612.jcl4tv.40` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) | yes |  |  |
 
 **webOS 25**
 
@@ -507,7 +515,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS | What people have reported | Source |
 |-------|---------------------------|--------|
 | webOS 3.5 / 4 (2017 and 2018: B7, C7, C8) | ASIX-based adapters (Cable Matters USB 3.0) work out of the box.  TP-Link UE300 (RTL8153) didn't work on C7 or C8.  Settings show "no connection" while apps work, which is what this script fixes. | [lgwebos.com thread](https://www.lgwebos.com/topic/3395-gigabit-ethernet-on-smart-tv/page/2/) |
-| webOS 5 (5.5.0) on a 2020 UN7300 (55UN7300PUF), kernel `4.4.84-612.jcl4tv.40` | No ASIX driver in the kernel.  A TP-Link UE306 (AX88179, `0b95:1790`) works with OCT0PUSCRIME's `ax88179_178a` build, which `get-driver` offers, and LG-USB-2-ETH0 makes it `eth0`.  228 Mbit/s down, 325 up over USB 2.0. | [Discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [OCT0PUSCRIME/lg-webos-ax88179-driver](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) |
+| webOS 5 (5.5.0) on a 2020 UN7300 (55UN7300PUF), kernel `4.4.84-612.jcl4tv.40` | No ASIX driver in the kernel.  A TP-Link UE306 (AX88179, `0b95:1790`) works with OCT0PUSCRIME's `ax88179_178a` build, which `get-driver` offers, and LG-USB-2-ETH0 makes it `eth0`.  228 Mbit/s down, 325 up over USB 2.0.  A Cable Matters RTL8153 works with the K6Lp `r8152` build ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)). | [Discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [OCT0PUSCRIME/lg-webos-ax88179-driver](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) |
 | webOS 24 | Where this script was first written. | |
 | webOS 25 on a 2024 C4 (same kernel as the C2 below) | RTL8153 and RTL8156 adapters come up through the generic `cdc_ncm` driver.  They work, but slower and with drops.  DonZoomik's `r8152_oot`, which `get-driver` offers, fixes that. | [DonZoomik/webos-r8152](https://github.com/DonZoomik/webos-r8152) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2022 C2 (OLED65C2PUA), kernel `5.4.268-329.ptl4tv.5` | Tested by the author.  An RTL8156 adapter (`0bda:8156`) comes up on `cdc_ncm`, and LG-USB-2-ETH0 makes it `eth0`.  With `r8152_oot` from `get-driver` and `install --module`, it's confirmed through a full reboot: at startup the hook loads the driver, moves the adapter over on the first try, turns scatter-gather off and makes it `eth0`, with traffic going out the adapter.  The C2's USB port runs at USB 2.0 speed. | This repo |
