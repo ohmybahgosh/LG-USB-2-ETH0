@@ -18,6 +18,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 ### Fixed
 
 - **The README's driver list puts the LM21A-family kernels under the right webOS version and chip.**
+- **The firmware audit's 27ART10AKPL is the StanbyME (the 2022 rolling-stand screen), not the StanbyME Go.**
 - **The driver build adds the exports of our own modules** (like `usbnet.ko`) when it checks a driver built on them.
 
 ## [2.5.0] - 2026-11-06
