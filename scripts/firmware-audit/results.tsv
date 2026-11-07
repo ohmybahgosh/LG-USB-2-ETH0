@@ -12,6 +12,7 @@ OLED65C3PUA-33.31.68	33.31.68	o22n	papikonda	5.4.268-329.ptl4tv.5	r8152 asix ax8
 OLED65C4PUA-33.31.69	33.31.69	o22n2	papikonda	5.4.268-329.ptl4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 OLED65C4PUA-43.21.96	43.21.96	o22n2	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 OLED65C9PUA-05.50.00	05.50.00	o18	grampians	4.4.84-169.gld4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+55SM8600PUA-05.50.00	05.50.00	m16p3	grampians	4.4.84-169.gld4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 OLED65CXPUA-04.64.00	04.64.00	o20	-	4.4.84-219.jcl4tvmr.6	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 75NANO99UNA-04.64.00	04.64.00	o208k	-	4.4.84-219.jcl4tvmr.6	asix usbnet	none	config
 75UQ9000PUD-04.60.90	04.60.90	lm21an	mole	5.4.96-934.mlt4tv.17	none	none	config

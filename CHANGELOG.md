@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.7.2] - 2026-11-07
+
+### Added
+
+- **Drivers for the 2020 and 2021 8K and Mini LED LCDs.**  The 2020 NANO97, NANO99 and ZX 8K models (O208K chip, kernel `4.4.84-219.jcl4tvmr.6`) and the 2021 NANO96 to NANO99 and QNED90 to QNED99 (E60N chip, kernel `4.4.84-229.kcl4tv.6`) run the CX's and C1's kernel names, but without their Realtek and ASIX drivers.  Realtek (`r8152.ko` and `r8152_oot.ko`), ASIX AX88179, Davicom DM9601 and Microchip LAN78xx, built from LG's own kernel source with each TV's config, are waiting for testers.  A CX or C1 isn't offered them: drivers match by kernel and chip.
+- **A firmware monitor.**  A daily workflow reads the [EPK archive](https://tv.slada.sk/)'s firmware index, audits the firmware of any new kernel this project doesn't cover yet and opens a `new-firmware` issue saying what it has and what needs building.  See [Watching for new firmware](docs/firmware-audit.md#watching-for-new-firmware).
+
 ## [2.7.1] - 2026-11-07
 
 ### Added
