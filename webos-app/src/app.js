@@ -9,6 +9,10 @@
 (function () {
     'use strict';
 
+    // The app's words in the TV's language (i18n.js); English if it's missing
+    var I18N = window.LGU2E_I18N || null;
+    var T = I18N ? I18N.T : function (t, v) { return v ? t.replace(/\{(\w+)\}/g, function (m, k) { return k in v ? v[k] : m; }) : t; };
+
     var REPO_PATH = '/ohmybahgosh/LG-USB-2-ETH0';
     var REPO = 'https://github.com' + REPO_PATH;
 
@@ -92,7 +96,7 @@
             var data = null;
             try { data = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { data = null; }
             if (!data) {
-                showNoRoot(ok ? 'The script gave an unexpected answer.' : err);
+                showNoRoot(ok ? T('The script gave an unexpected answer.') : err);
                 if (cb) { cb(null); }
                 return;
             }
@@ -147,12 +151,12 @@
             refresh(function (s) {
                 var e = s && eth0(s);
                 if (e && e.ip) {
-                    hint('eth0 is connected at ' + e.ip.replace(/\/\d+$/, '') + '.  Press OK or BACK to close.');
+                    hint(T('eth0 is connected at {ip}.  Press OK or BACK to close.', { ip: e.ip.replace(/\/\d+$/, '') }));
                 } else if (++tries < 20) {
-                    hint('Waiting for eth0 to get an address…  Press OK or BACK to close.');
+                    hint(T('Waiting for eth0 to get an address…  Press OK or BACK to close.'));
                     waitTimer = setTimeout(check, 2000);
                 } else {
-                    hint('eth0 has no address after 40 seconds.  Check the cable and the router.  Press OK or BACK to close.');
+                    hint(T('eth0 has no address after 40 seconds.  Check the cable and the router.  Press OK or BACK to close.'));
                 }
             });
         }
@@ -161,8 +165,8 @@
 
     function showNoRoot(detail) {
         $('dot').className = 'dot dot-bad';
-        $('headline').textContent = "Can't reach the TV as root";
-        $('subline').textContent = 'This app needs a rooted TV with the Homebrew Channel.  ' + (detail || '');
+        $('headline').textContent = T('Can\'t reach the TV as root');
+        $('subline').textContent = T('This app needs a rooted TV with the Homebrew Channel.  ') + (detail || '');
         $('facts').innerHTML = '';
         $('notes').innerHTML = '';
     }
@@ -180,26 +184,26 @@
         // Headline
         var dot = 'dot-ok', head, sub;
         if (a && s.adapterIsEth0) {
-            head = 'USB adapter is eth0';
-            sub = s.defaultRoute === 'eth0' ? 'Traffic is going over the adapter.' : 'Traffic is going out ' + (s.defaultRoute || 'nowhere') + ', not the adapter.';
+            head = T('USB adapter is eth0');
+            sub = s.defaultRoute === 'eth0' ? T('Traffic is going over the adapter.') : T('Traffic is going out {route}, not the adapter.', { route: s.defaultRoute || T('nowhere') });
             if (s.defaultRoute !== 'eth0') { dot = 'dot-warn'; }
         } else if (a) {
-            head = 'Adapter found, not eth0 yet';
-            sub = h.state === 'enabled' ? 'Choose Switch now, or reboot.' : 'Turn on Run at every boot, or choose Switch now.';
+            head = T('Adapter found, not eth0 yet');
+            sub = h.state === 'enabled' ? T('Choose Switch now, or reboot.') : T('Turn on Run at every boot, or choose Switch now.');
             dot = 'dot-warn';
         } else {
-            head = 'No USB adapter found';
-            sub = 'Plug in a USB Ethernet adapter.  The built-in port keeps working meanwhile.';
+            head = T('No USB adapter found');
+            sub = T('Plug in a USB Ethernet adapter.  The built-in port keeps working meanwhile.');
             dot = 'dot-warn';
         }
         // The script's v1 advice is for SSH ("Run 'install'").  In the app,
         // point at the Upgrade from v1 row instead.
         var v1 = h.state === 'legacy' || h.state === 'legacy-disabled';
         var issues = s.issues.map(function (i) {
-            return v1 && /'install'/.test(i) ? 'An old v1 boot hook is installed.  Choose Upgrade from v1 to replace it, step by step.' : i;
+            return v1 && /'install'/.test(i) ? T('An old v1 boot hook is installed.  Choose Upgrade from v1 to replace it, step by step.') : i;
         });
         if (issues.length) { dot = 'dot-bad'; sub = issues[0]; }
-        else if (dot === 'dot-ok') { sub += '  No problems found.'; }
+        else if (dot === 'dot-ok') { sub += T('  No problems found.'); }
         $('dot').className = 'dot ' + dot;
         $('headline').textContent = head;
         $('subline').textContent = sub;
@@ -207,29 +211,29 @@
         // Facts
         var html = '';
         if (a) {
-            html += row('Adapter', esc((a.chip || a.id || 'USB') + ' · ' + a.driver) +
+            html += row(T('Adapter'), esc((a.chip || a.id || 'USB') + ' · ' + a.driver) +
                 (a.driver === h.driver && h.driver ? ' <span class="ok">✔</span>' : ''));
             // A gigabit adapter on a 100 Mbit/s link (a two-pair cable, a slow
             // router port) or a half-duplex one is worth pointing out
             var slow = a.carrier && ((a.speed && a.speed < 1000) || a.duplex === 'half');
-            html += row('Link', (slow ? '<span class="warn">' : '') +
-                esc((a.speed ? a.speed + ' Mbit/s' : (a.carrier ? 'up' : 'no cable')) + (a.duplex === 'half' ? ', half duplex' : '')) +
+            html += row(T('Link'), (slow ? '<span class="warn">' : '') +
+                esc((a.speed ? a.speed + ' ' + T('Mbit/s') : (a.carrier ? T('up') : T('no cable'))) + (a.duplex === 'half' ? T(', half duplex') : '')) +
                 (slow ? '</span>' : '') + esc(a.bus ? ' · ' + a.bus : ''));
-            html += row('Address', esc(a.ip ? a.ip.replace(/\/\d+$/, '') : 'none yet'));
+            html += row(T('Address'), esc(a.ip ? a.ip.replace(/\/\d+$/, '') : T('none yet')));
         } else {
-            html += row('Adapter', 'none');
+            html += row(T('Adapter'), esc(T('none')));
         }
-        if (h.wifiFallbackOn) { html += row('Wi-Fi backup', '<span class="warn">on, the cable has no link</span>'); }
+        if (h.wifiFallbackOn) { html += row(T('Wi-Fi backup'), '<span class="warn">' + esc(T('on, the cable has no link')) + '</span>'); }
         if (s.speed && (s.speed.downMbps || s.speed.upMbps)) {
-            html += row('Speed', esc((s.speed.downMbps || '?') + ' down · ' + (s.speed.upMbps || '?') + ' up Mbit/s' +
-                (s.speed.pingMs !== null ? ' · ' + s.speed.pingMs + ' ms' : '')));
+            html += row(T('Speed'), esc(T('{down} down · {up} up Mbit/s', { down: s.speed.downMbps || '?', up: s.speed.upMbps || '?' }) +
+                (s.speed.pingMs !== null ? ' · ' + s.speed.pingMs + ' ' + T('ms') : '')));
         }
-        if (b) { html += row('Built-in port', esc(b.name + ' · ' + (b.carrier ? 'cable in' : 'no cable'))); }
-        if (w) { html += row('Wi-Fi', w.carrier ? '<span class="warn">connected</span>' : 'off'); }
-        var hookText = { enabled: 'on', disabled: 'off (disabled)', none: 'off', broken: 'broken link', legacy: 'old v1 hook', 'legacy-disabled': 'old v1 hook' }[h.state] || h.state;
-        html += row('At boot', esc(hookText + (h.running ? ' · running' : '')));
+        if (b) { html += row(T('Built-in port'), esc(b.name + ' · ' + (b.carrier ? T('cable in') : T('no cable')))); }
+        if (w) { html += row('Wi-Fi', w.carrier ? '<span class="warn">' + esc(T('connected')) + '</span>' : esc(T('off'))); }
+        var hookText = { enabled: T('on'), disabled: T('off (disabled)'), none: T('off'), broken: T('broken link'), legacy: T('old v1 hook'), 'legacy-disabled': T('old v1 hook') }[h.state] || h.state;
+        html += row(T('At boot'), esc(hookText + (h.running ? T(' · running') : '')));
         var last = s.log.length ? s.log[s.log.length - 1] : '';
-        if (last) { html += row('Last log', esc(last)); }
+        if (last) { html += row(T('Last log'), esc(last)); }
         $('facts').innerHTML = html;
 
         // Notes (skip the first issue, already in the subline)
@@ -250,24 +254,24 @@
         var rtFits = rt.r8152 && /^0bda:815[23]$/.test((s.adapter || {}).id || '');
         rtBtn.style.display = (rtFits || rt.result || h.realtekMode === false) ? '' : 'none';
         $('tog-realtek').className = 'tog' + (h.realtekMode !== false ? ' on' : '');
-        $('realtek-hint').textContent = rt.result === 'ok' ? 'your adapter is on the TV\'s own r8152' :
-            rt.result === 'failed' ? 'r8152 didn\'t take your adapter' : 'uses the TV\'s own Realtek driver';
+        $('realtek-hint').textContent = rt.result === 'ok' ? T('your adapter is on the TV\'s own r8152') :
+            rt.result === 'failed' ? T('r8152 didn\'t take your adapter') : T('uses the TV\'s own Realtek driver');
         var u = s.updates || {};
         $('updates-hint').textContent = u.hbcBlock === false ?
-            (bootOn && h.blockUpdates ? 'also covers the Homebrew Channel\'s block, which is off' : 'the Homebrew Channel\'s block is off too') :
-            'on top of the Homebrew Channel\'s block';
+            (bootOn && h.blockUpdates ? T('also covers the Homebrew Channel\'s block, which is off') : T('the Homebrew Channel\'s block is off too')) :
+            T('on top of the Homebrew Channel\'s block');
         // The faster-driver row only appears when it fits this TV: a driver is
         // known for this exact kernel and the adapter is one it supports, or a
         // driver is already set up (so it can be turned off again).
         var offer = s.driverOffer || 'none';
         var driverBtn = document.querySelector('[data-action="driver"]');
         var hints = {
-            available: 'built for this TV\'s kernel',
-            active: h.driver || 'custom module',
-            'wrong-kernel': 'built for an older kernel, not loaded',
-            replace: 'firmware updated, a driver for the new kernel is ready',
-            changed: 'file changed, not loaded',
-            missing: 'module file is missing'
+            available: T('built for this TV\'s kernel'),
+            active: h.driver || T('custom module'),
+            'wrong-kernel': T('built for an older kernel, not loaded'),
+            replace: T('firmware updated, a driver for the new kernel is ready'),
+            changed: T('file changed, not loaded'),
+            missing: T('module file is missing')
         };
         driverBtn.style.display = offer === 'none' ? 'none' : '';
         $('driver-hint').textContent = hints[offer] || '';
@@ -276,9 +280,10 @@
         // past test's report to send
         var dt = s.driverTest || {};
         document.querySelector('[data-action="drvtest"]').style.display = dt.available || dt.result ? '' : 'none';
-        $('drvtest-hint').textContent = dt.state === 'running' ? 'testing now' :
-            (dt.result ? 'last test: ' + (DT_SAYS[dt.result] || dt.result) :
-                (dt.adapterOk ? 'built for this TV\'s kernel, helps add support' : 'plug in an adapter it supports to try it'));
+        $('drvtest-hint').textContent = dt.state === 'running' ? T('testing now') :
+            (dt.result ? T('last test: {result}', { result: T(DT_SAYS[dt.result] || dt.result) }) :
+                (dt.adapterOk ? T('built for this TV\'s kernel, helps add support') : T('plug in an adapter it supports to try it')));
+        $('lang-hint').textContent = I18N ? I18N.label() : 'English';
         renderUpdate();
         if (current >= buttons().length) { current = buttons().length - 1; }
     }
@@ -294,10 +299,10 @@
         btn.style.display = show ? '' : 'none';
         // Squeeze the rows a little when there are more of them, so they fit
         var n = buttons().length;
-        $('actions').className = 'actions' + (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : '')));
+        $('actions').className = 'actions' + (n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
         if (!show) { return; }
-        $('update-title').textContent = 'Update to v' + upd.latest;
-        $('update-hint').textContent = upd.source === 'homebrew' ? 'opens the Homebrew Channel' : 'you have v' + upd.current + ', downloads and installs';
+        $('update-title').textContent = T('Update to v{v}', { v: upd.latest });
+        $('update-hint').textContent = upd.source === 'homebrew' ? T('opens the Homebrew Channel') : T('you have v{v}, downloads and installs', { v: upd.current });
     }
 
     function checkUpdate() {
@@ -330,14 +335,14 @@
     function act(title, args, after, network) {
         if (busy) { return; }
         busy = true;
-        overlay('busy', title, '<span class="spinner"></span>Working on it…  The picture is fine, only the network is changing.', '');
+        overlay('busy', title, '<span class="spinner"></span>' + esc(T('Working on it…  The picture is fine, only the network is changing.')), '');
         runScript(args, function (ok, out, err) {
             busy = false;
             var text = (out || err || '').replace(/\x1b\[[0-9;]*m/g, '').trim();
             var lines = text.split('\n');
             if (lines.length > 14) { lines = lines.slice(lines.length - 14); }
-            overlay('message', ok ? title + ': done' : title + ': something went wrong',
-                '<pre>' + esc(lines.join('\n')) + '</pre>', 'Press OK or BACK to close.');
+            overlay('message', ok ? T('{title}: done', { title: title }) : T('{title}: something went wrong', { title: title }),
+                '<pre>' + esc(lines.join('\n')) + '</pre>', T('Press OK or BACK to close.'));
             if (network && ok) { waitForAddress(); } else { refresh(); }
             if (after) { after(ok, text); }
         });
@@ -349,6 +354,12 @@
         overlay('confirm', title, html, hint);
     }
     function li(cls, html) { return '<li class="' + cls + '">' + html + '</li>'; }
+    // Translated text with {eth0}, {file}, {name}, {link} as code
+    function TC(text, vars) {
+        var v = vars || {}, out = esc(T(text));
+        v.eth0 = v.eth0 || 'eth0';
+        return out.replace(/\{(\w+)\}/g, function (m, k) { return k in v ? '<code>' + esc(v[k]) + '</code>' : m; });
+    }
 
     // CHANGELOG markdown, short: the bold lead if there is one, else the
     // first sentence.  Links become plain text, since there's no browser.
@@ -376,18 +387,18 @@
         var html = '', n = 0;
         wn.sections.forEach(function (sec) {
             if (n >= 7 || !sec.items.length) { return; }
-            html += '<div class="walk-h">' + esc(sec.title) + '</div><ul class="walk">';
+            html += '<div class="walk-h">' + esc(T(sec.title)) + '</div><ul class="walk">';
             sec.items.forEach(function (it) { if (n < 7) { html += li(sec.title === 'Fixed' ? 'ok' : '', mdShort(it)); n++; } });
             html += '</ul>';
         });
-        overlay('message', 'Updated to v' + v + ': what\'s new', html,
-            'Press OK or BACK to close.  Full notes: github.com/ohmybahgosh/LG-USB-2-ETH0/releases');
+        overlay('message', T('Updated to v{v}: what\'s new', { v: v }), html,
+            T('Press OK or BACK to close.  Full notes: github.com/ohmybahgosh/LG-USB-2-ETH0/releases'));
     }
 
     // Step 3 of the walk-through: upgrade, then check the result
     function upgradeNow() {
         busy = true;
-        overlay('busy', 'Upgrade from v1', '<span class="step-of">Step 3 of 3 · upgrading</span><span class="spinner"></span>Replacing the boot hook…', '');
+        overlay('busy', T('Upgrade from v1'), '<span class="step-of">' + esc(T('Step 3 of 3 · upgrading')) + '</span><span class="spinner"></span>' + esc(T('Replacing the boot hook…')), '');
         runScript('install -y', function (ok, out, err) {
             refresh(function (s) {
                 busy = false;
@@ -395,16 +406,16 @@
                 var done = ok && s && h.state === 'enabled' && !!h.link;
                 var checks = '';
                 if (s) {
-                    checks += h.state === 'enabled' && h.link ? li('ok', 'The boot hook is this version\'s now: <code>' + esc(h.link) + '</code>') : li('warn', 'The boot hook isn\'t this version\'s yet.');
-                    checks += h.state !== 'legacy' && h.state !== 'legacy-disabled' ? li('ok', 'The old v1 file is gone.') : li('warn', 'The old v1 file is still there.');
-                    checks += s.adapter && s.adapterIsEth0 ? li('ok', 'Your USB adapter is still <code>eth0</code>.') : li('', 'The adapter becomes <code>eth0</code> at the next boot, or choose Switch now.');
-                    checks += li('ok', 'Run at every boot is on.  Your settings are in <code>/var/lib/webosbrew/lg-usb-2-eth0.conf</code>.');
+                    checks += h.state === 'enabled' && h.link ? li('ok', esc(T('The boot hook is this version\'s now: {link}')).replace('{link}', '<code>' + esc(h.link) + '</code>')) : li('warn', esc(T('The boot hook isn\'t this version\'s yet.')));
+                    checks += h.state !== 'legacy' && h.state !== 'legacy-disabled' ? li('ok', esc(T('The old v1 file is gone.'))) : li('warn', esc(T('The old v1 file is still there.')));
+                    checks += s.adapter && s.adapterIsEth0 ? li('ok', TC('Your USB adapter is still {eth0}.')) : li('', TC('The adapter becomes {eth0} at the next boot, or choose Switch now.'));
+                    checks += li('ok', TC('Run at every boot is on.  Your settings are in {file}.', { file: '/var/lib/webosbrew/lg-usb-2-eth0.conf' }));
                 }
                 var text = (out || err || '').replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').slice(-8).join('\n');
-                overlay('message', done ? 'Upgrade from v1: done' : 'Upgrade from v1: something went wrong',
-                    '<span class="step-of">Step 3 of 3 · ' + (done ? 'all done' : 'check this') + '</span><ul class="walk">' + checks + '</ul>' +
+                overlay('message', done ? T('Upgrade from v1: done') : T('Upgrade from v1: something went wrong'),
+                    '<span class="step-of">' + esc(done ? T('Step 3 of 3 · all done') : T('Step 3 of 3 · check this')) + '</span><ul class="walk">' + checks + '</ul>' +
                     (done ? '' : '<pre>' + esc(text) + '</pre>'),
-                    done ? 'Press OK or BACK to close.  Nothing else to do.' : 'Press OK or BACK to close.  Report for GitHub makes a report you can send.');
+                    done ? T('Press OK or BACK to close.  Nothing else to do.') : T('Press OK or BACK to close.  Report for GitHub makes a report you can send.'));
             });
         });
     }
@@ -461,15 +472,14 @@
                 (DT_FORM[result] ? '&result=' + q(DT_FORM[result]) : '') +
                 '&report=' + q(short);
             var svg = formQr(form);
-            var said = result === 'works' ? 'It works!  ' : (result === 'crashed' ? 'The TV restarted during the test, so this driver doesn\'t fit as it is.  ' : '');
-            var html = '<div class="qr">' + svg + '<div>' + esc(said) + 'Scan this with your phone to send the result on GitHub, already filled in.  ' +
-                'Every result helps, good or bad.  MAC and IP addresses are left out.<br><br><pre>' +
+            var said = result === 'works' ? T('It works!  ') : (result === 'crashed' ? T('The TV restarted during the test, so this driver doesn\'t fit as it is.  ') : '');
+            var html = '<div class="qr">' + svg + '<div>' + esc(said) + esc(T('Scan this with your phone to send the result on GitHub, already filled in.  Every result helps, good or bad.  MAC and IP addresses are left out.')) + '<br><br><pre>' +
                 esc(report.split('\n').slice(0, 10).join('\n')) + '</pre></div></div>';
             if (again) {
-                stepThen('Driver test: ' + (DT_SAYS[result] || result), html, 'Press OK to test again, or BACK to close.', drvtestStart);
+                stepThen(T('Driver test: {result}', { result: T(DT_SAYS[result] || result) }), html, T('Press OK to test again, or BACK to close.'), drvtestStart);
             } else {
-                overlay('message', 'Driver test: ' + (DT_SAYS[result] || result), html,
-                    result === 'works' ? 'Press OK or BACK to close.  The driver stays in use until the next restart.' : 'Press OK or BACK to close.');
+                overlay('message', T('Driver test: {result}', { result: T(DT_SAYS[result] || result) }), html,
+                    result === 'works' ? T('Press OK or BACK to close.  The driver stays in use until the next restart.') : T('Press OK or BACK to close.'));
             }
         });
     }
@@ -486,14 +496,15 @@
             window.localStorage.setItem('lgu2e.drvtestOffered', dt.folder);
         } catch (e) { return; }
         var html = '<ul class="walk">' +
-            li('ok', 'There\'s a driver built for this TV\'s kernel from LG\'s own source' + (s.adapter && s.adapter.driver ? '' : ', so your adapter could work') + ', and nobody with this kernel has tried it yet.') +
-            li('', 'Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.') +
-            li('', dt.adapterOk ? 'Your adapter is one it supports.' : 'Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.') +
-            li('', 'It stays in the menu as Test a new driver, so you can do it any time.') + '</ul>';
+            li('ok', esc(s.adapter && s.adapter.driver ? T('There\'s a driver built for this TV\'s kernel from LG\'s own source, and nobody with this kernel has tried it yet.') :
+                T('There\'s a driver built for this TV\'s kernel from LG\'s own source, so your adapter could work, and nobody with this kernel has tried it yet.'))) +
+            li('', esc(T('Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.'))) +
+            li('', esc(dt.adapterOk ? T('Your adapter is one it supports.') : T('Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.'))) +
+            li('', esc(T('It stays in the menu as Test a new driver, so you can do it any time.'))) + '</ul>';
         if (dt.adapterOk) {
-            stepThen('A new driver to test', html, 'Press OK to test it now, or BACK for later.', drvtestStart);
+            stepThen(T('A new driver to test'), html, T('Press OK to test it now, or BACK for later.'), drvtestStart);
         } else {
-            overlay('message', 'A new driver to test', html, 'Press OK or BACK to close.');
+            overlay('message', T('A new driver to test'), html, T('Press OK or BACK to close.'));
         }
     }
 
@@ -502,16 +513,14 @@
     function drvtestStart() {
         var dt = (state && state.driverTest) || {};
         if (!dt.adapterOk) {
-            overlay('message', 'Test a new driver', 'Plug in a USB adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.', 'Press OK or BACK to close.');
+            overlay('message', T('Test a new driver'), esc(T('Plug in a USB adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.')), T('Press OK or BACK to close.'));
             return;
         }
-        confirmThen('Test a new driver?',
-            'There\'s a driver built for this TV\'s kernel from LG\'s own source, that hasn\'t run on a TV with this kernel yet.  ' +
-            'The test downloads it, checks its checksum, loads it until the next restart only, moves the adapter to it and checks it gets online.  ' +
-            'The network drops for a moment.  If it doesn\'t fit, the TV can freeze or restart: restart it (unplug it if needed) and open the app again to send that result too.',
+        confirmThen(T('Test a new driver?'),
+            T('There\'s a driver built for this TV\'s kernel from LG\'s own source, that hasn\'t run on a TV with this kernel yet.  The test downloads it, checks its checksum, loads it until the next restart only, moves the adapter to it and checks it gets online.  The network drops for a moment.  If it doesn\'t fit, the TV can freeze or restart: restart it (unplug it if needed) and open the app again to send that result too.'),
             function () {
                 busy = true;
-                overlay('busy', 'Testing the new driver', '<span class="spinner"></span>Downloading and checking it, then moving the adapter over.  This takes up to a minute.', '');
+                overlay('busy', T('Testing the new driver'), '<span class="spinner"></span>' + esc(T('Downloading and checking it, then moving the adapter over.  This takes up to a minute.')), '');
                 runScript('test-driver -y --no-wait', function (ok, out, err) {
                     var tries = 0;
                     function poll() {
@@ -521,8 +530,8 @@
                             busy = false;
                             if (st === 'done') { drvtestResult(false); return; }
                             var text = (out || err || '').replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').slice(-12).join('\n');
-                            overlay('message', st === 'running' ? 'Driver test: still running' : 'Driver test: didn\'t start',
-                                '<pre>' + esc(text) + '</pre>', 'Press OK or BACK to close.');
+                            overlay('message', st === 'running' ? T('Driver test: still running') : T('Driver test: didn\'t start'),
+                                '<pre>' + esc(text) + '</pre>', T('Press OK or BACK to close.'));
                         });
                     }
                     setTimeout(poll, 2000);
@@ -532,7 +541,7 @@
 
     function confirmThen(title, text, fn) {
         onConfirm = fn;
-        overlay('confirm', title, esc(text), 'Press OK to go ahead, or BACK to cancel.');
+        overlay('confirm', title, esc(text), T('Press OK to go ahead, or BACK to cancel.'));
     }
 
     // ------------------------------------------------------------------ actions
@@ -543,11 +552,11 @@
         boot: function () {
             if (!state) { return; }
             if (state.hook.state === 'enabled') {
-                confirmThen('Stop running at boot?', 'The adapter stays eth0 until the next reboot.  After that, the built-in port is eth0 again.', function () {
-                    act('Turn off at boot', 'uninstall -y');
+                confirmThen(T('Stop running at boot?'), T('The adapter stays eth0 until the next reboot.  After that, the built-in port is eth0 again.'), function () {
+                    act(T('Turn off at boot'), 'uninstall -y');
                 });
             } else {
-                act('Turn on at boot', installArgs(''));
+                act(T('Turn on at boot'), installArgs(''));
             }
         },
         driver: function () {
@@ -558,27 +567,28 @@
             // is known for the new kernel, so switch to it
             if (state.driverOffer === 'replace') {
                 var rpage = (state.driverPage || '').replace(/^https:\/\//, '');
-                confirmThen('Switch to the driver for the new kernel?',
-                    'A firmware update changed this TV\'s kernel' + (state.kernelAtSetup ? ' (from ' + state.kernelAtSetup + ' to ' + state.kernel + ')' : '') +
-                    ', so your faster driver isn\'t loaded anymore.  This downloads the one built for the new kernel' + (rpage ? ' by ' + rpage.split('/')[1] : '') +
-                    ', checks its checksum, and uses it from now on.  The network drops for a moment while the adapter moves over.',
+                confirmThen(T('Switch to the driver for the new kernel?'),
+                    T('A firmware update changed this TV\'s kernel{change}, so your faster driver isn\'t loaded anymore.  This downloads the one built for the new kernel{by}, checks its checksum, and uses it from now on.  The network drops for a moment while the adapter moves over.', {
+                        change: state.kernelAtSetup ? T(' (from {old} to {new})', { old: state.kernelAtSetup, 'new': state.kernel }) : '',
+                        by: rpage ? T(' by {who}', { who: rpage.split('/')[1] }) : ''
+                    }),
                     function () {
-                        act('Driver for the new kernel', 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
+                        act(T('Driver for the new kernel'), 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
                             ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);
                     });
                 return;
             }
             if (h.module) {
-                confirmThen('Stop using the faster driver?', 'The boot hook stops loading it.  It stays in use until the next reboot.', function () {
-                    act('Faster driver off', installArgs('--no-module'));
+                confirmThen(T('Stop using the faster driver?'), T('The boot hook stops loading it.  It stays in use until the next reboot.'), function () {
+                    act(T('Faster driver off'), installArgs('--no-module'));
                 });
             } else if (state.driverOffer === 'available') {
                 var page = (state.driverPage || '').replace(/^https:\/\//, '');
-                confirmThen('Use the faster driver?',
-                    'This downloads a driver module built for this exact TV kernel' + (page ? ' by ' + page.split('/')[1] + ' (' + page + ')' : '') + ', checks its checksum, and loads it at every boot.  ' +
-                    'Moving the adapter to it takes the network down for a moment.  Wi-Fi is a good way back in if anything goes wrong.',
+                confirmThen(T('Use the faster driver?'),
+                    T('This downloads a driver module built for this exact TV kernel{by}, checks its checksum, and loads it at every boot.  Moving the adapter to it takes the network down for a moment.  Wi-Fi is a good way back in if anything goes wrong.',
+                        { by: page ? T(' by {who} ({page})', { who: page.split('/')[1], page: page }) : '' }),
                     function () {
-                        act('Faster driver', 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
+                        act(T('Faster driver'), 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
                             ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);
                     });
             }
@@ -592,47 +602,44 @@
         watch: function () {
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.watch;
-            act(on ? 'Stop following plug and unplug' : 'Follow plug and unplug', installArgs(on ? '--no-watch' : '--watch'));
+            act(on ? T('Stop following plug and unplug') : T('Follow plug and unplug'), installArgs(on ? '--no-watch' : '--watch'));
         },
         realtek: function () {
             if (!state) { return; }
             if (state.hook.realtekMode !== false) {
-                confirmThen('Turn Realtek mode off?',
-                    'Your Realtek adapter stays on the generic driver, which works but is slower.  It takes effect from the next boot.',
-                    function () { act('Realtek mode off', installArgs('--no-realtek-mode')); });
+                confirmThen(T('Turn Realtek mode off?'),
+                    T('Your Realtek adapter stays on the generic driver, which works but is slower.  It takes effect from the next boot.'),
+                    function () { act(T('Realtek mode off'), installArgs('--no-realtek-mode')); });
             } else {
-                act('Realtek mode', installArgs('--realtek-mode'));
+                act(T('Realtek mode'), installArgs('--realtek-mode'));
             }
         },
         wifi: function () {
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.wifiFallback;
             if (on) {
-                act('Wi-Fi backup off', installArgs('--no-wifi-fallback'));
+                act(T('Wi-Fi backup off'), installArgs('--no-wifi-fallback'));
             } else {
-                confirmThen('Use Wi-Fi as a backup?',
-                    'If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  ' +
-                    'Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.',
-                    function () { act('Wi-Fi backup', installArgs('--wifi-fallback')); });
+                confirmThen(T('Use Wi-Fi as a backup?'),
+                    T('If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.'),
+                    function () { act(T('Wi-Fi backup'), installArgs('--wifi-fallback')); });
             }
         },
         updates: function () {
             if (!state) { return; }
             if (state.hook.state === 'enabled' && state.hook.blockUpdates) {
-                confirmThen('Stop blocking updates harder?',
-                    'webOS\'s own update check goes back to how it was, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.',
-                    function () { act('Update blocking off', installArgs('--no-block-updates')); });
+                confirmThen(T('Stop blocking updates harder?'),
+                    T('webOS\'s own update check goes back to how it was, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.'),
+                    function () { act(T('Update blocking off'), installArgs('--no-block-updates')); });
             } else {
-                confirmThen('Block updates harder?',
-                    'A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  ' +
-                    'It turns off webOS\'s own update check, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  ' +
-                    'It starts now and at every boot, and turning it off undoes all of it.',
-                    function () { act('Block updates', installArgs('--block-updates')); });
+                confirmThen(T('Block updates harder?'),
+                    T('A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  It turns off webOS\'s own update check, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  It starts now and at every boot, and turning it off undoes all of it.'),
+                    function () { act(T('Block updates'), installArgs('--block-updates')); });
             }
         },
         apply: function () {
-            confirmThen('Switch now?', 'The network drops for a few seconds while the adapter becomes eth0.', function () {
-                act('Switch now', 'apply -y', null, true);
+            confirmThen(T('Switch now?'), T('The network drops for a few seconds while the adapter becomes eth0.'), function () {
+                act(T('Switch now'), 'apply -y', null, true);
             });
         },
         // Upgrade from v1, as a walk-through: what's there, what changes,
@@ -643,20 +650,20 @@
             var s = state, h = s.hook, wasOff = h.state === 'legacy-disabled';
             var hookDir = '/var/lib/webosbrew/init.d/';
             var found = wasOff ?
-                li('warn', 'A v1 boot hook you turned off is still in the boot folder, as <code>' + hookDir + 'S01fix-eth.disabled</code>.  On many TVs that file still runs at every boot.') :
-                li('warn', 'The v1 boot hook is installed, at <code>' + hookDir + 'S01fix-eth</code>.  It runs at every boot and renames <code>eth0</code> even when no adapter is plugged in.');
-            var adapter = s.adapter && s.adapterIsEth0 ? li('ok', 'Your USB adapter is <code>eth0</code> right now.') :
-                (s.adapter ? li('', 'Your USB adapter is plugged in, as <code>' + esc(s.adapter.name) + '</code>.') : li('', 'No USB adapter is plugged in right now.'));
-            stepThen('Upgrade from v1', '<span class="step-of">Step 1 of 3 · what\'s there now</span><ul class="walk">' + found + adapter +
-                li('', 'The upgrade takes a few seconds and doesn\'t touch the network.') + '</ul>',
-                'Press OK to see what changes, or BACK to cancel.', function () {
-                    stepThen('Upgrade from v1', '<span class="step-of">Step 2 of 3 · what changes</span><ul class="walk">' +
-                        li('ok', 'The v1 hook is replaced, in place, by this version\'s: a link to the script inside this app, so updating the app updates the hook too.') +
-                        li('ok', 'Nothing switches now.  The adapter stays as it is until the next boot.') +
-                        li('ok', 'At boot, the new hook only changes anything when an adapter is plugged in, and puts the old names back if a step fails.') +
-                        li('', 'It starts with the defaults.  Turn on Faster driver, Follow plug and unplug or Wi-Fi as a backup afterwards if you want them.') +
-                        li('', wasOff ? 'This turns the boot hook on.  Prefer it off?  Turn off Run at every boot afterwards.' : 'To undo everything later, use Turn everything off.') + '</ul>',
-                        'Press OK to upgrade, or BACK to cancel.', upgradeNow);
+                li('warn', TC('A v1 boot hook you turned off is still in the boot folder, as {file}.  On many TVs that file still runs at every boot.', { file: hookDir + 'S01fix-eth.disabled' })) :
+                li('warn', TC('The v1 boot hook is installed, at {file}.  It runs at every boot and renames {eth0} even when no adapter is plugged in.', { file: hookDir + 'S01fix-eth' }));
+            var adapter = s.adapter && s.adapterIsEth0 ? li('ok', TC('Your USB adapter is {eth0} right now.')) :
+                (s.adapter ? li('', TC('Your USB adapter is plugged in, as {name}.', { name: s.adapter.name })) : li('', esc(T('No USB adapter is plugged in right now.'))));
+            stepThen(T('Upgrade from v1'), '<span class="step-of">' + esc(T('Step 1 of 3 · what\'s there now')) + '</span><ul class="walk">' + found + adapter +
+                li('', esc(T('The upgrade takes a few seconds and doesn\'t touch the network.'))) + '</ul>',
+                T('Press OK to see what changes, or BACK to cancel.'), function () {
+                    stepThen(T('Upgrade from v1'), '<span class="step-of">' + esc(T('Step 2 of 3 · what changes')) + '</span><ul class="walk">' +
+                        li('ok', esc(T('The v1 hook is replaced, in place, by this version\'s: a link to the script inside this app, so updating the app updates the hook too.'))) +
+                        li('ok', esc(T('Nothing switches now.  The adapter stays as it is until the next boot.'))) +
+                        li('ok', esc(T('At boot, the new hook only changes anything when an adapter is plugged in, and puts the old names back if a step fails.'))) +
+                        li('', esc(T('It starts with the defaults.  Turn on Faster driver, Follow plug and unplug or Wi-Fi as a backup afterwards if you want them.'))) +
+                        li('', esc(wasOff ? T('This turns the boot hook on.  Prefer it off?  Turn off Run at every boot afterwards.') : T('To undo everything later, use Turn everything off.'))) + '</ul>',
+                        T('Press OK to upgrade, or BACK to cancel.'), upgradeNow);
                 });
         },
         update: function () {
@@ -665,14 +672,14 @@
                 luna('luna://com.webos.applicationManager/launch', { id: 'org.webosbrew.hbchannel' }, function () {});
                 return;
             }
-            confirmThen('Update to v' + upd.latest + '?',
-                'Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.',
+            confirmThen(T('Update to v{v}?', { v: upd.latest }),
+                T('Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.'),
                 function () {
-                    act('Update', 'update -y', function (ok, text) {
+                    act(T('Update'), 'update -y', function (ok, text) {
                         // What's new shows once the new version opens, not here
                         if (ok && /Installing/.test(text || '')) {
-                            overlay('message', 'Updating to v' + upd.latest,
-                                '<span class="spinner"></span>Checked the download and installing it now.  The app closes and opens again by itself in a few seconds, then shows what\'s new.', '');
+                            overlay('message', T('Updating to v{v}', { v: upd.latest }),
+                                '<span class="spinner"></span>' + esc(T('Checked the download and installing it now.  The app closes and opens again by itself in a few seconds, then shows what\'s new.')), '');
                         }
                     });
                 });
@@ -697,20 +704,20 @@
                     rows += '<tr><td>' + esc(d ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') +
                         '</td><td>' + esc((h[i].downMbps || '?') + ' / ' + (h[i].upMbps || '?')) + '</td><td>' + esc(h[i].driver || '') + '</td></tr>';
                 }
-                return '<div class="speed-meta">Earlier (down / up Mbit/s, driver):</div><table class="hist">' + rows + '</table>';
+                return '<div class="speed-meta">' + esc(T('Earlier (down / up Mbit/s, driver):')) + '</div><table class="hist">' + rows + '</table>';
             }
             function draw(stage, done, s) {
-                var where = r.interface ? 'Over ' + r.interface + (r.server ? ', to Cloudflare\'s ' + r.server + ' server' : ', to Cloudflare') + '.' : 'Finding the nearest Cloudflare server…';
-                overlay(done ? 'message' : 'busy', done ? 'Speed test' : 'Speed test: ' + stage,
-                    '<div class="speed">' + tile('Download', r.downMbps, 'Mbit/s', stage === 'download') +
-                    tile('Upload', r.upMbps, 'Mbit/s', stage === 'upload') + tile('Latency', r.pingMs, 'ms', stage === 'latency') +
-                    '</div><div class="speed-meta">' + esc(where) + '  Uses a few hundred MB of data.</div>' + (done ? history(s) : ''),
-                    done ? 'Press OK or BACK to close.' : 'This takes about 15 seconds.');
+                var where = r.interface ? (r.server ? T('Over {nic}, to Cloudflare\'s {server} server.', { nic: r.interface, server: r.server }) : T('Over {nic}, to Cloudflare.', { nic: r.interface })) : T('Finding the nearest Cloudflare server…');
+                overlay(done ? 'message' : 'busy', done ? T('Speed test') : T('Speed test: {stage}', { stage: T(stage) }),
+                    '<div class="speed">' + tile(esc(T('Download')), r.downMbps, esc(T('Mbit/s')), stage === 'download') +
+                    tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
+                    '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' + (done ? history(s) : ''),
+                    done ? T('Press OK or BACK to close.') : T('This takes about 15 seconds.'));
             }
             function fail(text) {
                 busy = false;
-                overlay('message', 'Speed test: something went wrong',
-                    '<pre>' + esc((text || 'No answer from the script.').replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>', 'Press OK or BACK to close.');
+                overlay('message', T('Speed test: something went wrong'),
+                    '<pre>' + esc((text || T('No answer from the script.')).replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>', T('Press OK or BACK to close.'));
                 refresh();
             }
             function step(phase, stage, next) {
@@ -769,16 +776,25 @@
                 } catch (e) {
                     svg = '';
                 }
-                overlay('message', 'Report for GitHub',
-                    '<div class="qr">' + svg + '<div>Scan this with your phone to open a compatibility report on GitHub, already filled in.  ' +
-                    'It opens in your browser so the details carry over.  Check the result it picked and submit.  MAC addresses are hidden.<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
-                    'Press OK or BACK to close.');
+                overlay('message', T('Report for GitHub'),
+                    '<div class="qr">' + svg + '<div>' + esc(T('Scan this with your phone to open a compatibility report on GitHub, already filled in.  It opens in your browser so the details carry over.  Check the result it picked and submit.  MAC addresses are hidden.')) +
+                    '<br><br><pre>' + esc(report.split('\n').slice(0, 12).join('\n')) + '</pre></div></div>',
+                    T('Press OK or BACK to close.'));
             });
         },
         off: function () {
-            confirmThen('Turn everything off?', 'This removes the boot hook and gives eth0 back to the built-in port now.  Do this before removing the app.', function () {
-                act('Turn everything off', 'uninstall -y --now', null, true);
+            confirmThen(T('Turn everything off?'), T('This removes the boot hook and gives eth0 back to the built-in port now.  Do this before removing the app.'), function () {
+                act(T('Turn everything off'), 'uninstall -y --now', null, true);
             });
+        },
+        // Language: Auto (the TV's menu language), then each language in turn.
+        // The page reloads in the new one; the choice stays in the app's storage.
+        lang: function () {
+            if (busy || !I18N) { return; }
+            if (I18N.next()) {
+                try { window.sessionStorage.setItem('lgu2e.focus', 'lang'); } catch (e) { /* not kept */ }
+                window.location.reload();
+            }
         }
     };
 
@@ -847,6 +863,15 @@
     // And now and then while it's open, so plugging or unplugging shows up
     setInterval(function () { if (!document.hidden && !busy && !waitTimer) { refresh(); } }, 30000);
 
+    if (I18N) { I18N.translatePage(document.body); }
+    $('lang-hint').textContent = I18N ? I18N.label() : 'English';
+    // Back on the Language row after switching
+    try {
+        if (window.sessionStorage.getItem('lgu2e.focus') === 'lang') {
+            window.sessionStorage.removeItem('lgu2e.focus');
+            current = buttons().indexOf(document.querySelector('[data-action="lang"]'));
+        }
+    } catch (e) { /* first row */ }
     focusCurrent();
     tvInfo(function () { refresh(function (s) { whatsNew(s); drvtestOffer(s); }); });
     checkUpdate();

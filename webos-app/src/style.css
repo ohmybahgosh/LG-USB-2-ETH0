@@ -102,6 +102,8 @@ footer .right { margin: 0 0 0 auto; }
 .actions.tighter .btn small { font-size: 19px; margin-top: 2px; }
 .actions.tightest .btn { padding-top: 6px; padding-bottom: 6px; margin-bottom: 7px; font-size: 26px; }
 .actions.tightest .btn small { font-size: 17px; margin-top: 0; }
+.actions.squeeze .btn { padding-top: 4px; padding-bottom: 4px; margin-bottom: 5px; font-size: 25px; }
+.actions.squeeze .btn small { font-size: 16px; }
 
 /* Earlier speed tests under the result */
 .hist { margin-top: 8px; border-collapse: collapse; font-size: 22px; opacity: .85; }

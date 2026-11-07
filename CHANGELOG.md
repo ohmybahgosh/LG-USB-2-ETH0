@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.8.0] - 2026-11-07
+
+### Added
+
+- **The TV app speaks Russian.**  It follows the TV's menu language, and a new **Language** row picks one by hand (Auto, English, Русский), remembered on the TV.  Thanks to the [webos-forums.ru](https://webos-forums.ru/lg-usb-2-eth0-gigabit-usb-adapter-support-t9430.html) thread for the push.  What the script itself prints stays in English, and so do the GitHub reports, so their fields still match the forms.  Other languages are easy to add: see [Translating the app](README.md#translating-the-app).
+
+### Changed
+
+- With a lot of rows on screen (an update, Upgrade from v1 and a driver to test all at once), the menu squeezes a little more so the last row clears the footer.
+
 ## [2.7.4] - 2026-11-07
 
 ### Added

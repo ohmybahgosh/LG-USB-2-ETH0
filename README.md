@@ -206,6 +206,7 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
 - **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.  Either way, the new version opens with a short list of what's new.
 - **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.
+- **Language:** the app follows the TV's menu language, English or Russian for now, and the Language row picks one by hand.  What the script itself prints, like the log and test output, stays in English.  More languages are welcome: see [Translating the app](#translating-the-app).
 
 <details>
 <summary><b>Screenshots</b></summary>
@@ -771,6 +772,10 @@ Pull requests are welcome.  Please keep the script POSIX `sh` (it has to run und
 They're welcome too, held to the same standard as the rest of this project: say in the pull request that AI was used, make sure you understand and have reviewed every change, and test it on a real TV (say which model and webOS version).  Set your assistant up first: give it the [AI knowledge base](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest/download/lg-usb-2-eth0-for-ai.md) (or run `sh scripts/ai-context.sh`).  Coding agents read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) on their own.  See [CONTRIBUTING.md](CONTRIBUTING.md) for the details.
 
 </details>
+
+### Translating the app
+
+The app's text is in [`webos-app/src/i18n.js`](webos-app/src/i18n.js): copy the `ru` block, translate the values (keep the `{placeholders}`), and add the language to `NAMES`.  `node tests/check-i18n.js` checks that nothing is missing.  A partly done language works too: anything untranslated shows in English.
 
 ## Thanks
 
