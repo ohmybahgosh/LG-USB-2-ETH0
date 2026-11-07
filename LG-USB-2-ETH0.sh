@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.6"
+VERSION="2.7.0"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -68,6 +68,9 @@ HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
 # Kept while --wifi-fallback has turned Wi-Fi on, so it's turned off again
 # once the cable works, even after a reboot in between
 WIFI_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+# The last speed tests, kept across reboots: "time down up ping interface
+# driver kernel", newest last
+SPEED_HIST="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.speeds"
 # --block-updates: what webOS's own update switch was before it was turned
 # off, so turning the option off puts it back
 UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
@@ -204,6 +207,11 @@ WATCH_EVERY=${LGU2E_WATCH_EVERY:-5}
 # seconds of a working link before it goes off again
 WIFI_GRACE=${LGU2E_WIFI_GRACE:-60}
 WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
+# --watch: seconds eth0 (the adapter) can keep sending with nothing coming
+# back, cable link up, before it counts as hung and is re-plugged in
+# software, and seconds before that's done again
+HANG_SECS=${LGU2E_HANG_SECS:-60}
+HANG_EVERY=${LGU2E_HANG_EVERY:-1800}
 # After standby: seconds to let webOS bring the network back up before the
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
@@ -1045,8 +1053,28 @@ watch_run() {
     _wifi_tried=""
     _wifi_on=""
     [ -f "$WIFI_MARK" ] && _wifi_on=1
+    _clock=0 _stall=0 _prx="" _ptx="" _last_reset=""
     while :; do
         sleep "$WATCH_EVERY"
+        _clock=$((_clock + WATCH_EVERY))
+        # A hung adapter: the cable link is up and the TV keeps sending, but
+        # nothing comes back (DonZoomik saw Realtek adapters do this on LG's
+        # USB controller).  Three sysfs reads, no subprocess.
+        if [ "$WATCH" = 1 ]; then
+            _hc="" _rx="" _tx=""
+            { read -r _hc < "$NET/eth0/carrier"; read -r _rx < "$NET/eth0/statistics/rx_packets"; read -r _tx < "$NET/eth0/statistics/tx_packets"; } 2>/dev/null
+            if [ "$_hc" = 1 ] && [ -n "$_rx" ] && [ "$_rx" = "$_prx" ] && [ -n "$_ptx" ] && [ "${_tx:-0}" -gt "$_ptx" ]; then
+                _stall=$((_stall + WATCH_EVERY))
+            else
+                _stall=0
+            fi
+            _prx=$_rx _ptx=$_tx
+            if [ "$_stall" -ge "$HANG_SECS" ] && { [ -z "$_last_reset" ] || [ $((_clock - _last_reset)) -ge "$HANG_EVERY" ]; } && is_usb_nic eth0; then
+                _last_reset=$_clock _stall=0 _prx="" _ptx=""
+                replug_hung
+                continue
+            fi
+        fi
         # Wi-Fi fallback: the cable link is one sysfs read, no subprocess
         if [ "$WIFI_FALLBACK" = 1 ]; then
             _car=""
@@ -1102,13 +1130,57 @@ watch_run() {
     done
 }
 
+# eth0, the adapter, stopped receiving: unplug and plug it back in software
+# (as after standby), then make it eth0 again.  The watch loop moves it back
+# to the faster driver, if one is set up.
+replug_hung() {
+    _hl=$(readlink "$NET/eth0/device" 2>/dev/null)
+    _hdev=${_hl##*/}
+    _hdev=${_hdev%%:*}
+    [ -n "$_hdev" ] && [ -e "$USB_DEVS/$_hdev" ] || return 0
+    echo "=== $(date) eth0 sent for ${HANG_SECS}s with nothing coming back, cable link up: the adapter seems hung.  Re-plugging it in software. ==="
+    sys_write "$USB_DEVS/$_hdev/authorized" 0
+    sleep 2
+    sys_write "$USB_DEVS/$_hdev/authorized" 1
+    wait_for_nic
+    _hu=$(find_usb_nic)
+    [ -n "$_hu" ] && [ "$_hu" != eth0 ] && swap_in
+    toast "the USB adapter stopped answering, so it was restarted."
+    return 0
+}
+
 # What the boot hook does: wait for the adapter, then swap. The hook runs
 # this in the background, so it never holds up the Homebrew Channel startup,
 # and it changes nothing when no adapter shows up.
+# toast MESSAGE: a short message on the TV screen, for problems at boot that
+# would otherwise only be in the log.  Best effort: nothing if webOS's
+# notification service isn't there or refuses it.
+toast() {
+    command -v luna-send >/dev/null 2>&1 || return 0
+    _tm=$(printf '%s' "$1" | tr -d '"\\')
+    _tp="{\"sourceId\":\"org.ohmybahgosh.lgusb2eth0\",\"message\":\"LG-USB-2-ETH0: $_tm\"}"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 5 luna-send -n 1 luna://com.webos.notification/createToast "$_tp" > /dev/null 2>&1
+    else
+        luna-send -n 1 luna://com.webos.notification/createToast "$_tp" > /dev/null 2>&1
+    fi
+    echo "(shown on the TV) $_tm"
+    return 0
+}
+
 boot_run() {
     echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
     [ "$BLOCK_UPDATES" = 1 ] && updates_block
-    load_module
+    # Not $(load_module): that would run it in a subshell
+    _lmf=${RUN_DIR:-/tmp}/lg-usb-2-eth0.boot
+    load_module > "$_lmf" 2>&1
+    _lm=$(cat "$_lmf" 2>/dev/null)
+    rm -f "$_lmf"
+    [ -n "$_lm" ] && echo "$_lm"
+    case "$_lm" in
+        *"a firmware update?"*) toast "the faster driver was built for the old kernel, so it wasn't loaded after the firmware update.  Open the app for one that fits." ;;
+        "Not loading"*) toast "the faster driver wasn't loaded.  Open the app for details." ;;
+    esac
     _t=0
     while [ "$_t" -lt "$WAIT_SECS" ] && [ -z "$(find_usb_nic)" ]; do
         sleep 2
@@ -1120,6 +1192,7 @@ boot_run() {
         take_over
         wait_for_nic
         swap_in
+        [ $? = 1 ] && toast "the USB adapter couldn't be made the wired port, so the TV is on its own port or Wi-Fi.  Open the app for details."
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
     fi
@@ -2271,6 +2344,7 @@ uninstall_fix() {
         rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF" || error_exit "Could not remove the hook."
         success "Boot hook removed."
     fi
+    rm -f "$SPEED_HIST"
     if [ -f "$WIFI_MARK" ]; then
         rm -f "$WIFI_MARK"
         warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
@@ -2574,6 +2648,7 @@ show_status() {
     if [ "$_usb" = eth0 ]; then
         echo
         log "$GREEN" "The USB adapter is eth0${_bi:+ and the built-in port is $_bi}."
+        echo "  $(wake_path_text)"
     fi
 
     if [ -s "$LOG_FILE" ]; then
@@ -2589,6 +2664,28 @@ show_status() {
     fi
     return 0
 }
+# How the TV can be turned on over the network once the adapter is eth0.
+# Standby resets the TV's USB ports, so the adapter can't be counted on to
+# wake it: LG's "Turn on via Wi-Fi" listens on Wi-Fi, and on the built-in
+# port when it has a cable.  Prints wifi, builtin, or none.
+wake_path() {
+    _bp=$(find_builtin_nic)
+    if [ -n "$_bp" ] && [ "$(sysval "$NET/$_bp/carrier" 2>/dev/null)" = 1 ]; then echo builtin; return 0; fi
+    for _wp in "$NET"/*; do
+        is_wifi "${_wp##*/}" || continue
+        [ "$(sysval "$_wp/carrier" 2>/dev/null)" = 1 ] && { echo "wifi ${_wp##*/}"; return 0; }
+    done
+    echo none
+}
+wake_path_text() {
+    case "$(wake_path)" in
+        builtin) echo "Turning the TV on over the network (Turn on via Wi-Fi, apps, Home Assistant) goes through the built-in port, which has a cable.  Wake it by $(find_builtin_nic)'s MAC, $(nic_mac "$(find_builtin_nic)")." ;;
+        wifi*) _wn=$(wake_path); _wn=${_wn#wifi }
+            echo "Turning the TV on over the network (Turn on via Wi-Fi, apps, Home Assistant) goes through Wi-Fi, not the adapter: standby resets the USB ports.  Wake it by $_wn's MAC, $(nic_mac "$_wn")." ;;
+        *) echo "Nothing can turn the TV on over the network right now: standby resets the USB ports, so the adapter can't, and Wi-Fi is off with no cable in the built-in port.  Leave Wi-Fi connected if you use Turn on via Wi-Fi." ;;
+    esac
+}
+
 status_issue() { log "$RED" "  ! $1"; ISSUES=$((ISSUES + 1)); ISSUE_LIST="$ISSUE_LIST
 $1"; }
 status_note() { NOTES="$NOTES
@@ -2698,6 +2795,7 @@ show_json() {
     else
         printf '"speed":null,'
     fi
+    printf '"speedHistory":%s,' "$(speed_history_json)"
     printf '"issues":%s,"notes":%s,"log":%s}\n' "$(jarr "$ISSUE_LIST")" "$(jarr "$NOTES")" "$(jarr "$(tail -n 8 "$LOG_FILE" 2>/dev/null)")"
 }
 
@@ -2766,6 +2864,26 @@ speed_set() {
 }
 speed_get() { sed -n "s/^$1=//p" "$SPEED_FILE" 2>/dev/null | head -n 1; }
 
+# Add the finished test to the history (the last 10), with the driver and
+# kernel it ran on, so a firmware or driver change shows up in the numbers
+speed_remember() {
+    _rd=$(speed_get down) _ru=$(speed_get up) _ri=$(speed_get iface)
+    [ -n "$_rd" ] && [ -n "$_ru" ] || return 0
+    _rdrv=$(nic_driver "$_ri")
+    mkdir -p "$(dirname "$SPEED_HIST")" 2>/dev/null
+    { tail -n 9 "$SPEED_HIST" 2>/dev/null; echo "$(speed_get at | grep . || date +%s) $_rd $_ru $(speed_get ping | grep . || echo -) ${_ri:--} ${_rdrv:--} $(uname -r)"; } > "$SPEED_HIST.new" \
+        && mv -f "$SPEED_HIST.new" "$SPEED_HIST"
+}
+
+# The history as JSON, newest first
+speed_history_json() {
+    [ -s "$SPEED_HIST" ] || { printf '[]'; return 0; }
+    awk 'function q(s) { return (s == "-" ? "null" : "\"" s "\"") }
+        function n(s) { return (s ~ /^[0-9.]+$/ ? s : "null") }
+        NF >= 7 { l[++c] = "{\"at\":" n($1) ",\"downMbps\":" n($2) ",\"upMbps\":" n($3) ",\"pingMs\":" n($4) ",\"interface\":" q($5) ",\"driver\":" q($6) ",\"kernel\":" q($7) "}" }
+        END { printf "["; for (i = c; i >= 1; i--) printf "%s%s", l[i], (i > 1 ? "," : ""); printf "]" }' "$SPEED_HIST"
+}
+
 speed_test() {
     command -v curl >/dev/null 2>&1 || error_exit "The speed test needs curl, and this TV doesn't have it."
     case "$PHASE" in ''|ping|down|up) ;; *) error_exit "--phase is ping, down or up" ;; esac
@@ -2787,6 +2905,7 @@ speed_test() {
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then
         _up=$(speed_run up)
         speed_set up "$_up"
+        speed_remember
     fi
     if [ "$JSON" = 1 ]; then
         printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s}\n' \
@@ -2799,6 +2918,12 @@ speed_test() {
     [ -n "$_ping" ] && echo "  Latency   $_ping ms"
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then echo "  Download  ${_down:-failed} ${_down:+Mbit/s}"; fi
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
+    if [ "$(wc -l < "$SPEED_HIST" 2>/dev/null || echo 0)" -gt 1 ]; then
+        echo "Earlier tests (down / up Mbit/s, driver, kernel):"
+        tail -n 6 "$SPEED_HIST" | sed '$d' | awk '{ printf "  %s  %s / %s  %s  %s\n", $1, $2, $3, $6, $7 }' | while read -r _ht _hrest; do
+            printf '  %s %s\n' "$(date -d "@$_ht" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_ht")" "$_hrest"
+        done
+    fi
 }
 
 # === Updates ===
@@ -3045,6 +3170,7 @@ show_report() {
         for _i in "$_u"/*:*/net/*; do [ -e "$_i" ] && _has_net=1; done
         [ "$_has_net" = 0 ] && echo "  no driver: $_id ($_chip)"
     done
+    _wk=$(wake_path); echo "Wake over network: ${_wk%% *}"
     _list=""
     for _m in r8152 r8152_oot $(hook_setting DRIVER) ax88179_178a asix cdc_ether cdc_ncm smsc95xx lan78xx usbnet; do
         case " $_list " in *" $_m "*) continue ;; esac

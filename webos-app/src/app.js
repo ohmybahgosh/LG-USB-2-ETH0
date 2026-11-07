@@ -686,12 +686,25 @@
                     (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
                     '<span>' + unit + '</span></div>';
             }
-            function draw(stage, done) {
+            // Earlier results (the newest is this one), with the driver and kernel
+            // each ran on, so a firmware or driver change shows in the numbers
+            function history(s) {
+                var h = (s && s.speedHistory) || [];
+                if (h.length < 2) { return ''; }
+                var rows = '';
+                for (var i = 1; i < h.length && i <= 4; i++) {
+                    var d = h[i].at ? new Date(h[i].at * 1000) : null;
+                    rows += '<tr><td>' + esc(d ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') +
+                        '</td><td>' + esc((h[i].downMbps || '?') + ' / ' + (h[i].upMbps || '?')) + '</td><td>' + esc(h[i].driver || '') + '</td></tr>';
+                }
+                return '<div class="speed-meta">Earlier (down / up Mbit/s, driver):</div><table class="hist">' + rows + '</table>';
+            }
+            function draw(stage, done, s) {
                 var where = r.interface ? 'Over ' + r.interface + (r.server ? ', to Cloudflare\'s ' + r.server + ' server' : ', to Cloudflare') + '.' : 'Finding the nearest Cloudflare server…';
                 overlay(done ? 'message' : 'busy', done ? 'Speed test' : 'Speed test: ' + stage,
                     '<div class="speed">' + tile('Download', r.downMbps, 'Mbit/s', stage === 'download') +
                     tile('Upload', r.upMbps, 'Mbit/s', stage === 'upload') + tile('Latency', r.pingMs, 'ms', stage === 'latency') +
-                    '</div><div class="speed-meta">' + esc(where) + '  Uses a few hundred MB of data.</div>',
+                    '</div><div class="speed-meta">' + esc(where) + '  Uses a few hundred MB of data.</div>' + (done ? history(s) : ''),
                     done ? 'Press OK or BACK to close.' : 'This takes about 15 seconds.');
             }
             function fail(text) {
@@ -715,7 +728,7 @@
                     step('up', 'upload', function () {
                         busy = false;
                         draw('', true);
-                        refresh();
+                        refresh(function (s) { if (overlayMode === 'message') { draw('', true, s); } });
                     });
                 });
             });

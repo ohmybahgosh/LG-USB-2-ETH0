@@ -102,3 +102,7 @@ footer .right { margin: 0 0 0 auto; }
 .actions.tighter .btn small { font-size: 19px; margin-top: 2px; }
 .actions.tightest .btn { padding-top: 6px; padding-bottom: 6px; margin-bottom: 7px; font-size: 26px; }
 .actions.tightest .btn small { font-size: 17px; margin-top: 0; }
+
+/* Earlier speed tests under the result */
+.hist { margin-top: 8px; border-collapse: collapse; font-size: 22px; opacity: .85; }
+.hist td { padding: 2px 24px 2px 0; }

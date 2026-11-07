@@ -9,7 +9,7 @@
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.6.6';
+  var LATEST = '2.7.0';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
@@ -22,6 +22,9 @@
     wifi: { name: 'wlan0', driver: 'mtk', mac: '', carrier: false, speed: 0, ip: '' },
     defaultRoute: 'eth0', knownDriver: true, driverOffer: 'active', driverFile: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driverPage: 'https://github.com/DonZoomik/webos-r8152', driverDownloaded: true, autobindHook: false,
     speed: withSpeed ? { interface: 'eth0', server: 'DTW', pingMs: 7, downMbps: 272, upMbps: 287, at: 0 } : null,
+    speedHistory: withSpeed ? [{ at: 1794100000, downMbps: 272, upMbps: 287, pingMs: 7, interface: 'eth0', driver: 'r8152_oot', kernel: '5.4.268-329.ptl4tv.5' },
+      { at: 1793700000, downMbps: 231, upMbps: 248, pingMs: 8, interface: 'eth0', driver: 'cdc_ncm', kernel: '5.4.268-329.ptl4tv.5' },
+      { at: 1793200000, downMbps: 226, upMbps: 251, pingMs: 9, interface: 'eth0', driver: 'cdc_ncm', kernel: '5.4.268-329.ptl4tv.2' }] : [],
     updatedTo: p.get('whatsnew') ? ver : '',
     issues: [], notes: [],
     log: ['=== boot hook (wait 120s, module /home/root/lg-usb-2-eth0/r8152_oot.ko) ===', 'Done: the USB adapter is eth0, the built-in port is eth2.']

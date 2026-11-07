@@ -2,6 +2,15 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.7.0] - 2026-11-07
+
+### Added
+
+- **A hung adapter restarts itself.**  With `--watch` (**Follow plug and unplug** in the app), when the cable link is up and the TV keeps sending but nothing has come back for a minute, the adapter is re-plugged in software, as after standby, and made `eth0` again.  At most once every 30 minutes, so a dead router upstream can't cause a loop.  DonZoomik saw Realtek adapters stall like this on LG's USB controller; before, only a reboot fixed it.
+- **A message on the TV screen when the boot switch goes wrong:** when the faster driver doesn't fit the kernel after a firmware update, when the adapter couldn't be made `eth0`, or when a hung adapter was restarted.  Nothing shows when it works.
+- **Speed test history.**  The app shows your earlier results under a new one, with the driver each ran on, so a firmware or driver change shows up in the numbers.  The last 10 are kept across reboots; `speedtest` lists them too, and `status --json` has `speedHistory`.
+- **Turning the TV on over the network.**  Standby resets the TV's USB ports, so the adapter can't be counted on to wake it.  Once the adapter is `eth0`, `status` says what can (Wi-Fi, or the built-in port if it has a cable) and which MAC to send the wake-up to, and the report has a `Wake over network` line.  The README's FAQ explains it, including for Home Assistant.
+
 ## [2.6.6] - 2026-11-07
 
 ### Fixed

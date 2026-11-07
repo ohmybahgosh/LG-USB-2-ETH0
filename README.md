@@ -363,6 +363,7 @@ Then LG-USB-2-ETH0:
 
 - **Moves the adapter over.**  The kernel may give the adapter to a generic driver first (`cdc_ncm`, or `cdc_ether` on TVs with no Realtek driver), so the script releases it and binds it to the new driver.  An adapter with no driver at all just picks up the new one.  If that doesn't work within a few seconds, the adapter goes back where it was.  Only adapters the module lists as supported are moved, so a phone tethered over USB is never touched.
 - **Turns off scatter-gather** on Realtek's driver.  In DonZoomik's testing, it made the TV's USB controller hang after a while.
+- **Tells you on screen when the boot switch goes wrong:** the faster driver didn't fit after a firmware update, the adapter couldn't be made `eth0`, or a hung adapter was restarted.  When it works, it stays quiet.
 - **Never forces anything.**  A module built for another kernel is refused before it's loaded.  Each adapter gets one try per boot, so a driver that doesn't support it can't cause repeated drops.
 
 Already using DonZoomik's `r8152-autobind.sh`?  It does the same job.  Keep only one: run `sh /home/root/r8152-autobind.sh uninstall`, then install LG-USB-2-ETH0 with `--module`.  `status` warns if both are set up.
@@ -602,6 +603,8 @@ It doesn't touch webOS's update service itself.  Overriding that, as some people
 
 **Does it affect Wi-Fi?**  No, unless you turn on `--wifi-fallback`.  Wi-Fi modules are never renamed or moved, even the ones that sit on USB.
 
+**Can I still turn the TV on over the network (Turn on via Wi-Fi, the LG app, Home Assistant)?**  Not through the adapter.  Standby resets the TV's USB ports, so the adapter can't be counted on to wake it.  LG's wake-up listens on Wi-Fi, and on the built-in port when it has a cable.  So to keep waking it over the network, leave Wi-Fi connected and send the wake-up to the Wi-Fi MAC: `status` prints which one to use once the adapter is `eth0`.  Most TVs still send traffic over the adapter with Wi-Fi connected; if yours doesn't, `status` says so, and then it's a choice between the faster connection and waking over the network.  If Home Assistant or another app learned the TV's "wired" MAC after the switch, that's the adapter's, so point it at the Wi-Fi MAC instead.  With Wi-Fi off and nothing in the built-in port, nothing can wake the TV over the network.
+
 **What about phone tethering or a USB modem?**  Those are skipped too (`rndis_host`, `ipheth`, `cdc_mbim`, `qmi_wwan`).
 
 **Can I use two adapters?**  Yes.  Pin the one you want with `--mac`.  Without it, the first adapter with a cable in wins.
@@ -637,7 +640,7 @@ It doesn't touch webOS's update service itself.  Overriding that, as some people
 |--------|--------------|
 | `-y`, `--yes` | Answer yes to every question. |
 | `--now` | With `install` or `uninstall`, also switch right away. |
-| `--watch` | Keep watching after boot.  Plug the adapter in and it becomes `eth0`; unplug it and `eth0` goes back to the built-in port.  Starts from the next boot. |
+| `--watch` | Keep watching after boot.  Plug the adapter in and it becomes `eth0`; unplug it and `eth0` goes back to the built-in port.  If the adapter hangs (cable link up, the TV sending, nothing coming back for a minute), it's re-plugged in software, at most once every 30 minutes.  Starts from the next boot. |
 | `--mac aa:bb:cc:dd:ee:ff` | Only ever promote that adapter.  Handy with more than one adapter. |
 | `--wait 120` | Seconds the boot hook waits for the adapter to appear. |
 | `--module /path/driver.ko` | Load this driver module at boot.  An adapter with no driver gets it right away, and one the kernel gave to a generic driver (`cdc_ncm` or `cdc_ether`) is moved over to it.  Refuses a module built for another kernel.  See [A faster driver](#a-faster-driver). |
@@ -668,7 +671,7 @@ At boot the Homebrew Channel runs everything in `/var/lib/webosbrew/init.d`.  Th
 5. With `--module`, an adapter that had no driver picks up your module as soon as it loads.  One the kernel gave to a generic driver (`cdc_ncm` or `cdc_ether`) is moved over to your module's driver.  If the module doesn't take it within a few seconds, it goes back where it was.  Each adapter gets one try per boot.
 6. Without `--module`, Realtek mode: a Realtek RTL8152 or RTL8153 adapter left on `cdc_ncm` or `cdc_ether`, on a kernel with `r8152` built in, is switched to its Realtek USB configuration so `r8152` takes it.  Once per plug-in, and if `r8152` doesn't take it within 5 seconds, it goes back to the configuration it was in.  `--no-realtek-mode` skips this.
 7. It renames the built-in `eth0` to `eth2` and the adapter to `eth0`, then brings both up.  A rename that webOS interrupts is retried, and if a step still fails, the old names are put back.
-8. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.
+8. With `--watch`, it keeps checking every few seconds and follows the adapter being plugged in or out.  It also restarts a hung adapter: when the cable link is up and the TV keeps sending but nothing has come back for a minute, it re-plugs the adapter in software (as after standby) and makes it `eth0` again, at most once every 30 minutes.
 9. With `--module`, it also keeps the adapter on the faster driver.  Standby resets the TV's USB ports, and a Realtek adapter comes back on `cdc_ncm`, so the hook moves it over again.  It first lets webOS reconnect the network, then checks webOS reconnects it after the move.  If not, it takes the link down and up, and if that doesn't help, gives the adapter back to `cdc_ncm` until the next boot, so you're never left without a connection.  The check every few seconds only looks at a couple of `/sys` folders, so it costs next to nothing.
 10. With `--wifi-fallback`, it checks whether `eth0` still has a cable link (one `/sys` file).  After a minute without one, if Wi-Fi is off, it turns Wi-Fi on through webOS's own connection manager, the same switch as in the TV's settings, and turns it off again once the cable has worked for 30 seconds.  It remembers turning Wi-Fi on in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`, so that still happens after a reboot in between.
 11. With `--block-updates`, before anything else, it turns webOS's own update check off and blocks LG's update servers again (see [Blocking updates](#blocking-updates)), since the hosts entries and firewall rule don't survive a reboot.

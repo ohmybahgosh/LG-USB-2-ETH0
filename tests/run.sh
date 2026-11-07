@@ -180,7 +180,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -309,6 +309,27 @@ test_app_tv_info() {
     APP_FIRMWARE='04.50;reboot' APP_BOARD='K6LP$(x)' run report
     check "odd values ignored" lacks "reboot"
     check "odd board ignored" lacks "k6lp"
+}
+
+# Once the adapter is eth0, status says how the TV can be woken over the
+# network: standby resets the USB ports, so through Wi-Fi or a cabled
+# built-in port
+test_wake_path() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    add_wifi wlan0 1-2
+    run apply -y
+    run status
+    check "wake through Wi-Fi" has "goes through Wi-Fi, not the adapter"
+    check "names the Wi-Fi MAC" has "00:11:22:33:44:55"
+    run report
+    check "report: wifi" has "Wake over network: wifi"
+    echo 0 > "$SYS/class/net/wlan0/carrier"
+    run status
+    check "nothing can wake it" has "Nothing can turn the TV on over the network"
+    echo 1 > "$SYS/class/net/eth2/carrier"
+    run report
+    check "report: builtin" has "Wake over network: builtin"
 }
 
 test_apply_no_adapter() {
@@ -464,6 +485,33 @@ test_watch_hotplug() {
     check "job gone" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.pid' 2>/dev/null || echo 999999) 2>/dev/null"
 }
 
+# A hung adapter (cable link up, sending, nothing back) is re-plugged in
+# software once, then made eth0 again
+test_watch_hung_adapter() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y --watch --wait 4
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    local st=$SYS/class/net/eth0/statistics i=0
+    mkdir -p "$st"
+    echo 100 > "$st/rx_packets"
+    check "watching" wait_log "Watching for the adapter" 20
+    sleep 2
+    # Receiving and sending: not hung
+    while [ $i -lt 6 ]; do echo $((100 + i)) > "$st/rx_packets"; echo $((50 + i)) > "$st/tx_packets"; sleep 1; i=$((i + 1)); done
+    check "a working link is left alone" sh -c "! grep -q 'seems hung' '$LOG'"
+    # Sending, nothing back
+    i=0
+    while [ $i -lt 15 ] && ! grep -q 'seems hung' "$LOG"; do echo $((60 + i)) > "$st/tx_packets" 2>/dev/null; sleep 1; i=$((i + 1)); done
+    check "hang noticed" wait_log "the adapter seems hung"
+    check "re-plugged in software" grep -q "1-1/authorized 0" "$STATE/syswrite.log"
+    check "says so on screen" wait_log "(shown on the TV) the USB adapter stopped answering"
+    check "through webOS's notifications" grep -q "createToast.*stopped answering" "$STATE/luna.log"
+    check "adapter is eth0" is eth0 usb:1-1
+    stop_bg
+}
+
 # link NAME SPEED [DUPLEX]: what the cable negotiated
 link() { echo "$2" > "$SYS/class/net/$1/speed"; echo "${3:-full}" > "$SYS/class/net/$1/duplex"; }
 
@@ -502,6 +550,7 @@ test_wifi_fallback() {
     check "plan mentions Wi-Fi" has "turn Wi-Fi on"
     run_hook
     check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    check "no message on screen when it works" sh -c "! grep -q createToast '$STATE/luna.log'"
     check "watching" wait_log "Turning Wi-Fi on if eth0 has no cable link"
     sleep 2
     check "Wi-Fi left alone while the cable works" wifi_is disabled
@@ -953,6 +1002,7 @@ t apply_swaps test_apply_swaps
 t apply_virtual_builtin test_apply_virtual_builtin
 t apply_virtual_bridge test_apply_virtual_bridge_left_alone
 t app_tv_info test_app_tv_info
+t wake_path test_wake_path
 t apply_no_adapter test_apply_no_adapter
 t revert test_revert
 t usb0_name test_usb0_name
@@ -968,6 +1018,7 @@ t install_and_boot test_install_and_boot
 t boot_no_adapter test_boot_no_adapter
 t boot_late_adapter test_boot_late_adapter
 t watch_hotplug test_watch_hotplug
+t watch_hung_adapter test_watch_hung_adapter
 t link_speed test_link_speed
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
@@ -1243,6 +1294,7 @@ test_boot_skips_module_for_other_kernel() {
     run_hook
     check "boot still swaps" wait_log "Done: the USB adapter is eth0"
     check "explains" grep -q "built for kernel 5.4.268-old" "$LOG"
+    check "says so on screen" grep -q "createToast.*built for the old kernel" "$STATE/luna.log"
     check "never loaded" test ! -e "$STATE/insmod.log"
     check "stays on cdc_ncm" drv eth0 cdc_ncm
     run status
@@ -1284,6 +1336,13 @@ test_speedtest() {
     check "status json has the speed" json_ok "$OUT" "d['speed']['downMbps'] == 1600 and d['speed']['interface'] == 'eth0'"
     run speedtest --json --phase down
     check "one phase as json" json_ok "$OUT" "d['downMbps'] == 1600 and d['upMbps'] is None and d['pingMs'] is None"
+    run status --json
+    check "history kept, with the driver" json_ok "$OUT" "len(d['speedHistory']) == 1 and d['speedHistory'][0]['downMbps'] == 1600 and d['speedHistory'][0]['driver'] == 'r8152'"
+    run speedtest
+    check "earlier tests listed" has "Earlier tests"
+    run status --json
+    check "newest first, two kept" json_ok "$OUT" "len(d['speedHistory']) == 2 and d['speedHistory'][0]['at'] >= d['speedHistory'][1]['at']"
+    check "kept across reboots" test -s "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speeds"
 }
 
 test_speedtest_offline() {
