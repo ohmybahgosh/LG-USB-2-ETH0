@@ -31,3 +31,9 @@ B5-K24N-43.22.72	43.22.72	k24n	qilian	6.12.44-67.18.qilian.6	asix usbnet	none	co
 K8LPN2-43.22.13	43.22.13	k8lpn2	qilian	6.12.44-67.18.qilian.5	asix usbnet	none	config
 UP-LM21A-03.53.45	03.53.45	lm21a	koli	4.4.84-899.19.koli.1	none	none	config
 LM21U-03.41.05	03.41.05	lm21u	kluane	4.4.84-899.kcl4tv.19	none	none	config
+O24-43.21.71	43.21.71	o24	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+O22-43.21.74	43.21.74	o22	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+O22N-43.21.71	43.21.71	o22n	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+O22N3-43.21.73	43.21.73	o22n3	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+O24N-43.21.73	43.21.73	o24n	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+K7LP-03.53.46	03.53.46	k7lp	koli	4.4.84-723.kcl4tv.20	asix usbnet	none	config
