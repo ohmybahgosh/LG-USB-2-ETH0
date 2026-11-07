@@ -23,6 +23,12 @@ on:
         description: 'At most this many firmware audits in this run'
         required: false
         default: '3'
+      issues:
+        description: 'Open issues (no: only list the audit lines in the run summary, for backfilling results.tsv)'
+        required: false
+        default: 'yes'
+        type: choice
+        options: ['yes', 'no']
 
 permissions:
   contents: read
@@ -82,6 +88,8 @@ jobs:
 
       - name: Audit each one and open an issue
         if: steps.new.outputs.count != '0'
+        env:
+          ISSUES: ${{ inputs.issues || 'yes' }}
         run: |
           n=0
           while IFS= read -r line; do
@@ -90,6 +98,7 @@ jobs:
             kernel=$(jq -r .kernel "$RUNNER_TEMP/pair.json")
             chip=$(jq -r .chip "$RUNNER_TEMP/pair.json")
             path=$(jq -r .path "$RUNNER_TEMP/pair.json")
+            model=$(jq -r '(.models[0] // .chip) + "-" + (.firmware[-1] // "")' "$RUNNER_TEMP/pair.json")
             url="https://tv.slada.sk/$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$path")"
             echo "== $kernel on $chip: $path"
             rm -rf "$RUNNER_TEMP/save" "$RUNNER_TEMP/fw.zip"
@@ -100,7 +109,7 @@ jobs:
               sleep 30
             done
             if [ "$ok" = 1 ]; then
-              SAVE="$RUNNER_TEMP/save" sh scripts/firmware-audit/audit.sh "$RUNNER_TEMP/fw.zip" "$chip" > "$RUNNER_TEMP/audit.tsv" || true
+              SAVE="$RUNNER_TEMP/save" sh scripts/firmware-audit/audit.sh "$RUNNER_TEMP/fw.zip" "$model" > "$RUNNER_TEMP/audit.tsv" || true
             fi
             cat "$RUNNER_TEMP/audit.tsv"
             config=$(find "$RUNNER_TEMP/save" -name config 2>/dev/null | head -n 1)
@@ -108,7 +117,10 @@ jobs:
             if [ -s "$RUNNER_TEMP/audit.tsv" ]; then
               { echo; echo 'Audit line for `scripts/firmware-audit/results.tsv`:'; echo; echo '```'; cat "$RUNNER_TEMP/audit.tsv"; echo '```'; } >> "$RUNNER_TEMP/body.md"
             fi
+            if [ "$ISSUES" = no ]; then
+              { echo; echo "### $kernel on $chip"; echo; echo '```'; cat "$RUNNER_TEMP/audit.tsv"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
             gh issue create --title "New firmware: kernel $kernel on $chip" --label new-firmware --body-file "$RUNNER_TEMP/body.md"
-            rm -f "$RUNNER_TEMP/fw.zip"
           done < "$RUNNER_TEMP/todo.jsonl"
-          echo "Opened $n issues"
+          echo "Audited $n"
