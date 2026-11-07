@@ -305,6 +305,7 @@ test_app_tv_info() {
     APP_FIRMWARE=04.50.56 APP_MODEL=55UN7300AUD APP_BOARD=K6LP_ATSC_US run report
     check "firmware from the app" has "04.50.56"
     check "chip from the board type" has "Chip:    k6lp"
+    # shellcheck disable=SC2016 # a literal \$(x), the kind of value to refuse
     APP_FIRMWARE='04.50;reboot' APP_BOARD='K6LP$(x)' run report
     check "odd values ignored" lacks "reboot"
     check "odd board ignored" lacks "k6lp"
