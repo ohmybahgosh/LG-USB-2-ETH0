@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.7.1] - 2026-11-07
+
+### Added
+
+- **Drivers for 2021 LCD TVs with the K7LP chip** (UP and NANO models on firmware 03.53.46, webOS 6, kernel `4.4.84-723.kcl4tv.20`).  Realtek (`r8152.ko` and `r8152_oot.ko`), ASIX AX88179, Davicom DM9601 and Microchip LAN78xx, built from LG's KLP source with the TV's own config.  They're waiting for testers: **Test a new driver** in the app tries one.
+
 ## [2.7.0] - 2026-11-07
 
 ### Added
