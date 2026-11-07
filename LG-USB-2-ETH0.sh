@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.7.2"
+VERSION="2.7.3"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/234b98ab867a8c79ba26fc06a8d0d11a1ed82fd8/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/36183a66e5fcfd892690e3cac07eae5425c53869/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1834,7 +1834,22 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-229.kcl4tv.6 e60n r8152_oot.ko 0f93773025026cf4e1c965d67a7ecb807db95b5d6eb5f2a20b116909bb4634c6
 4.4.84-229.kcl4tv.6 e60n ax88179_178a.ko ff396d3e0631c14b963aca896ad2a45e326464df95e707026265e36113946aa0
 4.4.84-229.kcl4tv.6 e60n dm9601.ko add3ac9553d3eeb7a9a604e39e54a6fdc6296d746123047bc8246c010a865a0f
-4.4.84-229.kcl4tv.6 e60n lan78xx.ko 7ed83a1334046625edef87f470aed4036e0567ad9e98e0bf2017a3c774fbe024"
+4.4.84-229.kcl4tv.6 e60n lan78xx.ko 7ed83a1334046625edef87f470aed4036e0567ad9e98e0bf2017a3c774fbe024
+4.4.84-p.649.grampians.k5lp.1 k5lp r8152.ko d2a36a02efa01dc0e4d540f938c6429233c04f47a65b759fb40d54d7ca9641eb
+4.4.84-p.649.grampians.k5lp.1 k5lp r8152_oot.ko b8482abff0018011d2971861cb4296070f1ab849b5f59428ca53fb9918960c13
+4.4.84-p.649.grampians.k5lp.1 k5lp ax88179_178a.ko d974e92d31fd83c7a03f6ab89955a7bab504379588f51e6dd40d43333b703a2f
+4.4.84-p.649.grampians.k5lp.1 k5lp dm9601.ko 355c79a031998432c4536729d2f0beb98f676606523ae28f468528ad829a6a7c
+4.4.84-p.649.grampians.k5lp.1 k5lp lan78xx.ko 4ff5f1afda179bf762ddd40b5c8e9b8dc88f7c43ee15cec24e8baddb56c62d87
+4.4.84-417.gld4tv.7 k5lp r8152.ko 5b31f38ec14ecdb581a58ca0ad8f5a93647219058eae33e6cb9cf546074e59da
+4.4.84-417.gld4tv.7 k5lp r8152_oot.ko f00752a9ac4d6f0f32f4eb2bde34c4204178af7cf76207c5d4d79a8bd8bb593e
+4.4.84-417.gld4tv.7 k5lp ax88179_178a.ko 5ee303ec7ce71100ad7529720792d0807789a464e68bf17184b99eb643642f39
+4.4.84-417.gld4tv.7 k5lp dm9601.ko 355b6be0802984379e76de956baa551e57c5979e76dcdfe0245d57ebf8929400
+4.4.84-417.gld4tv.7 k5lp lan78xx.ko 166c0bdd895cfeee9e46cdb24e65ec869a431d1c8a265e8dd926537ccb7eb948
+4.4.84-433 m3r r8152.ko 27b5d67150b17efaf69f8280cd550880f8c946c83f73da5e9902ad6a0321a4b4
+4.4.84-433 m3r r8152_oot.ko 9e2266e6d4c062e76713f367f1a0f8b5ff6cb5816792874647befe0a5ff9c893
+4.4.84-433 m3r usbnet.ko b639944dc74485d01a3817b3374518545e74e4cc56d3a89c02827cb0de5f656b
+4.4.84-433 m3r ax88179_178a.ko 175a793f24832a7148199327af7cb1f1e3f26c5c67d2ded4ecc568fede584d0f
+4.4.84-433 m3r dm9601.ko 044f1cece8c0dfb86bcaeb096b0c39fbc93f83e52cf06b181b78165a8ac60bc9"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)

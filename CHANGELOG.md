@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.7.3] - 2026-11-07
+
+### Added
+
+- **Drivers for 2019 LCDs on webOS 4.5.**  The UM7000 to UM7800 (K5LP chip, kernels `4.4.84-p.649.grampians.k5lp.1` and `4.4.84-417.gld4tv.7`) already had throwaway96's Realtek and ASIX drivers in get-driver; now Realtek's newer `r8152_oot` (with 2.5G RTL8156), Davicom DM9601 and Microchip LAN78xx are waiting for testers too, built for each exact kernel.  The LM63 (M3R chip, `4.4.84-433`), whose kernel has no USB network driver at all, gets Realtek, ASIX AX88179 and Davicom, with a `usbnet.ko` loaded first.  Built from LG's webOS 4.5 source with configs that match the TVs' exactly, and waiting for testers.  webOS 4.5 TVs can be rooted with faultmanager-autoroot.
+- **The firmware audit covers 29 more kernels**, back to webOS 3.5, from the firmware monitor's first full run.
+
 ## [2.7.2] - 2026-11-07
 
 ### Added
