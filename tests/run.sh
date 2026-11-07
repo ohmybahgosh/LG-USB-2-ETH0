@@ -121,7 +121,7 @@ add_wifi() {
 # USB IDs it supports as aliases (like real modules have)
 fake_ko() {
     local f=$1 n=$2 k=${3:-$(uname -r)} id
-    shift 3 2>/dev/null || shift $#
+    if [ $# -ge 3 ]; then shift 3; else shift $#; fi
     {
         printf 'junk\0name=%s\0vermagic=%s SMP preempt mod_unload aarch64\0' "$n" "$k"
         for id in "$@"; do
@@ -159,7 +159,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -173,7 +173,7 @@ run_hook() {
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 \
-        LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
+        LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
 
@@ -1649,7 +1649,7 @@ test_test_driver_checks() {
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/146ebc0.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/af9e573.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
@@ -1668,7 +1668,7 @@ test_test_driver_checks() {
     check "tested: no new test" has "has a tested driver for your adapter"
     LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24 r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
         FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run get-driver -y
-    check "tested: get-driver downloads it" grep -q "146ebc0.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "tested: get-driver downloads it" grep -q "af9e573.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
@@ -1685,38 +1685,38 @@ test_test_driver_k6lp() {
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run status --json
     check "offered with the adapter" has '"driverTest":{"available":true,"adapterOk":true,"folder":"4.4.84-612.40.jimna.1-k6lp"'
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "ASIX: the ASIX build" grep -q "146ebc0.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
+    check "ASIX: the ASIX build" grep -q "af9e573.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
-    check "Realtek: the r8152 build" grep -q "146ebc0.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    check "Realtek: the r8152 build" grep -q "af9e573.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "RTL8156: Realtek's newer driver" grep -q "146ebc0.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    check "RTL8156: Realtek's newer driver" grep -q "af9e573.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
     # The UN7300's kernel: the kernel's own r8152 for an RTL8153
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "jcl4tv.40, RTL8153: r8152" grep -q "146ebc0.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
+    check "jcl4tv.40, RTL8153: r8152" grep -q "af9e573.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     # webOS 22 K8 TVs: the Realtek build of their own chip
     : > "$STATE/curl.log"
     FAKE_SOC=k8lp FAKE_KERNEL=5.4.96-115.30.mole.2 run test-driver -y
-    check "mole.2 K8Lp: r8152_oot" grep -q "146ebc0.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
+    check "mole.2 K8Lp: r8152_oot" grep -q "af9e573.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
     # webOS 24 K24 TVs on a 5.4.268 223 kernel
     : > "$STATE/curl.log"
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-223.29.okapi.5 run test-driver -y
-    check "okapi.5 K24: r8152_oot" grep -q "146ebc0.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "okapi.5 K24: r8152_oot" grep -q "af9e573.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
     # paparoa.pine.2 has a tested r8152, but not for an RTL8156: the build to test is offered
     : > "$STATE/curl.log"
     FAKE_SOC=k8hp FAKE_KERNEL=5.4.268-294.17.paparoa.pine.2 run test-driver -y
-    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "146ebc0.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
+    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "af9e573.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # An adapter no driver has: the new one takes it as it loads (no cdc_ncm
@@ -1846,7 +1846,7 @@ test_new_chip_drivers() {
 }
 
 # 2022 UQ LCDs (LM21AN): no USB network drivers at all.  Realtek's driver
-# doesn't need usbnet, so it's offered; nothing for ASIX yet
+# doesn't need usbnet; ASIX comes with its own usbnet.ko
 test_lm21an_drivers() {
     add_builtin
     add_unclaimed 1-1 0bda 8153
@@ -1860,7 +1860,7 @@ test_lm21an_drivers() {
     remove_usb 1-2
     add_unclaimed 1-3 0b95 1790
     FAKE_SOC=lm21an FAKE_KERNEL=5.4.96-934.mlt4tv.17 run status --json
-    check "ASIX: nothing yet" dt_json "true false"
+    check "ASIX: its driver, with usbnet" dt_json "true true"
 }
 
 # webOS 26 only loads modules LG signed: nothing is offered or loaded, and
@@ -1890,7 +1890,74 @@ test_webos26_signed_modules() {
     check "built-ins from /usr/lib/modules" has "Built in: r8152"
 }
 
+# LM21AN kernels have no usbnet: a driver built on it brings the pinned
+# usbnet.ko, which loads first (and only where the kernel lacks it)
+test_driver_with_usbnet() {
+    add_builtin
+    drvtest_file
+    add_unclaimed 1-1 0b95 1790
+    echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
+    echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
+    local k=5.4.96-934.mlt4tv.17
+    fake_ko "$STATE/download" ax88179_178a $k 0b95:1790
+    fake_ko "$STATE/download_usbnet" usbnet $k
+    local xs us
+    xs=$(sha256sum "$STATE/download" | awk '{print $1}')
+    us=$(sha256sum "$STATE/download_usbnet" | awk '{print $1}')
+    # The pinned usbnet.ko doesn't match: nothing is loaded
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k/ax88179_178a.ko $xs ax88179_178a.ko $k 0b95:1790" \
+        LGU2E_TEST_USBNET="https://example.test/$k/usbnet.ko 0000000000000000000000000000000000000000000000000000000000000000" \
+        FAKE_SOC=lm21an FAKE_KERNEL=$k run test-driver -y
+    check "bad usbnet: refused" has "usbnet.ko couldn't be downloaded and verified"
+    check "bad usbnet: nothing loaded" test ! -e "$STATE/insmod.log"
+    # The right one: usbnet first, then the driver, which takes the adapter
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k/ax88179_178a.ko $xs ax88179_178a.ko $k 0b95:1790" \
+        LGU2E_TEST_USBNET="https://example.test/$k/usbnet.ko $us" \
+        FAKE_SOC=lm21an FAKE_KERNEL=$k run test-driver -y
+    check "downloaded usbnet.ko" grep -q "/$k/usbnet.ko" "$STATE/curl.log"
+    check "usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q 'usbnet.ko'"
+    check "then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a'"
+    check "result works" dt_is "result=works"
+}
+
+# Where the kernel has usbnet, or for Realtek's driver, no usbnet.ko is fetched
+test_driver_without_usbnet() {
+    add_builtin
+    drvtest_file
+    add_unclaimed 1-1 0b95 1790
+    echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
+    echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
+    mkdir -p "$SYS/module/usbnet"
+    local k=5.4.96-115.30.mole.2
+    fake_ko "$STATE/download" ax88179_178a $k 0b95:1790
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k/ax88179_178a.ko $(sha256sum "$STATE/download" | awk '{print $1}') ax88179_178a.ko $k 0b95:1790" \
+        LGU2E_TEST_USBNET="https://example.test/$k/usbnet.ko 1111111111111111111111111111111111111111111111111111111111111111" \
+        FAKE_SOC=k8lp FAKE_KERNEL=$k run test-driver -y
+    check "kernel has usbnet: not fetched" sh -c "! grep -q usbnet.ko '$STATE/curl.log'"
+    check "result works" dt_is "result=works"
+}
+
+# At boot, a set-up driver built on usbnet loads the usbnet.ko beside it first
+test_boot_loads_usbnet() {
+    add_builtin
+    add_unclaimed 1-1 0b95 1790
+    mkdir -p "$SB/drv"
+    fake_ko "$SB/drv/ax88179_178a.ko" ax88179_178a "" 0b95:1790
+    fake_ko "$SB/drv/usbnet.ko" usbnet
+    local us
+    us=$(sha256sum "$SB/drv/usbnet.ko" | awk '{print $1}')
+    LGU2E_TEST_USBNET="https://example.test/usbnet.ko $us" run install -y --module "$SB/drv/ax88179_178a.ko"
+    check "installed" rc_is 0
+    LGU2E_TEST_USBNET="https://example.test/usbnet.ko $us" run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q '/drv/usbnet.ko'"
+    check "then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a.ko'"
+}
+
 t report test_report
+t driver_with_usbnet test_driver_with_usbnet
+t driver_without_usbnet test_driver_without_usbnet
+t boot_loads_usbnet test_boot_loads_usbnet
 t webos26_signed_modules test_webos26_signed_modules
 t lm21an_drivers test_lm21an_drivers
 t new_chip_drivers test_new_chip_drivers

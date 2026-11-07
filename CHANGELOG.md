@@ -2,6 +2,24 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.0] - 2026-11-06
+
+### Added
+
+- **Drivers that need `usbnet` work on kernels that leave it out.**  LG's LM21A-family LCD kernels have no `usbnet`, the core ASIX AX88179, Davicom, Aquantia and most other USB Ethernet drivers build on.  For those kernels the mirror now has the kernel's own `usbnet.ko`, pinned by SHA-256 like any driver.  `get-driver`, **Test a new driver** and boot-time loading download it alongside the driver, check it, and load it first.  Kernels that have `usbnet` built in are untouched.
+- **ASIX, Davicom and Aquantia drivers to test for the 2022 UQ LCDs (LM21AN chip)**, on both of its kernels, built on that `usbnet`.
+- **Drivers to test for the 2023 UR LCDs (LM21ANN chip) on webOS 23, 24 and 25:** Realtek (`r8152_oot` and the kernel's own `r8152`), ASIX AX88179, Davicom DM9601 and Aquantia AQC111, with `usbnet`, for `5.4.96-955.20.namtok.1`, `5.4.268-966.8.4.okapi.pine.1` and `5.4.268-966.15.ptl4tv.8`.  Built from LG's published source with each TV's own config.
+- **Drivers to test for the 2021 UP and NANO LCDs (LM21A and LM21U chips) on webOS 6:** Realtek, ASIX AX88179 and Davicom DM9601, with `usbnet`, for `4.4.84-899.19.koli.1` and `4.4.84-899.kcl4tv.19`.  LG's published source is older than these kernels and turns off one option (`CPU_SW_DOMAIN_PAN`) the TVs have on, so that was put back to match; the TVs' own kernels confirm it.
+- **294 drivers are now waiting for testers.**
+- **The README's webOS 26 section is a table by model:** which webOS 26 firmware can still be rooted, which drivers are built in, and whether added drivers can load.
+- **More of the firmware audit on webOS 26:** the 2024 B4 and 2025 B5 (43.22.72) and the 2024 K8LpN2 LCDs (43.22.13) have only `asix`, with module signing off.  The C6 and G6 moved to `6.12.44-352` in 43.21.69 and still only load drivers LG signed, while the 2022 to 2025 OLEDs' `6.12.44-352` doesn't, so the script checks the running kernel rather than its name.  The 2021 UP and NANO LCDs (LM21A, LM21U) on 4.4 kernels have no USB network drivers either.
+- **A tested adapter from Reddit:** the TP-Link UE306 on a 2024 C4, about 300 Mbit/s.
+
+### Fixed
+
+- **The README's driver list puts the LM21A-family kernels under the right webOS version and chip.**
+- **The driver build adds the exports of our own modules** (like `usbnet.ko`) when it checks a driver built on them.
+
 ## [2.5.0] - 2026-11-06
 
 ### Added

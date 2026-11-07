@@ -1,6 +1,7 @@
 #!/bin/sh
 # Fake `curl` for the test suite: never touches the network.
-#   Driver downloads: writes $FAKE_STATE/download (or "not the real file")
+#   Driver downloads: writes $FAKE_STATE/download (or "not the real file"),
+#   and $FAKE_STATE/download_usbnet for a usbnet.ko
 #   to the file given with -o.  curl_404 makes URLs containing its text 404.
 #   Releases (https://releases.test/...): serves $FAKE_STATE/rel/NAME.
 #   Speed test (URLs with __down or __up): answers -w with a fixed transfer
@@ -43,5 +44,9 @@ case "$url" in
         [ -f "$f" ] || { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
         cat "$f" > "$out"
         exit 0 ;;
+esac
+# usbnet.ko, which some drivers bring along: $FAKE_STATE/download_usbnet
+case "$url" in
+    */usbnet.ko) if [ -f "$FAKE_STATE/download_usbnet" ]; then cat "$FAKE_STATE/download_usbnet" > "$out"; else echo "not the real file" > "$out"; fi; exit 0 ;;
 esac
 if [ -f "$FAKE_STATE/download" ]; then cat "$FAKE_STATE/download" > "$out"; else echo "not the real file" > "$out"; fi

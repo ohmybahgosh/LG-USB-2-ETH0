@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.5.0"
+VERSION="2.6.0"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/146ebc052ff102923dd94250365bab7f875fe89f/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/af9e573dd6c0ebfea6db501c6845e4aa246d56df/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -413,6 +413,63 @@ mod_dir() {
 # The kernel only loads modules LG signed (the 2026 models' webOS 26
 # kernels), so no added driver can load, whoever built it
 sig_enforced() { [ "$(sysval "$SYS_MODULES/module/parameters/sig_enforce")" = Y ]; }
+# usbnet, the core most USB network drivers build on.  Some LG kernels (the
+# LM21A family) leave it out, so drivers built for them come with their own
+# usbnet.ko, pinned like any driver, and it's loaded first.
+needs_usbnet() { [ ! -d "$SYS_MODULES/usbnet" ] && ! grep -q '/usbnet\.ko$' "$(mod_dir)/modules.builtin" 2>/dev/null; }
+# uses_usbnet FILE: the driver is one of those built on usbnet (Realtek's and
+# lan78xx aren't)
+uses_usbnet() {
+    _un=$(tr -c '[:alnum:]_=.-' '\n' < "$1" 2>/dev/null | sed -n 's/^name=//p' | head -n 1)
+    case "$_un" in r8152|r8152_oot|lan78xx|'') return 1 ;; *) return 0 ;; esac
+}
+# usbnet_row KERNEL: "url sha256" of the usbnet.ko built for KERNEL (and this
+# TV's chip), from the tested or experimental tables.  A background job only
+# has this part of the script, so run_detached hands it USBNET_ROW instead.
+usbnet_row() {
+    if [ -n "${LGU2E_TEST_USBNET:-}" ]; then echo "$LGU2E_TEST_USBNET"; return 0; fi
+    if [ -n "${USBNET_ROW:-}" ]; then echo "$USBNET_ROW"; return 0; fi
+    printf '%s\n%s\n' "$TESTED_DRIVERS" "$EXPERIMENTAL_DRIVERS" | while read -r _uk _uch _uf _us; do
+        [ "$_uk" = "$1" ] && [ "$_uf" = usbnet.ko ] || continue
+        _ufo=$1
+        if [ "$_uch" != - ]; then
+            [ "$(tv_soc)" = "$_uch" ] || continue
+            _ufo=$1-$_uch
+        fi
+        echo "$EXPERIMENTAL_URL/$_ufo/usbnet.ko $_us"
+        break
+    done | grep .
+}
+# fetch_usbnet DIR: for a driver built on usbnet, on a kernel without it, put
+# the pinned usbnet.ko in DIR (checked like the driver)
+fetch_usbnet() {
+    needs_usbnet || return 0
+    _ur=$(usbnet_row "$(uname -r)") || return 0
+    _uurl=${_ur% *} _usum=${_ur#* }
+    _uf="$1/usbnet.ko"
+    if [ -f "$_uf" ] && [ "$(sha256sum "$_uf" | awk '{print $1}')" = "$_usum" ]; then return 0; fi
+    if fetch "$_uf.part" "$_uurl" && [ "$(sha256sum "$_uf.part" | awk '{print $1}')" = "$_usum" ]; then
+        mv -f "$_uf.part" "$_uf" && return 0
+    fi
+    rm -f "$_uf.part"
+    return 1
+}
+# load_usbnet DIR: load DIR/usbnet.ko first when one is pinned for this
+# kernel (it leaves usbnet out) and it isn't loaded yet.  Prints why not, and
+# fails, if it can't.
+load_usbnet() {
+    needs_usbnet || return 0
+    # Only kernels known to leave usbnet out have one pinned; others have it
+    # built in, even when /sys/module doesn't show it
+    _ur=$(usbnet_row "$(uname -r)") || return 0
+    _uf="$1/usbnet.ko"
+    [ -r "$_uf" ] || { echo "$_uf is missing"; return 1; }
+    [ "$(sha256sum "$_uf" | awk '{print $1}')" = "${_ur#* }" ] || { echo "$_uf isn't the usbnet.ko pinned for this kernel"; return 1; }
+    module_fits "$_uf" || { echo "$_uf is built for another kernel"; return 1; }
+    insmod "$_uf" 2>&1 || return 1
+    echo "loaded usbnet first: this kernel leaves it out"
+}
+
 SIG_MSG="This kernel only loads drivers signed by LG (the 2026 models' webOS 26 kernels enforce it), so no added driver can load here.  Only the TV's built-in drivers work."
 
 # The kernel a .ko file was built for (its vermagic), read without modinfo
@@ -511,6 +568,8 @@ load_module() {
     elif [ -n "$MODULE_SHA" ] && command -v sha256sum >/dev/null 2>&1 && \
          [ "$(sha256sum "$MODULE" | awk '{print $1}')" != "$MODULE_SHA" ]; then
         echo "Not loading $MODULE: the file changed since it was installed. Run install again if that was you."
+    elif uses_usbnet "$MODULE" && ! _lu=$(load_usbnet "$(dirname "$MODULE")"); then
+        echo "Not loading $MODULE: $_lu."
     elif insmod "$MODULE"; then
         echo "Loaded module $MODULE."
     else
@@ -709,6 +768,8 @@ drv_try() {
     _dte=""
     if [ -d "$SYS_MODULES/$DRIVER" ]; then
         _dtd=already
+    elif uses_usbnet "$MODULE" && ! _dte=$(load_usbnet "$(dirname "$MODULE")"); then
+        _dtd=no
     elif _dte=$(insmod "$MODULE" 2>&1); then
         _dtd=yes
     else
@@ -1276,6 +1337,9 @@ get_driver() {
         fi
         mv -f "$_dest.part" "$_dest" || error_exit "Could not save $_dest."
         success "Verified and saved: $_dest"
+        if uses_usbnet "$_dest" && ! fetch_usbnet "$DRIVER_DIR"; then
+            error_exit "This kernel has no usbnet, which the driver needs, and its usbnet.ko couldn't be downloaded and verified."
+        fi
     fi
     echo "Install it with:"
     echo "  sh $0 install --module $_dest"
@@ -1614,7 +1678,43 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.96-934.mlt4tv.17 - r8152_oot.ko af1ae12bbffb42b2f4fe342309e92a5cab781fc59a605c6e9e89521b712cb964
 5.4.96-934.mlt4tv.17 - r8152.ko ace00688f2b7d63545921a64e48c7d123581d1b06ed98f636a054b7ad2652615
 5.4.96-934.16.1.mirima.1 - r8152_oot.ko fc28abb1bc27b03fd332c384b2e037bd7f897d5779fe4976c02decf593f9882a
-5.4.96-934.16.1.mirima.1 - r8152.ko b7d038d7ffd13ae02ce09ce1f0fe8225c63b13cbab33df1d3e7980dd9ec8ec39"
+5.4.96-934.16.1.mirima.1 - r8152.ko b7d038d7ffd13ae02ce09ce1f0fe8225c63b13cbab33df1d3e7980dd9ec8ec39
+5.4.96-934.mlt4tv.17 - usbnet.ko 14690e0215980eab06b741047376f66a28049647527dd9a9778cd5ed28e824d9
+5.4.96-934.mlt4tv.17 - ax88179_178a.ko 582a967496f9afb96ce068078fc0938719588d43f60b7286b117f81c02d7dcfc
+5.4.96-934.mlt4tv.17 - dm9601.ko 7cd82d8988ab1ce916ec349628cfa124286d61debef5a26f21db97e9403aa7ea
+5.4.96-934.mlt4tv.17 - aqc111.ko 90451b94ed5f520005959edcb85fae2eadd3521b7fc197c375029df179056ba2
+5.4.96-934.16.1.mirima.1 - usbnet.ko a077664216fe73332e924f35238456cf1ead89cd240306d4c2a8867046b177e6
+5.4.96-934.16.1.mirima.1 - ax88179_178a.ko 8cf34aaa2f8ac689f7ad624e2371cb2d86217cc5c47486db11160b17229df4dc
+5.4.96-934.16.1.mirima.1 - dm9601.ko 952d96d5def983324326c5cc4af4966dc4fa245c6de3a65d52e4ef900d5b9818
+5.4.96-934.16.1.mirima.1 - aqc111.ko 73b4376746d66a6d3614c5b05e836616b78c5bba19f315c6dce98e4affc0a7dd
+5.4.96-955.20.namtok.1 - r8152_oot.ko 848b4b1a3127038ba3578a20b994e41bfc76f5597f11358712f8643bf2c38389
+5.4.96-955.20.namtok.1 - r8152.ko d89876a4e0999ef524d7318512c2ebe71702ed702689bc4709a0e89011c78868
+5.4.96-955.20.namtok.1 - usbnet.ko 684bf8c7e09b54741b1bb4310bf674149f07879184d8b1d248dd53746d46b399
+5.4.96-955.20.namtok.1 - ax88179_178a.ko 1278045563661738deff23f05756cca68b3411413c7b131f7490416ca4b3da72
+5.4.96-955.20.namtok.1 - dm9601.ko 0f466851e6383c81a278d96da25e43c476a2f77d8f9fa7cdc5b1983cbdee0672
+5.4.96-955.20.namtok.1 - aqc111.ko 77c9b4c8fd5ceb05ce43fcb699be2b53fc19f724c3d24bf89983fd2d2c623d30
+5.4.268-966.8.4.okapi.pine.1 - r8152_oot.ko eceadb6d19630fa9682a7766817a8c8432e9656c14a2c696e7d4b881b2c4328c
+5.4.268-966.8.4.okapi.pine.1 - r8152.ko 77617409da691d863895b7d1bb83020aa1147cefc213ccf713338028fdd415a6
+5.4.268-966.8.4.okapi.pine.1 - usbnet.ko 04a8ed503133e48008fe6885793473762f1e5b4dd5aeb68fe7d3f6137315ecfd
+5.4.268-966.8.4.okapi.pine.1 - ax88179_178a.ko 1416ca98f96b12b66f3c9b9ec857a8e687a7becab8219557891f700205b879f2
+5.4.268-966.8.4.okapi.pine.1 - dm9601.ko cd1f50be9afdf5ae1637ec17b6430f30e3927cb971c44052b92445fe7783baae
+5.4.268-966.8.4.okapi.pine.1 - aqc111.ko 6ad4beb8d6131bcaf80c5b3d0b5bc6e7c6b3c7aa0be4cb0b08f358d22f98acff
+5.4.268-966.15.ptl4tv.8 - r8152_oot.ko 82b96ceafa0c85576b16b50ba29723dffae808cbd9cc58b1cd4beef97ffae358
+5.4.268-966.15.ptl4tv.8 - r8152.ko 9ca46a97bd884a58d46dd069bd44b4ffa3bc32cd68b864600fc77d2bc210a4e8
+5.4.268-966.15.ptl4tv.8 - usbnet.ko 6c03c12c83626aa08537e9e4c1ebeef272bb4f2beafc839500db18be15b764f2
+5.4.268-966.15.ptl4tv.8 - ax88179_178a.ko c63941580f9c983ccb792e48f9c56cfd23c02106401e00b25d35eed336d5b2a8
+5.4.268-966.15.ptl4tv.8 - dm9601.ko f5b592e7fc77efa8ada66f93ac78be35a54bc4ffc481b73eb6a5e3fc5c839f42
+5.4.268-966.15.ptl4tv.8 - aqc111.ko 1bc3cf524723f6445578ed52288a1b83af3b094b4030f77b33f6e03e4ed29f67
+4.4.84-899.kcl4tv.19 - r8152_oot.ko 3aa2dcf4715215506c4074b5a818e102d3323a1c03b41d8c0042465cd9600afd
+4.4.84-899.kcl4tv.19 - r8152.ko 1f4c77b119d249c4d8df9c05ead4c33a4fcac38dee8569eb6353d079163adc3f
+4.4.84-899.kcl4tv.19 - usbnet.ko 8503c66e503726533ed39814ce81aa8f54a54836838c1843a1f9aa50572f3eaf
+4.4.84-899.kcl4tv.19 - ax88179_178a.ko 90427709e3b3c0768f1efe0f6b9035dfa8c678d5d9037cc6b9636fd250bd0aeb
+4.4.84-899.kcl4tv.19 - dm9601.ko bf7c15f0a0692e84fe1f4c88b473995240b556dc60c00d6d9093a84c546e16d1
+4.4.84-899.19.koli.1 - r8152_oot.ko e863bc0c1ae38da9598788f374346e92c1bdea40d725656ebd5e2c12def78f3d
+4.4.84-899.19.koli.1 - r8152.ko b96d7c77b32ef351f7aac682379bef30fa4d9f116fb5e3cde90f31d5bb62d94e
+4.4.84-899.19.koli.1 - usbnet.ko 9674ec86e7e586bcd7dcd911c94d99afbc92293a954009e2cfcaa31e2e265817
+4.4.84-899.19.koli.1 - ax88179_178a.ko 316a5b93461285f2b77cd776af86046a22a70ae3aedb01eec034550ad8dcece5
+4.4.84-899.19.koli.1 - dm9601.ko 33b082bcd5c20961200939ffcf09492f4211bd30d0dda2fd7871f8e12d3f3106"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -1643,6 +1743,7 @@ driver_rows() {
     _xo="" _xc="" _xcr=0
     while read -r _xk _xch _xfile _xs; do
         [ "$_xk" = "$1" ] || continue
+        [ "$_xfile" != usbnet.ko ] || continue
         _xf=$1
         if [ "$_xch" != - ]; then
             [ "$_xcr" = 1 ] || { _xc=$(tv_soc); _xcr=1; }
@@ -1842,6 +1943,10 @@ EOF
         error_exit "The module isn't built for kernel $_k.  The file was deleted and nothing changed."
     fi
     mv -f "$_xko.part" "$_xko" || error_exit "Could not save $_xko."
+    if uses_usbnet "$_xko" && ! fetch_usbnet "$RUN_DIR"; then
+        rm -f "$_xko"
+        error_exit "This kernel has no usbnet, which the new driver needs, and its usbnet.ko couldn't be downloaded and verified.  Nothing changed."
+    fi
     success "Downloaded and verified."
     { echo "state=running"; echo "boot=$(boot_id)"; echo "kernel=$_k"; echo "chip=${_soc:-unknown}"
       echo "adapter=$_xid${_xchip:+ ($_xchip)}"; echo "folder=$_xfold"; echo "file=$_xfile"; echo "sha=$_xsum"; echo "started=$(date)"; } > "$DRVTEST_FILE"
@@ -2035,7 +2140,11 @@ run_detached() {
         echo "The change still finishes on the TV. Wi-Fi is the safe way in."
         confirm "Go ahead?" || { echo "Cancelled. Nothing changed."; return 1; }
     fi
-    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"; MODULE_SHA=\"$MODULE_SHA\"; REALTEK_MODE=\"$REALTEK_MODE\"
+    # The pinned usbnet.ko for this kernel, if it has one: the job can't
+    # read the driver tables
+    _ujr=$(usbnet_row "$(uname -r)") || _ujr=""
+    case "$_ujr" in *[!A-Za-z0-9:/._\ -]*) _ujr="" ;; esac
+    _job="PIN_MAC=\"$PIN_MAC\"; PARK_NAME=\"$PARK_NAME\"; MODULE=\"$MODULE\"; DRIVER=\"$DRIVER\"; MODULE_SHA=\"$MODULE_SHA\"; REALTEK_MODE=\"$REALTEK_MODE\"; USBNET_ROW=\"$_ujr\"
 LOG_FILE=\"$LOG_FILE\"; RUN_DIR=\"$RUN_DIR\"
 $CORE
 $_what"

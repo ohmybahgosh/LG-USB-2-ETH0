@@ -60,23 +60,37 @@ def folder(k, ch):
 def webos(k):
     if k.startswith('4.4.84-61'):
         return 'webOS 5'
-    if '-329.' in k or '-294.' in k:
+    if k.startswith('4.4.84-899'):
+        return 'webOS 6'
+    if '-329.' in k or '-294.' in k or '-966.15.' in k:
         return 'webOS 25'
-    if k.startswith('5.4.268-320') or '-223.' in k:
+    if k.startswith('5.4.268-320') or '-223.' in k or '-966.8.' in k:
         return 'webOS 24'
-    if k.startswith('5.4.96-307') or '-132.' in k:
+    if k.startswith('5.4.96-307') or '-132.' in k or '-955.20.' in k:
         return 'webOS 23'
     if '-115.' in k or '-934.' in k:
         return 'webOS 22'
     return 'other'
 
 
+# usbnet.ko rows are a helper some drivers load first, not a driver to list
+HELPERS = ('usbnet.ko',)
+# Kernels with no chip in their row: LG's LM21A-family LCD chips, or LG's own
+LM_CHIPS = (('-934.', 'LM21AN'), ('-955.20.namtok', 'LM21ANN'), ('-966.', 'LM21ANN'),
+            ('-899.', 'LM21A'))
+
+
+def lm_chip(k):
+    return next((c for m, c in LM_CHIPS if m in k), 'LG chips')
+
+
 def listing(rows):
+    rows = [r for r in rows if r[2] not in HELPERS]
     kern = {}
     for k, ch, f, _ in rows:
         e = kern.setdefault(k, {'chips': [], 'realtek': False, 'asix': False, 'other': set()})
         fo = folder(k, ch)
-        link = '[%s](%s/tree/main/experimental/%s)' % (CHIPS.get(ch, ch.upper()) if ch != '-' else ('LM21AN' if '-934.' in k else 'LG chips'), MIRROR, fo)
+        link = '[%s](%s/tree/main/experimental/%s)' % (CHIPS.get(ch, ch.upper()) if ch != '-' else lm_chip(k), MIRROR, fo)
         if link not in e['chips']:
             e['chips'].append(link)
         e['realtek'] |= f.startswith('r8152')
@@ -84,7 +98,7 @@ def listing(rows):
         if f in OTHER:
             e['other'].add(OTHER[f])
     out = []
-    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 5', 'other'):
+    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 6', 'webOS 5', 'other'):
         ks = sorted((k for k in kern if webos(k) == g), reverse=True)
         if not ks:
             continue
@@ -138,7 +152,7 @@ def update():
     readme, svg = render(open(README).read(), rows, tested)
     open(README, 'w').write(readme)
     open(BADGE, 'w').write(svg)
-    print('README and badge: %d drivers waiting for testers' % len(rows))
+    print('README and badge: %d drivers waiting for testers' % len([r for r in rows if r[2] not in HELPERS]))
 
 
 def check(sums_file=None):
@@ -207,6 +221,12 @@ def promote(report_file):
     row = hit[0]
     exp.remove(row)
     tested.append(row)
+    # A driver built on usbnet, for a kernel that leaves it out, takes its
+    # usbnet.ko along
+    helper = [r for r in exp if folder(r[0], r[1]) == fo and r[2] in HELPERS]
+    for h in helper:
+        exp.remove(h)
+        tested.append(h)
     fmt = lambda rows: '\n'.join(' '.join(r) for r in rows)
     # Replace the later table first, so the earlier match's offsets still hold
     for m2, rows in sorted(((em, exp), (tm, tested)), key=lambda x: -x[0].start(1)):

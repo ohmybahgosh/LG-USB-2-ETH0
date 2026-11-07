@@ -102,8 +102,19 @@ esac
 case "$DRIVER" in
     intree:*)
         NAME=${DRIVER#intree:}
-        [ -f "$SRC/drivers/net/usb/$NAME.c" ] || { echo "no drivers/net/usb/$NAME.c in $SRC" >&2; exit 1; }
-        FILES="$SRC/drivers/net/usb/$NAME.c"
+        # A module made of several files (like asix: asix_devices, asix_common
+        # and ax88172a) is listed as NAME-y in the folder's Makefile
+        COMPOSITE=$(sed -n "s/^$NAME-y[[:space:]]*:=[[:space:]]*//p" "$SRC/drivers/net/usb/Makefile" | head -n 1)
+        if [ -n "$COMPOSITE" ]; then
+            FILES=""
+            for _o in $COMPOSITE; do
+                [ -f "$SRC/drivers/net/usb/${_o%.o}.c" ] || { echo "no drivers/net/usb/${_o%.o}.c in $SRC" >&2; exit 1; }
+                FILES="$FILES $SRC/drivers/net/usb/${_o%.o}.c"
+            done
+        else
+            [ -f "$SRC/drivers/net/usb/$NAME.c" ] || { echo "no drivers/net/usb/$NAME.c in $SRC" >&2; exit 1; }
+            FILES="$SRC/drivers/net/usb/$NAME.c"
+        fi
         # Its own header too, if it has one (lan78xx.h, aqc111.h)
         [ -f "$SRC/drivers/net/usb/$NAME.h" ] && FILES="$FILES $SRC/drivers/net/usb/$NAME.h"
         MODULE=$NAME.ko
@@ -127,7 +138,10 @@ mkdir -p "$B" "$M"
 cp "$KDIR/config" "$B/.config"
 # shellcheck disable=SC2086
 cp $FILES "$M/"
-[ -f "$M/Makefile" ] || echo "obj-m := ${MODULE%.ko}.o" > "$M/Makefile"
+if [ ! -f "$M/Makefile" ]; then
+    echo "obj-m := ${MODULE%.ko}.o" > "$M/Makefile"
+    [ -z "${COMPOSITE:-}" ] || echo "${MODULE%.ko}-y := $COMPOSITE" >> "$M/Makefile"
+fi
 # Realtek's v2.22.1 driver needs a few back-ports for 4.4 kernels (2020
 # TVs): r8152-4.4.patch adds them, and changes nothing on newer kernels
 case "${OOT:-0}:$BASE" in
@@ -217,7 +231,13 @@ KO=$M/$MODULE
 "${CROSS_COMPILE}readelf" -p .modinfo "$KO" > "$WORK/modinfo.txt"
 grep -Fq "vermagic=$KERNEL " "$WORK/modinfo.txt" || { echo "vermagic doesn't match" >&2; exit 1; }
 "${CROSS_COMPILE}nm" -u "$KO" | awk '{print $NF}' > "$WORK/imports.txt"
-python3 "$HERE/check-exports.py" "$EXPORTS" "$WORK/imports.txt" > "$WORK/exports.txt" || {
+# EXTRA_KO: modules of ours this one loads after (like usbnet.ko, on
+# kernels that leave usbnet out): their exports count too
+: > "$WORK/extra-exports.txt"
+for _xk in ${EXTRA_KO:-}; do
+    "${CROSS_COMPILE}nm" "$_xk" | sed -n 's/.* __ksymtab_\([A-Za-z0-9_]*\)$/\1/p' >> "$WORK/extra-exports.txt"
+done
+python3 "$HERE/check-exports.py" "$EXPORTS" "$WORK/imports.txt" "$WORK/extra-exports.txt" > "$WORK/exports.txt" || {
     cat "$WORK/exports.txt" >&2; exit 1; }
 cp "$KO" "$WORK/$MODULE"
 rm -rf "$B"
