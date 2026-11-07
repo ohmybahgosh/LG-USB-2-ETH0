@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.5"
+VERSION="2.6.6"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -548,6 +548,10 @@ tv_soc() {
     # firmware is built per chip and names it as the machine name too.
     if [ -z "$_ts" ] && [ -r "${LGU2E_ROOT}/etc/prefs/properties/machineName" ]; then
         _ts=$(head -n 1 "${LGU2E_ROOT}/etc/prefs/properties/machineName" 2>/dev/null | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_')
+    fi
+    # Or the board type the app passes on, like K6LP_ATSC_US
+    if [ -z "$_ts" ] && [ -n "${LGU2E_APP_BOARD:-}" ]; then
+        case "$LGU2E_APP_BOARD" in *[!A-Za-z0-9_.-]*) ;; *) _ts=$(echo "${LGU2E_APP_BOARD%%_*}" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9') ;; esac
     fi
     [ -z "$_ts" ] || echo "$_ts"
 }
@@ -1137,6 +1141,9 @@ limited() {
     if command -v timeout >/dev/null 2>&1; then timeout 5 "$@"; else "$@"; fi
 }
 
+# app_value VALUE: VALUE if it's a plain name or version, otherwise nothing
+app_value() { case "$1" in ''|*[!A-Za-z0-9._-]*) ;; *) echo "$1" ;; esac; }
+
 # Fills TV_MODEL, WEBOS_RELEASE, WEBOS_NAME, FIRMWARE
 tv_info() {
     [ -n "$TV_INFO_DONE" ] && return 0
@@ -1152,6 +1159,10 @@ tv_info() {
         TV_MODEL=$(echo "$INFO" | json_get modelName)
         [ -n "$FIRMWARE" ] || FIRMWARE=$(echo "$INFO" | json_get firmwareVersion)
     fi
+    # The app asks the TV itself and passes these on, for when the commands
+    # above come back empty under the Homebrew Channel
+    [ -n "$FIRMWARE" ] || FIRMWARE=$(app_value "${LGU2E_APP_FIRMWARE:-}")
+    [ -n "$TV_MODEL" ] || TV_MODEL=$(app_value "${LGU2E_APP_MODEL:-}")
     # LG's marketing names: 7.x is webOS 22, 8.x webOS 23, 9.x webOS 24, 10.x webOS 25,
     # 11.x webOS 26
     case "$WEBOS_RELEASE" in
@@ -2395,7 +2406,7 @@ show_status() {
     _wired_up=0
     for _sp in "$NET"/*; do
         _sn=${_sp##*/}
-        [ -e "$_sp/device" ] || continue
+        [ -e "$_sp/device" ] || is_builtin_nic "$_sn" || continue
         if is_wifi "$_sn"; then _kind="Wi-Fi"
         elif is_usb_nic "$_sn"; then _kind="USB Ethernet"; _usb_seen=1
         elif is_builtin_nic "$_sn"; then _kind="built-in Ethernet"
@@ -2405,7 +2416,9 @@ show_status() {
         _spd=$(sysval "$_sp/speed" 2>/dev/null)
         case "$_spd" in ''|-1|*[!0-9]*) _spd="" ;; esac
         [ "$_car" = 1 ] && [ "$_kind" != "Wi-Fi" ] && _wired_up=$((_wired_up + 1))
-        printf '  %-9s %-18s driver %-14s %s\n' "$_sn" "$_kind" "$(nic_driver "$_sn")" "$(nic_mac "$_sn")"
+        _sd=$(nic_driver "$_sn")
+        [ -n "$_sd" ] || [ -e "$_sp/device" ] || _sd=virtual
+        printf '  %-9s %-18s driver %-14s %s\n' "$_sn" "$_kind" "$_sd" "$(nic_mac "$_sn")"
         if [ "$_kind" = "Wi-Fi" ]; then
             if [ "$_car" = 1 ]; then _line="connected"; else _line="not connected"; fi
         elif [ "$_car" = 1 ]; then _line="cable in"
@@ -3005,13 +3018,17 @@ show_report() {
     echo "Interfaces:"
     for _rp in "$NET"/*; do
         _rn=${_rp##*/}
-        [ -e "$_rp/device" ] || continue
+        # Hardware-backed ports, plus a built-in port some TVs register as
+        # virtual (a UN7300's, parked as eth2 once the adapter is eth0)
+        [ -e "$_rp/device" ] || is_builtin_nic "$_rn" || continue
         if is_wifi "$_rn"; then _rk=wifi
         elif is_usb_nic "$_rn"; then _rk=usb
         elif is_builtin_nic "$_rn"; then _rk=builtin
         else _rk=other
         fi
-        _rl="  $_rn $_rk driver=$(nic_driver "$_rn") mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null || echo down)"
+        _rd=$(nic_driver "$_rn")
+        [ -n "$_rd" ] || [ -e "$_rp/device" ] || _rd=virtual
+        _rl="  $_rn $_rk driver=$_rd mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null || echo down)"
         _rs=$(sysval "$_rp/speed" 2>/dev/null)
         case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
         [ "$(sysval "$_rp/duplex" 2>/dev/null)" = half ] && _rl="$_rl half-duplex"

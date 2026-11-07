@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.6] - 2026-11-07
+
+### Fixed
+
+- **The report and Test a new driver know the firmware and model when the app runs the script.**  Under the Homebrew Channel, the script's own `nyx-cmd` and `luna-send` can come back empty (a UN7300 on webOS 5 reported "Firmware: unknown", [#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)).  The app now asks the TV for its model, firmware and board type itself and passes them on.  The script only uses them when its own sources come up empty, and only if they're plain names and version numbers.  The board type (like `K6LP_ATSC_US`) is one more way to find the chip.
+- **`status` and the report list a built-in port that shows up as a virtual device**, like the UN7300's once it's parked as `eth2` (its driver shows as `virtual`).
+
 ## [2.6.5] - 2026-11-07
 
 ### Added

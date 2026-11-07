@@ -168,6 +168,7 @@ run() {
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
+        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
     OUT=$(cat "$SB/out")
@@ -279,6 +280,10 @@ test_apply_virtual_builtin() {
     check "apply exits 0" rc_is 0
     check "adapter is eth0" is eth0 usb:1-1
     check "virtual built-in parked as eth2" is eth2 virtual
+    run report
+    check "report lists the parked virtual port" has "eth2 builtin driver=virtual"
+    run status
+    check "status lists it as built-in" has "built-in Ethernet"
     run revert -y
     check "built-in back to eth0" is eth0 virtual
     check "adapter is eth1" is eth1 usb:1-1
@@ -291,6 +296,18 @@ test_apply_virtual_bridge_left_alone() {
     run apply -y
     check "a bridge called eth0 is left alone" has "eth0 is not the built-in port"
     check "adapter stays eth1" is eth1 usb:1-1
+}
+
+# The app passes what the TV told it when the script's own commands come
+# back empty under the Homebrew Channel (issue #6)
+test_app_tv_info() {
+    add_builtin
+    APP_FIRMWARE=04.50.56 APP_MODEL=55UN7300AUD APP_BOARD=K6LP_ATSC_US run report
+    check "firmware from the app" has "04.50.56"
+    check "chip from the board type" has "Chip:    k6lp"
+    APP_FIRMWARE='04.50;reboot' APP_BOARD='K6LP$(x)' run report
+    check "odd values ignored" lacks "reboot"
+    check "odd board ignored" lacks "k6lp"
 }
 
 test_apply_no_adapter() {
@@ -934,6 +951,7 @@ t status_clean test_status_clean
 t apply_swaps test_apply_swaps
 t apply_virtual_builtin test_apply_virtual_builtin
 t apply_virtual_bridge test_apply_virtual_bridge_left_alone
+t app_tv_info test_app_tv_info
 t apply_no_adapter test_apply_no_adapter
 t revert test_revert
 t usb0_name test_usb0_name

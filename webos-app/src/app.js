@@ -60,10 +60,27 @@
         bridge.call(uri, JSON.stringify(params));
     }
 
+    // What the TV says about itself, asked from the app.  When the Homebrew
+    // Channel runs the script, nyx-cmd and luna-send can come back empty there
+    // (a UN7300 on webOS 5 did), so the app hands these over.
+    var tvEnv = '';
+    function tvInfo(cb) {
+        luna('luna://com.webos.service.tv.systemproperty/getSystemInfo',
+            { keys: ['modelName', 'firmwareVersion', 'boardType'] }, function (r) {
+                var ok = function (v) { return typeof v === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(v); };
+                if (r && r.returnValue !== false) {
+                    if (ok(r.firmwareVersion)) { tvEnv += 'LGU2E_APP_FIRMWARE=' + shq(r.firmwareVersion) + ' '; }
+                    if (ok(r.modelName)) { tvEnv += 'LGU2E_APP_MODEL=' + shq(r.modelName) + ' '; }
+                    if (ok(r.boardType)) { tvEnv += 'LGU2E_APP_BOARD=' + shq(r.boardType) + ' '; }
+                }
+                cb();
+            });
+    }
+
     // Run the bundled script as root. cb(ok, stdout, stderr)
     function runScript(args, cb) {
         if (window.LGU2E_DEMO) { window.LGU2E_DEMO(args, cb); return; }
-        luna(HBC_EXEC, { command: 'sh ' + shq(SCRIPT) + ' ' + args + ' 2>&1' }, function (r) {
+        luna(HBC_EXEC, { command: tvEnv + 'sh ' + shq(SCRIPT) + ' ' + args + ' 2>&1' }, function (r) {
             cb(r.returnValue !== false, r.stdoutString || '', r.errorText || r.stderrString || '');
         });
     }
@@ -818,6 +835,6 @@
     setInterval(function () { if (!document.hidden && !busy && !waitTimer) { refresh(); } }, 30000);
 
     focusCurrent();
-    refresh(function (s) { whatsNew(s); drvtestOffer(s); });
+    tvInfo(function () { refresh(function (s) { whatsNew(s); drvtestOffer(s); }); });
     checkUpdate();
 }());
