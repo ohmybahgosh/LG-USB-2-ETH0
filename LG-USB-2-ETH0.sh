@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.3"
+VERSION="2.6.4"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -251,11 +251,18 @@ is_usb_nic() {
     return 1
 }
 
-# True for the TV's own wired port (a device-backed, non-USB, non-Wi-Fi NIC)
+# True for the TV's own wired port (a device-backed, non-USB, non-Wi-Fi NIC).
+# On some Realtek-chip TVs (a 2020 UN7300 on webOS 5) LG's own driver
+# registers it with no parent device, so it shows up as a virtual ethN.  That
+# counts too, unless it's a bridge, bond or tunnel.
 is_builtin_nic() {
-    [ -e "$NET/$1/device" ] || return 1
     [ "$(sysval "$NET/$1/type")" = 1 ] || return 1
     is_wifi "$1" && return 1
+    if [ ! -e "$NET/$1/device" ]; then
+        case "$1" in eth[0-9]*) ;; *) return 1 ;; esac
+        [ -e "$NET/$1/bridge" ] || [ -e "$NET/$1/bonding" ] || [ -e "$NET/$1/tun_flags" ] && return 1
+        return 0
+    fi
     is_usb_nic "$1" && return 1
     return 0
 }

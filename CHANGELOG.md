@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.4] - 2026-11-06
+
+### Fixed
+
+- **Switch now works on TVs whose built-in port has no parent device.**  On a 2020 UN7300 (55UN7300AUD) on webOS 5 ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)), LG's own Ethernet driver registers the built-in port as a virtual `eth0`.  The script didn't count that as the built-in port, so **Switch now** said "eth0 is not the built-in port", **Turn everything off** found no built-in port, and the report left it out.  A virtual `ethN` that's a plain Ethernet device now counts as the built-in port.  Bridges, bonds and tunnels still don't.
+
 ## [2.6.3] - 2026-11-06
 
 ### Added

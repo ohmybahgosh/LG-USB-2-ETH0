@@ -75,6 +75,12 @@ add_builtin() {
     ln -s "$d" "$d/net/${1:-eth0}/device"
 }
 
+# add_virtual_builtin [NAME]: the built-in port as some Realtek-chip TVs show
+# it (a UN7300 on webOS 5, issue #6), with no parent device
+add_virtual_builtin() {
+    netdev "$SYS/devices/virtual/net/${1:-eth0}" "${1:-eth0}" "b4:b2:91:00:00:01" 0
+}
+
 # usbdev PORT VID PID [SPEED]: a USB device and its first interface
 usbdev() {
     local u=$SYS/devices/usb1/$1
@@ -149,6 +155,7 @@ kind() {
     t=$(readlink "$SYS/class/net/$1" 2>/dev/null) || { echo none; return; }
     case "$t" in
         */platform/*) echo builtin ;;
+        */virtual/net/*) echo virtual ;;
         */usb1/*) t=${t#*/usb1/}; echo "usb:${t%%/*}" ;;
         *) echo other ;;
     esac
@@ -263,6 +270,27 @@ test_apply_swaps() {
     check "adapter is eth0" is eth0 usb:1-1
     check "built-in parked as eth2" is eth2 builtin
     check "says done" has "Done: the USB adapter is eth0"
+}
+
+test_apply_virtual_builtin() {
+    add_virtual_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    check "apply exits 0" rc_is 0
+    check "adapter is eth0" is eth0 usb:1-1
+    check "virtual built-in parked as eth2" is eth2 virtual
+    run revert -y
+    check "built-in back to eth0" is eth0 virtual
+    check "adapter is eth1" is eth1 usb:1-1
+}
+
+test_apply_virtual_bridge_left_alone() {
+    add_virtual_builtin
+    mkdir -p "$SYS/devices/virtual/net/eth0/bridge"
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    check "a bridge called eth0 is left alone" has "eth0 is not the built-in port"
+    check "adapter stays eth1" is eth1 usb:1-1
 }
 
 test_apply_no_adapter() {
@@ -904,6 +932,8 @@ test_status_builtin_driver() {
 t help test_help
 t status_clean test_status_clean
 t apply_swaps test_apply_swaps
+t apply_virtual_builtin test_apply_virtual_builtin
+t apply_virtual_bridge test_apply_virtual_bridge_left_alone
 t apply_no_adapter test_apply_no_adapter
 t revert test_revert
 t usb0_name test_usb0_name
