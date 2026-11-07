@@ -40,3 +40,32 @@ O22N-43.21.71	43.21.71	o22n	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a
 O22N3-43.21.73	43.21.73	o22n3	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 O24N-43.21.73	43.21.73	o24n	qilian	6.12.44-352	r8152 r8153_ecm asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 K7LP-03.53.46	03.53.46	k7lp	koli	4.4.84-723.kcl4tv.20	asix usbnet	none	config
+75SM9900PLA.AEK-05.50.00	05.50.00	o18k	grampians	4.4.84-169.gld4tv.5	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+HU710PB-GL-03.01.07	03.00.26	k7lp	-	4.4.84-pjtr.k7lp.kavir.1	asix usbnet	none	config
+32LM6300PLA.AEK-05.40.97	05.40.97	m3r	grampians	4.4.84-433	none	none	config
+43UM7000PLA.AEK-05.40.97	05.40.97	k5lp	grampians	4.4.84-p.649.grampians.k5lp.1	asix usbnet	none	config
+32LK6100PLB.AEK-05.50.70	05.50.70	m3	gorongosa	4.4.84-404.glacier.10	none	none	modules.builtin
+43UK6200PLA.AEK-05.50.70	05.50.70	lm18a	gorongosa	4.4.84-636.glacier.26	none	none	modules.builtin
+43UJ6200-NA-06.10.55	-	m16plite	-	4.4.3-119.drd4tv.6	r8152 rtl8150	none	modules.builtin
+43UJ750V.AEK-06.10.65	-	m16p	-	4.4.3-119.drd4tv.6	r8152 rtl8150	none	modules.builtin
+32LJ590U.AEKQ-06.10.60	-	m2r	-	4.4.3-78.drd4tv.2	none	none	modules.builtin
+49SK8000PLB.AEK-05.50.70	05.50.70	m16pp	gorongosa	4.4.84-150.glacier.2	r8152 rtl8150	none	modules.builtin
+OLED55C8AUA.AUS-05.50.70	05.50.70	o18	gorongosa	4.4.84-150.glacier.2	r8152 rtl8150	none	modules.builtin
+43UK6200BNA-05.50.70	05.50.70	m16pplite	gorongosa	4.4.84-150.glacier.2	r8152 rtl8150	none	modules.builtin
+43UJ630V.AEK-06.10.75	-	k3lp	-	4.4.3-208.drd4tv.3	asix usbnet	none	config
+43QNED756RA.AEK-13.40.97	13.40.97	m23	namtok	5.4.96-311.namtok.1	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED42C31LA.AEU-13.40.76	13.40.76	o22n	namtok	5.4.96-311.namtok.1	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED42C44LA.AEK-03.11.20	03.11.20	o22n2	oeta	5.4.96-314	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+43UR73006LA.AEKQ-03.31.82	03.31.82	lm21ann	nameri	5.4.96-955.15.nameri.2	none	none	config
+43UJ6200-NA-06.00.03	-	m16plite	-	4.4.3-119.drd4tv.5	r8152 rtl8150	none	modules.builtin
+43UM7800BNA-05.00.15	05.00.15	k5lp	-	4.4.84-417.gld4tv.7	asix usbnet	none	config
+65NANO97KNB-03.11.40	03.11.30	o208k	-	4.4.84-212	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED48CXKNB-03.21.18	03.21.16	o20	jardine	4.4.84-220	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+32LM630BBNA-05.00.03	05.00.03	m3r	-	4.4.84-432	none	none	config
+49UJ7800-NB-06.00.05	-	m16p	-	4.4.3-119.drd4tv.5	r8152 rtl8150	none	modules.builtin
+AN-US800K-03.91.51	-	m16pstb	-	4.4.3-p.439.dixie.m16pstb.3	r8152 rtl8150	none	modules.builtin
+55SM8900KNB-05.00.15	05.00.15	m16p3	-	4.4.84-169.gld4tv.4	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+75SM9980KNB-05.00.10	05.00.10	o18k	-	4.4.84-169.gld4tv.4	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED55C9BNA-05.20.35	05.00.10	o18	-	4.4.84-169.gld4tv.4	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+OLED48CXKNB-03.11.30	03.11.30	o20	-	4.4.84-212	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
+HU70LA-KR-04.00.08	04.00.08	k5lp	-	4.4.84-k5lp.projector.gulaga.1.2	asix usbnet	none	config
