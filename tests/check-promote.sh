@@ -31,7 +31,10 @@ report "$1" works other.ko
 python3 "$T/scripts/drivers.py" promote "$T/report.txt" > /dev/null && fail "promoted a file that isn't listed"
 report "$1" works "$3"
 python3 "$T/scripts/drivers.py" promote "$T/report.txt" || fail "didn't promote a working driver"
-grep -q "^TESTED_DRIVERS=\"$1 $2 $3 $4\"$" "$T/LG-USB-2-ETH0.sh" || fail "row not in TESTED_DRIVERS"
+# The row is now in TESTED_DRIVERS (its first line, or a later one when
+# others were promoted before) and no longer in EXPERIMENTAL_DRIVERS
+awk -v r="$1 $2 $3 $4" '/^TESTED_DRIVERS="/ {t = 1} t {l = $0; sub(/^TESTED_DRIVERS="/, "", l); sub(/"$/, "", l); if (l == r) f = 1} t && /"$/ {t = 0} END {exit !f}' "$T/LG-USB-2-ETH0.sh" || fail "row not in TESTED_DRIVERS"
+awk -v r="$1 $2 $3 $4" '/^EXPERIMENTAL_DRIVERS="/ {t = 1} t {l = $0; sub(/^EXPERIMENTAL_DRIVERS="/, "", l); sub(/"$/, "", l); if (l == r) f = 1} t && /"$/ {t = 0} END {exit f}' "$T/LG-USB-2-ETH0.sh" || fail "row still in EXPERIMENTAL_DRIVERS"
 sh -n "$T/LG-USB-2-ETH0.sh" || fail "the script no longer parses"
 python3 "$T/scripts/drivers.py" check --sums "$SUMS" || fail "check fails after promoting"
 python3 "$T/scripts/drivers.py" promote "$T/report.txt" > /dev/null && fail "promoted the same driver twice"
