@@ -236,16 +236,16 @@
         html += row(T('At boot'), esc(hookText + (h.running ? T(' · running') : '')));
         var last = s.log.length ? s.log[s.log.length - 1] : '';
         // The last log line, unless there are problems or tips to make room for
-        if (last && !issues.length && !s.notes.length) { html += row(T('Last log'), esc(last)); }
+        if (last && !issues.length && !(s.notes || []).length) { html += row(T('Last log'), esc(last)); }
         $('facts').innerHTML = html;
 
         // Notes (skip the first issue, already in the subline)
-        var notes = issues.slice(1).concat(s.notes.map(TS)).slice(0, 4);
+        var notes = issues.slice(1).concat((s.notes || []).map(TS)).slice(0, 4);
         $('notes').innerHTML = notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
         // Drop notes from the end until the card fits the screen (a long
         // problem plus several notes can run past it, more so in Russian)
         var card = $('status'), list = $('notes');
-        card.className = 'card' + (issues.length || s.notes.length ? ' compact' : '');
+        card.className = 'card' + (issues.length || (s.notes || []).length ? ' compact' : '');
         while (list.lastChild && card.scrollHeight > card.clientHeight + 1) { list.removeChild(list.lastChild); }
 
         // Toggles
