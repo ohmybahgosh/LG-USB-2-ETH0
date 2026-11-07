@@ -2,7 +2,7 @@
 
 Which USB Ethernet drivers each LG TV's kernel has, read straight from LG's own firmware files rather than from user reports.  It tells us which TVs work out of the box, which need a driver `get-driver` already offers, and which still need one built.
 
-Last run: November 6, 2026, on the latest US firmware for each model, plus LG's LM21A-family LCD chips and the 2024 and 2025 OLED chips from the [EPK firmware archive](https://tv.slada.sk/).  The raw data is in [`scripts/firmware-audit/results.tsv`](../scripts/firmware-audit/results.tsv).
+Last run: November 7, 2026, on the latest US firmware for each model, plus LG's LM21A-family LCD chips and the 2024 and 2025 OLED chips from the [EPK firmware archive](https://tv.slada.sk/).  The raw data is in [`scripts/firmware-audit/results.tsv`](../scripts/firmware-audit/results.tsv).
 
 ## Results
 
@@ -12,8 +12,10 @@ Last run: November 6, 2026, on the latest US firmware for each model, plus LG's 
 |-------|------|----------|-------|------|--------|----------|
 | OLED65C9PUA | 2019 | 05.50.00 | 4.5 | o18 | `4.4.84-169.gld4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65CXPUA | 2020 | 04.64.00 | 5 | o20 | `4.4.84-219.jcl4tvmr.6` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| 75NANO99UNA (and the NANO97 and ZX 8K models) | 2020 | 04.64.00 | 5 | o208k | `4.4.84-219.jcl4tvmr.6` | asix only |
 | 55UN7300PUF | 2020 | 04.64.00 | 5 | k6lp | `4.4.84-612.40.jimna.1` | asix only |
 | OLED65C1PUB | 2021 | 03.53.45 | 6 | o20n | `4.4.84-229.kcl4tv.6` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
+| 65QNED99UPA (and the 2021 NANO96 to NANO99 and QNED90 to QNED99) | 2021 | 03.53.45 | 6 | e60n | `4.4.84-229.kcl4tv.6` | asix only |
 | 65NANO75UQA | 2022 | 04.60.92 | 22 | k8lp | `5.4.96-115.30.mole.2` | asix only |
 | OLED65C2PUA | 2022 | 33.31.68 | 25 | o22 | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
 | OLED65C3PUA | 2023 | 33.31.68 | 25 | o22n | `5.4.268-329.ptl4tv.5` | r8152, asix, ax88179_178a, cdc_ether, cdc_ncm |
@@ -56,6 +58,7 @@ Last run: November 6, 2026, on the latest US firmware for each model, plus LG's 
 - **Older Realtek-chip LCD TVs have only the ASIX AX8817x driver.**  The 2020 UN7300 (K6LP) and 2022 NANO75 (K8LP) have no `r8152`, no `ax88179_178a` and no `cdc_ncm`.  An adapter needs a module built for them.
   - The UN7300's current firmware reports `4.4.84-612.40.jimna.1`, not the `4.4.84-612.jcl4tv.40` that OCT0PUSCRIME's driver was built for.  That kernel name may come from older firmware, so his module may not load after an update.  A report from a UN7300 on 04.64.00 would settle it.  For that kernel, and K6Lp's `4.4.84-612.21.6.jardine.2`, there are now Realtek and ASIX drivers to test, built with the TV's own config: see [driver-build.md](driver-build.md).
 - **LG's own OLED chips (O18 to O22N2) have everything built in** on webOS 4.5 to 25.  Adapters work out of the box there.  Only the driver version decides how fast.
+- **The 2020 and 2021 8K and Mini LED LCDs don't.**  The 2020 NANO97, NANO99 and ZX (O208K) run the CX's kernel name, `4.4.84-219.jcl4tvmr.6`, and the 2021 NANO96 to NANO99 and QNED90 to QNED99 (E60N) run the C1's, `4.4.84-229.kcl4tv.6`, but their chips' configs have only `asix` and `usbnet`: no Realtek and no AX88179.  Same kernel name, different drivers, which is why the script matches drivers by kernel and chip.
 - **webOS 26 moves to kernel 6.12, and on the 2026 models it only loads drivers LG signed.**  Their kernels have `MODULE_SIG_FORCE=y`, so no added driver can load, even as root: what's built in is all there is.  That goes by the chip, not the kernel name: the C6 and G6 moved from `6.12.44-347` to `6.12.44-352` in 43.21.69 and still enforce it, while the 2022 to 2025 OLEDs' `6.12.44-352` has signing off on every one of their chips (O22, O22N, O22N2, O22N3, O24, O24N, checked on 43.21.71 to 43.21.96).  Likewise `6.12.44-67.18.qilian.5` enforces it on the B6 and QNED7S but not on the K8LpN2 LCDs, and the B4 and B5's `qilian.6` has it off.  So the script checks the running kernel (`sig_enforce`) instead of trusting a kernel name.  Where the built-in drivers are enough, adapters work once the TV is rooted:
   - LG's own chips (the 2022 to 2025 OLEDs on `6.12.44-352`, and the 2026 C6 and G6 on `6.12.44-347`) have everything built in.  Their `r8152` handles RTL8153 and RTL8156 properly, and `r8153_ecm` is there too.
   - The 2026 B6 (K26) has `r8152` and `asix` but no `ax88179_178a`, so AX88179 adapters get nothing.  The 2026 QNED7S (K25LpNLM) has only `asix`: no Realtek and no AX88179.  Neither can be fixed with a driver.
@@ -78,5 +81,14 @@ EPK2EXTRACT=$PWD/epk2extract/build_linux/epk2extract scripts/firmware-audit/audi
 It needs `unsquashfs` (squashfs-tools) and python3.  A firmware file is 1 to 2 GB, so it only keeps one at a time.  With `SAVE=DIR` it also keeps the kernel image and its config in `DIR/<kernel>/`, for [building a driver](driver-build.md) against that kernel.
 
 The download links for current firmware are on each model's LG support page (Manuals & Software, Download Software).  LG only keeps the latest one, so older firmware comes from the [EPK firmware archive](https://tv.slada.sk/).  Its [`processed_fw.json`](https://tv.slada.sk/processed_fw.json) lists the exact kernel of every firmware it has (`kernelVersion`), so you can find which firmware runs a kernel without downloading anything.  Please try LG's download first, and keep to two downloads at a time there.
+
+## Watching for new firmware
+
+A [daily workflow](../.github/workflows/firmware-monitor.yml) reads the archive's `processed_fw.json` and looks for (kernel, chip) pairs that are new: no drivers in the script and no row in `results.tsv`.  For each one (up to three a day), it downloads the newest firmware with it, runs `audit.sh` on it and opens an issue labeled [`new-firmware`](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues?q=label%3Anew-firmware) that says what the kernel has: drivers built in, module signing enforced, or what needs building.  The run's summary has the whole coverage table, every LG kernel from 4.4 on with what the project has for it.  [`monitor.py`](../scripts/firmware-audit/monitor.py) does the comparing, and runs locally too:
+
+```sh
+python3 scripts/firmware-audit/monitor.py coverage -     # the table, from the live index
+python3 scripts/firmware-audit/monitor.py new - 2026-10-01   # new kernels since a date
+```
 
 Want a model added?  Open an issue with its model number.

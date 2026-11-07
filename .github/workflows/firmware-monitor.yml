@@ -1,0 +1,114 @@
+name: Firmware monitor
+
+# Once a day, look for LG firmware with a kernel this project doesn't cover
+# yet.  The EPK archive (https://tv.slada.sk/) lists every LG firmware file
+# with its kernel and chip.  For each new (kernel, chip) pair, this
+# downloads the newest firmware with it, audits it for USB Ethernet drivers
+# (scripts/firmware-audit/audit.sh) and opens an issue saying what it has
+# and whether drivers need building.  Pairs that already have drivers in
+# LG-USB-2-ETH0.sh or a row in results.tsv are skipped, and so is a pair
+# that already has an issue, open or closed.
+#
+# The run's summary also has the whole coverage table.
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Firmware released on or after (YYYY-MM-DD).  Default: 45 days ago'
+        required: false
+      max:
+        description: 'At most this many firmware audits in this run'
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: firmware-monitor
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EPK2EXTRACT_REV: a0ccd8a
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the firmware index
+        run: |
+          curl -fsS -m 600 --retry 3 -A 'LG-USB-2-ETH0 firmware monitor' -o "$RUNNER_TEMP/index.json" https://tv.slada.sk/processed_fw.json
+          python3 scripts/firmware-audit/monitor.py coverage "$RUNNER_TEMP/index.json" > "$RUNNER_TEMP/coverage.md"
+          { echo '## LG firmware coverage'; echo; cat "$RUNNER_TEMP/coverage.md"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Find new kernels
+        id: new
+        env:
+          SINCE: ${{ inputs.since }}
+          MAX: ${{ inputs.max }}
+        run: |
+          since=${SINCE:-$(date -u -d '45 days ago' +%F)}
+          case "$since" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;; *) echo "since must be YYYY-MM-DD" >&2; exit 1 ;; esac
+          max=${MAX:-3}
+          case "$max" in ''|*[!0-9]*) max=3 ;; esac
+          gh label create new-firmware --color 1d76db --description 'LG firmware the monitor found' 2>/dev/null || true
+          gh issue list --label new-firmware --state all --limit 1000 --json title --jq '.[].title' > "$RUNNER_TEMP/titles.txt"
+          # Ask for extra, since some may already have an issue
+          python3 scripts/firmware-audit/monitor.py new "$RUNNER_TEMP/index.json" "$since" 50 > "$RUNNER_TEMP/all.jsonl"
+          : > "$RUNNER_TEMP/todo.jsonl"
+          while IFS= read -r line; do
+            title="New firmware: kernel $(echo "$line" | jq -r .kernel) on $(echo "$line" | jq -r .chip)"
+            grep -qxF "$title" "$RUNNER_TEMP/titles.txt" && continue
+            echo "$line" >> "$RUNNER_TEMP/todo.jsonl"
+            [ "$(wc -l < "$RUNNER_TEMP/todo.jsonl")" -lt "$max" ] || break
+          done < "$RUNNER_TEMP/all.jsonl"
+          echo "count=$(wc -l < "$RUNNER_TEMP/todo.jsonl")" >> "$GITHUB_OUTPUT"
+          echo "New kernels since $since: $(wc -l < "$RUNNER_TEMP/todo.jsonl")"
+
+      - name: Build epk2extract
+        if: steps.new.outputs.count != '0'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake libssl-dev liblzo2-dev zlib1g-dev squashfs-tools
+          git clone -q https://github.com/openlgtv/epk2extract "$RUNNER_TEMP/epk2extract"
+          cd "$RUNNER_TEMP/epk2extract" && git checkout -q "$EPK2EXTRACT_REV" && ./build.sh > build.log 2>&1 || { tail -30 build.log; exit 1; }
+          echo "EPK2EXTRACT=$RUNNER_TEMP/epk2extract/build_linux/epk2extract" >> "$GITHUB_ENV"
+
+      - name: Audit each one and open an issue
+        if: steps.new.outputs.count != '0'
+        run: |
+          n=0
+          while IFS= read -r line; do
+            n=$((n + 1))
+            echo "$line" > "$RUNNER_TEMP/pair.json"
+            kernel=$(jq -r .kernel "$RUNNER_TEMP/pair.json")
+            chip=$(jq -r .chip "$RUNNER_TEMP/pair.json")
+            path=$(jq -r .path "$RUNNER_TEMP/pair.json")
+            url="https://tv.slada.sk/$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$path")"
+            echo "== $kernel on $chip: $path"
+            rm -rf "$RUNNER_TEMP/save" "$RUNNER_TEMP/fw.zip"
+            : > "$RUNNER_TEMP/audit.tsv"
+            ok=0
+            for try in 1 2 3 4 5 6; do
+              curl -fsS --speed-limit 20000 --speed-time 60 -C - -o "$RUNNER_TEMP/fw.zip" "$url" && { ok=1; break; }
+              sleep 30
+            done
+            if [ "$ok" = 1 ]; then
+              SAVE="$RUNNER_TEMP/save" sh scripts/firmware-audit/audit.sh "$RUNNER_TEMP/fw.zip" "$chip" > "$RUNNER_TEMP/audit.tsv" || true
+            fi
+            cat "$RUNNER_TEMP/audit.tsv"
+            config=$(find "$RUNNER_TEMP/save" -name config 2>/dev/null | head -n 1)
+            python3 scripts/firmware-audit/monitor.py body "$RUNNER_TEMP/pair.json" "$RUNNER_TEMP/audit.tsv" ${config:+"$config"} > "$RUNNER_TEMP/body.md"
+            if [ -s "$RUNNER_TEMP/audit.tsv" ]; then
+              { echo; echo 'Audit line for `scripts/firmware-audit/results.tsv`:'; echo; echo '```'; cat "$RUNNER_TEMP/audit.tsv"; echo '```'; } >> "$RUNNER_TEMP/body.md"
+            fi
+            gh issue create --title "New firmware: kernel $kernel on $chip" --label new-firmware --body-file "$RUNNER_TEMP/body.md"
+            rm -f "$RUNNER_TEMP/fw.zip"
+          done < "$RUNNER_TEMP/todo.jsonl"
+          echo "Opened $n issues"

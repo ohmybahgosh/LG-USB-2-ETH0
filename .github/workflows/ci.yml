@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: ShellCheck the script (POSIX sh, like the TV)
-        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh tests/check-promote.sh scripts/virtual-tv/luna-send scripts/virtual-tv/uname scripts/virtual-tv/syswrite scripts/virtual-tv/make-media.sh
+        run: shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* scripts/ai-context.sh tests/check-promote.sh tests/check-monitor.sh scripts/virtual-tv/luna-send scripts/virtual-tv/uname scripts/virtual-tv/syswrite scripts/virtual-tv/make-media.sh
       - name: ShellCheck the test suite
         run: shellcheck tests/run.sh scripts/virtual-tv/vtv.sh
       - name: Script parses under dash and busybox sh
@@ -48,6 +48,8 @@ jobs:
           url=$(sed -n 's/^EXPERIMENTAL_URL="\(.*\)"$/\1/p' LG-USB-2-ETH0.sh)
           curl -fsSL -o "$RUNNER_TEMP/SHA256SUMS" "$url/SHA256SUMS"
           tests/check-promote.sh "$RUNNER_TEMP/SHA256SUMS"
+      - name: The firmware monitor reads the index and writes its issues
+        run: sh tests/check-monitor.sh
 
   test:
     name: Tests (${{ matrix.shell }})
