@@ -48,6 +48,44 @@ for (const [lang, dict] of Object.entries(I.dicts)) {
   }
   console.log(`${lang}: ${used.size} texts, ${bad ? bad + ' problems' : 'all translated'}`);
 }
+// The script's status messages (and the pieces some are built from), with
+// made-up values in place of the variables: each must come out with no
+// English sentence left in it
+const sh = fs.readFileSync(path.join(__dirname, '../LG-USB-2-ETH0.sh'), 'utf8');
+const msgs = [];
+const re = /(?:status_issue|status_note|_hx=|_rx=|SIG_MSG=)\s*"((?:[^"\\]|\\.)*)"/g;
+while ((m = re.exec(sh))) { msgs.push(m[1]); }
+const fill = (t) => t
+  .replace(/\$_hx|\$_rx|\$SIG_MSG/g, '')
+  .replace(/\$DRIVER_DIR\/\$\(echo\s*$/, "/var/lib/webosbrew/lg-usb-2-eth0-drivers/r8152_oot.ko'.")
+  .replace(/\$\(uname -r\)/g, '5.4.268-329.ptl4tv.5')
+  .replace(/\$\{WIFI_BACK_SECS\}/g, '60').replace(/\$_spd/g, '100').replace(/\$LOG_FILE/g, '/var/lib/webosbrew/lg-usb-2-eth0.log')
+  .replace(/\$_chip/g, 'Microchip LAN78xx').replace(/\$_id/g, '0424:7800')
+  .replace(/\$\{_\w+:-[^}]*\}|\$_\w+|\$[A-Z_]+/g, 'eth1')
+  .replace(/\\"/g, '"');
+const OK = /Block system updates|Homebrew Channel|sh \/home\/root\/r8152-autobind\.sh uninstall|Busybox run-parts|LG-USB-2-ETH0|Microchip LAN78xx/g;
+const english = /[A-Za-z']{2,}(?:\s+[A-Za-z'.-]{2,}){2,}/;
+for (const [lang] of Object.entries(I.scripts)) {
+  let n = 0;
+  for (const raw of msgs) {
+    const t = fill(raw).trim();
+    if (!t) { continue; }
+    n++;
+    // With this language's patterns, whatever language i18n.js picked here
+    let r = t;
+    for (const [rx, to] of I.scripts[lang]) { r = r.replace(rx, to); }
+    if (english.test(r.replace(OK, ''))) { console.log(`script message not translated (${lang}): ${t}\n  -> ${r}`); bad++; }
+  }
+  console.log(`${lang}: ${n} script messages checked`);
+}
+// The boot hook's messages on the TV, in the script itself
+const toasts = (sh.match(/^toast_text\(\) \{[\s\S]*?^\}/m) || [''])[0];
+for (const k of (toasts.match(/\*:([a-z-]+)\)/g) || []).map((x) => x.slice(2, -1))) {
+  for (const lang of Object.keys(I.dicts)) {
+    if (toasts.indexOf(`${lang}:${k})`) < 0) { console.log(`toast ${k} has no ${lang} text in toast_text()`); bad++; }
+  }
+}
+
 // English stays English, and placeholders fill in
 if (I.T('Update to v{v}', { v: '2.8.0' }) !== 'Update to v2.8.0') { console.log('T() placeholder fill broken'); bad++; }
 process.exit(bad ? 1 : 0);

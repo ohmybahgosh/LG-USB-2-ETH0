@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.8.0"
+VERSION="2.8.1"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -91,6 +91,10 @@ MODULE_SHA=""
 WATCH=0
 WIFI_FALLBACK=0
 BLOCK_UPDATES=0
+# The TV app's language (en or ru), for the messages the boot hook shows on
+# the TV screen.  The app hands it over (LGU2E_APP_LANG) and it's saved with
+# the settings, since the hook runs at boot without the app.
+UI_LANG=en
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
 SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_BLOCK=0 SET_RTK=0
@@ -1145,19 +1149,33 @@ replug_hung() {
     wait_for_nic
     _hu=$(find_usb_nic)
     [ -n "$_hu" ] && [ "$_hu" != eth0 ] && swap_in
-    toast "the USB adapter stopped answering, so it was restarted."
+    toast hung
     return 0
 }
 
 # What the boot hook does: wait for the adapter, then swap. The hook runs
 # this in the background, so it never holds up the Homebrew Channel startup,
 # and it changes nothing when no adapter shows up.
-# toast MESSAGE: a short message on the TV screen, for problems at boot that
+# toast_text WHICH: a message for the TV screen, in the app's language
+toast_text() {
+    case "$UI_LANG:$1" in
+        ru:hung) echo "USB-адаптер перестал отвечать, поэтому он был перезапущен." ;;
+        ru:old-kernel) echo "быстрый драйвер собран для старого ядра, поэтому после обновления прошивки он не загружен.  Откройте приложение, чтобы выбрать подходящий." ;;
+        ru:not-loaded) echo "быстрый драйвер не загружен.  Подробности в приложении." ;;
+        ru:no-swap) echo "USB-адаптер не удалось сделать проводным портом, поэтому телевизор работает через свой порт или Wi-Fi.  Подробности в приложении." ;;
+        *:hung) echo "the USB adapter stopped answering, so it was restarted." ;;
+        *:old-kernel) echo "the faster driver was built for the old kernel, so it wasn't loaded after the firmware update.  Open the app for one that fits." ;;
+        *:not-loaded) echo "the faster driver wasn't loaded.  Open the app for details." ;;
+        *:no-swap) echo "the USB adapter couldn't be made the wired port, so the TV is on its own port or Wi-Fi.  Open the app for details." ;;
+    esac
+}
+
+# toast WHICH: a short message on the TV screen, for problems at boot that
 # would otherwise only be in the log.  Best effort: nothing if webOS's
 # notification service isn't there or refuses it.
 toast() {
     command -v luna-send >/dev/null 2>&1 || return 0
-    _tm=$(printf '%s' "$1" | tr -d '"\\')
+    _tm=$(toast_text "$1" | tr -d '"\\')
     _tp="{\"sourceId\":\"org.ohmybahgosh.lgusb2eth0\",\"message\":\"LG-USB-2-ETH0: $_tm\"}"
     if command -v timeout >/dev/null 2>&1; then
         timeout 5 luna-send -n 1 luna://com.webos.notification/createToast "$_tp" > /dev/null 2>&1
@@ -1178,8 +1196,8 @@ boot_run() {
     rm -f "$_lmf"
     [ -n "$_lm" ] && echo "$_lm"
     case "$_lm" in
-        *"a firmware update?"*) toast "the faster driver was built for the old kernel, so it wasn't loaded after the firmware update.  Open the app for one that fits." ;;
-        "Not loading"*) toast "the faster driver wasn't loaded.  Open the app for details." ;;
+        *"a firmware update?"*) toast old-kernel ;;
+        "Not loading"*) toast not-loaded ;;
     esac
     _t=0
     while [ "$_t" -lt "$WAIT_SECS" ] && [ -z "$(find_usb_nic)" ]; do
@@ -1192,7 +1210,7 @@ boot_run() {
         take_over
         wait_for_nic
         swap_in
-        [ $? = 1 ] && toast "the USB adapter couldn't be made the wired port, so the TV is on its own port or Wi-Fi.  Open the app for details."
+        [ $? = 1 ] && toast no-swap
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
     fi
@@ -2170,6 +2188,7 @@ settings_ok() {
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
+    case "$UI_LANG" in en|ru) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
@@ -2189,6 +2208,26 @@ load_settings() {
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
+    _v=$(hook_setting UI_LANG); case "$_v" in en|ru) UI_LANG=$_v ;; esac
+    _v=$(app_lang); [ -n "$_v" ] && UI_LANG=$_v
+    return 0
+}
+
+# app_lang: the language the TV app runs in, when the app started this run
+app_lang() { case "${LGU2E_APP_LANG:-}" in en|ru) echo "$LGU2E_APP_LANG" ;; esac; }
+
+# When the app's language changed since the hook was set up, save the new one,
+# so the next boot's messages are in it too.  Only for runs from the app, and
+# only the one setting.
+app_lang_sync() {
+    _al=$(app_lang)
+    [ -n "$_al" ] && [ -f "$CONF" ] && [ ! -L "$CONF" ] || return 0
+    [ "$(hook_setting UI_LANG)" != "$_al" ] || return 0
+    if grep -q '^UI_LANG=' "$CONF"; then
+        sed "s/^UI_LANG=.*/UI_LANG=\"$_al\"/" "$CONF" > "$CONF.new" && mv -f "$CONF.new" "$CONF"
+    else
+        echo "UI_LANG=\"$_al\"" >> "$CONF"
+    fi
     return 0
 }
 
@@ -2234,6 +2273,7 @@ write_hook() {
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
+        echo "UI_LANG=\"$UI_LANG\""
         echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
     } > "$CONF.new" || error_exit "Could not write $CONF."
     mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
@@ -3339,6 +3379,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+app_lang_sync
 case "$CMD" in
     install) install_fix ;;
     uninstall) uninstall_fix ;;

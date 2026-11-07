@@ -247,6 +247,58 @@
         'This removes the boot hook and gives eth0 back to the built-in port now.  Do this before removing the app.': 'Загрузочный хук будет удалён, а eth0 сразу вернётся встроенному порту.  Сделайте это перед удалением приложения.'
     };
 
+
+    // The script's status messages (status --json issues and notes), in
+    // pieces: a message can be several of these back to back, so each piece
+    // is translated where it appears.  Where the English says to run a
+    // command, the translation names the app's menu row instead.  Longest
+    // first.  tests/check-i18n.js checks every message the script can give.
+    var ruScript = [
+        [/The driver module is built for kernel (\S+), but the TV now runs (\S+?)(?= \(it was|, probably|\.  |$)/g, 'Модуль драйвера собран для ядра $1, а телевизор сейчас работает на $2'],
+        [/ ?\(it was (\S+) when you set it up, so a firmware update changed it\)/g, ' (при настройке было $1, значит его сменило обновление прошивки)'],
+        [/, probably after a firmware update/g, ', вероятно, после обновления прошивки'],
+        [/\.  It won't be loaded, so the adapter stays on the TV's own driver\./g, '.  Он не будет загружен, поэтому адаптер остаётся на собственном драйвере телевизора.'],
+        [/A driver is known for the new kernel and your adapter: run 'get-driver', then 'install --module \S+'\./g, 'Для нового ядра и вашего адаптера есть драйвер: выберите «Быстрый драйвер».'],
+        [/There's a new driver to test for this kernel: run 'test-driver'\./g, 'Для этого ядра есть новый драйвер для проверки: выберите «Проверить новый драйвер».'],
+        [/No driver is known for this kernel yet\.  Run 'report' and open an issue, so one can be built\./g, 'Для этого ядра пока нет драйвера.  Отправьте «Отчёт для GitHub», чтобы его можно было собрать.'],
+        [/A driver is known for this kernel and adapter: run 'get-driver'\./g, 'Для этого ядра и адаптера есть драйвер: выберите «Быстрый драйвер».'],
+        [/The hook is a copy from an older version\. Run 'install' to switch it to a link \(your settings are kept\)\./g, 'Загрузочный хук остался копией из старой версии.  Выключите и снова включите «Запуск при каждом включении», чтобы заменить его ссылкой (настройки сохранятся).'],
+        [/Run 'install' to replace the v1 hook\./g, 'Выберите «Обновление с v1», чтобы заменить хук v1.'],
+        [/Busybox run-parts may still run that file at boot\. Run 'disable' to move it out, or 'install' to upgrade\./g, 'Busybox run-parts может всё равно запускать этот файл при включении.  Выберите «Обновление с v1».'],
+        [/The app or script the boot hook used was removed\. Run 'install' to relink it, or 'uninstall'\./g, 'Приложение или скрипт, на который указывал загрузочный хук, удалён.  Включите «Запуск при каждом включении» заново или выберите «Выключить всё».'],
+        [/Homebrew Channel not found, so a boot hook would never run\./g, 'Homebrew Channel не найден, поэтому загрузочный хук никогда не запустится.'],
+        [/(\S+) runs at USB 1\.1 speed\. Try another port or cable\./g, '$1 работает на скорости USB 1.1.  Попробуйте другой порт или кабель.'],
+        [/(\S+) is on USB 2\.0, which tops out around 300 Mbit\/s on these TVs\./g, '$1 подключён по USB 2.0: на этих телевизорах это около 300 Мбит/с максимум.'],
+        [/(\S+) has a cable but no IPv4 address yet\. webOS may still be setting it up\./g, 'У $1 есть кабель, но пока нет IPv4-адреса.  Возможно, webOS ещё его настраивает.'],
+        [/(\S+)'s cable link is only (\d+) Mbit\/s, so it's no faster than the built-in port\. Usually that's a cable with only two wire pairs \(many flat or old cables\), a 100 Mbit\/s port on the router or switch, or a loose plug\. Try a Cat5e or better cable, or another port\./g,
+            'Связь $1 по кабелю всего $2 Мбит/с, это не быстрее встроенного порта.  Обычно виноват кабель только с двумя парами проводов (многие плоские или старые кабели), порт на 100 Мбит/с в роутере или коммутаторе, или плохо вставленный штекер.  Попробуйте кабель Cat5e или лучше, либо другой порт.'],
+        [/(\S+)'s cable link is half duplex, which is slow and loses packets\. Try another cable or another port on the router or switch\./g, 'Связь $1 по кабелю в режиме полудуплекса: это медленно и с потерями пакетов.  Попробуйте другой кабель или другой порт роутера или коммутатора.'],
+        [/USB adapter (\S+) \((.*?)\) is plugged in, but no driver made a network device for it\./g, 'USB-адаптер $1 ($2) подключён, но ни один драйвер не создал для него сетевое устройство.'],
+        [/This kernel \((\S+)\) seems to lack a driver for that chip\. Try an adapter with another chip, or load a module built for this exact kernel with --module\./g, 'Похоже, в этом ядре ($1) нет драйвера для этого чипа.  Попробуйте адаптер с другим чипом, или «Быстрый драйвер» и «Проверить новый драйвер», если они есть в меню.'],
+        [/The driver module (\S+) is missing\. Run 'get-driver' and 'install --module' again, or 'install --no-module'\./g, 'Файла модуля драйвера $1 нет.  Выключите «Быстрый драйвер» и включите его снова.'],
+        [/The driver module changed since it was installed, so it won't be loaded\. Run 'install' again if you replaced it on purpose\./g, 'Модуль драйвера изменился после установки, поэтому он не будет загружен.  Если вы заменили его сознательно, установите его заново.'],
+        [/(\S+) is still on (\S+), not (\S+)\. Run 'apply', or check (\S+?)\.(?=\s|$)/g, '$1 всё ещё на драйвере $2, а не $3.  Выберите «Переключить сейчас» или посмотрите журнал $4.'],
+        [/Realtek mode was tried, but the kernel's r8152 didn't take your adapter, so it's back on the generic (\S+) driver\./g, 'Режим Realtek пробовали включить, но r8152 ядра не подхватил адаптер, поэтому он снова на общем драйвере $1.'],
+        [/This kernel has r8152, but your Realtek adapter is in its standard USB mode, where only the generic (\S+) driver can use it\./g, 'В этом ядре есть r8152, но адаптер Realtek работает в стандартном режиме USB, где его может использовать только общий драйвер $1.'],
+        [/Realtek mode switches it over: install --realtek-mode, then apply\./g, 'Режим Realtek переключит его: включите «Режим Realtek», затем «Переключить сейчас».'],
+        [/Run 'apply' \(or reboot\) and Realtek mode switches it over\./g, 'Выберите «Переключить сейчас» (или перезагрузите телевизор), и режим Realtek переключит его.'],
+        [/(\S+) uses the generic (\S+) driver\. A better driver is known for this kernel and adapter: run 'get-driver'\./g, '$1 работает на общем драйвере $2.  Для этого ядра и адаптера есть драйвер получше: выберите «Быстрый драйвер».'],
+        [/This kernel only loads drivers signed by LG \(the 2026 models' webOS 26 kernels enforce it\), so no added driver can load here\.  Only the TV's built-in drivers work\./g, 'Это ядро загружает только драйверы, подписанные LG (так работают ядра webOS 26 у моделей 2026 года), поэтому добавленный драйвер здесь не загрузится.  Работают только встроенные драйверы телевизора.'],
+        [/Your adapter has no driver on this TV, but one is known for this kernel and adapter: run 'get-driver'\./g, 'Для вашего адаптера на этом телевизоре нет драйвера, но для этого ядра и адаптера он есть: выберите «Быстрый драйвер».'],
+        [/DonZoomik's r8152-autobind hook and --module both manage the driver\. Keep one: /g, 'Драйвером управляют сразу хук r8152-autobind от DonZoomik и «Быстрый драйвер».  Оставьте что-то одно: '],
+        [/DonZoomik's r8152-autobind hook is installed\. 'install --module' can do the same job inside LG-USB-2-ETH0\./g, 'Установлен хук r8152-autobind от DonZoomik.  «Быстрый драйвер» в LG-USB-2-ETH0 делает то же самое.'],
+        [/The hook is on, but no adapter is visible now, so a boot right now would change nothing\./g, 'Хук включён, но адаптер сейчас не виден, поэтому включение прямо сейчас ничего бы не изменило.'],
+        [/The adapter is (\S+), not eth0 yet\. Reboot, run 'apply', or check (\S+?)\.(?=\s|$)/g, 'Адаптер пока $1, а не eth0.  Перезагрузите телевизор, выберите «Переключить сейчас» или посмотрите журнал $2.'],
+        [/Traffic goes out (\S+), not the adapter\. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable\./g, 'Трафик идёт через $1, а не через адаптер.  Пока Wi-Fi подключён, webOS предпочитает его: выключите Wi-Fi в настройках телевизора или выньте и снова вставьте сетевой кабель.'],
+        [/The Homebrew Channel blocks four of LG's update servers, but misses others\.  install --block-updates closes the rest\./g, 'Homebrew Channel блокирует четыре сервера обновлений LG, но пропускает другие.  «Усиленная блокировка обновлений» закроет остальные.'],
+        [/Firmware updates aren't blocked\.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel\./g, 'Обновления прошивки не заблокированы.  Обновление может навсегда лишить root: включите «Усиленную блокировку обновлений» или Block system updates в Homebrew Channel.'],
+        [/The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link\.  It turns Wi-Fi off again once the cable works for (\d+)s\./g, 'Резерв Wi-Fi включил Wi-Fi, потому что у eth0 пропала связь по кабелю.  Wi-Fi снова выключится, когда кабель проработает $1 с.'],
+        [/Both wired ports have a cable\. Unplug the built-in one, or traffic may take the slower port\./g, 'Кабель подключён к обоим проводным портам.  Выньте кабель из встроенного, иначе трафик может пойти через более медленный порт.'],
+        // The app's own errors, when the Homebrew Channel doesn't answer
+        [/^Not running on a webOS TV$/g, 'Приложение запущено не на телевизоре webOS'],
+        [/^Unreadable reply$/g, 'Непонятный ответ']
+    ];
+    var SCRIPTS = { ru: ruScript };
     var DICTS = { ru: ru };
     var KEY = 'lgu2e.lang';
 
@@ -276,6 +328,15 @@
         return s;
     }
 
+    // A message from the script (or a system error), translated piece by
+    // piece; English where no piece matches
+    function TS(msg) {
+        var pats = SCRIPTS[lang];
+        if (!pats || typeof msg !== 'string') { return msg; }
+        for (var i = 0; i < pats.length; i++) { msg = msg.replace(pats[i][0], pats[i][1]); }
+        return msg;
+    }
+
     // Translate the page's own text (index.html), keeping the spacing
     function translatePage(root) {
         if (lang === 'en') { return; }
@@ -302,5 +363,5 @@
         return choice === 'auto' ? T('Auto ({lang})', { lang: NAMES[lang] }) : NAMES[choice];
     }
 
-    window.LGU2E_I18N = { T: T, lang: lang, choice: choice, translatePage: translatePage, next: next, label: label, dicts: DICTS, names: NAMES };
+    window.LGU2E_I18N = { T: T, TS: TS, scripts: SCRIPTS, lang: lang, choice: choice, translatePage: translatePage, next: next, label: label, dicts: DICTS, names: NAMES };
 }());

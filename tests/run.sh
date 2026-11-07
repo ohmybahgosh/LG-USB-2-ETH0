@@ -168,7 +168,7 @@ run() {
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
-        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" \
+        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
     OUT=$(cat "$SB/out")
@@ -1273,6 +1273,25 @@ test_driver_kept_after_reenumeration() {
     check "built-in still parked" is eth2 builtin
 }
 
+# The TV app's language reaches the boot hook's messages on the TV screen
+test_toast_in_app_language() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot 5.4.268-old
+    APP_LANG=ru FAKE_KERNEL=5.4.268-old run install -y --module "$SB/r8152_oot.ko"
+    check "installed" rc_is 0
+    check "language saved" grep -q '^UI_LANG="ru"$' "$CONF"
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "message in Russian" grep -q "createToast.*быстрый драйвер собран для старого ядра" "$STATE/luna.log"
+    APP_LANG=en run status --json
+    check "app back in English: saved" grep -q '^UI_LANG="en"$' "$CONF"
+    run status
+    check "a run over SSH leaves it" grep -q '^UI_LANG="en"$' "$CONF"
+    APP_LANG=xx run status --json
+    check "an unknown language is ignored" grep -q '^UI_LANG="en"$' "$CONF"
+}
+
 test_json_skips_p2p() {
     add_builtin
     add_wifi wlan0 1-2
@@ -2163,6 +2182,7 @@ t status_json test_status_json
 t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
 t json_skips_p2p test_json_skips_p2p
 t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
+t toast_in_app_language test_toast_in_app_language
 t boot_skips_changed_module test_boot_skips_changed_module
 t driver_offer_webos5_asix test_driver_offer_webos5_asix
 t get_driver_mirror test_get_driver_mirror

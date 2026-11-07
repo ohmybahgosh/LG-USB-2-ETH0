@@ -12,6 +12,7 @@
     // The app's words in the TV's language (i18n.js); English if it's missing
     var I18N = window.LGU2E_I18N || null;
     var T = I18N ? I18N.T : function (t, v) { return v ? t.replace(/\{(\w+)\}/g, function (m, k) { return k in v ? v[k] : m; }) : t; };
+    var TS = I18N ? I18N.TS : function (t) { return t; };
 
     var REPO_PATH = '/ohmybahgosh/LG-USB-2-ETH0';
     var REPO = 'https://github.com' + REPO_PATH;
@@ -67,7 +68,8 @@
     // What the TV says about itself, asked from the app.  When the Homebrew
     // Channel runs the script, nyx-cmd and luna-send can come back empty there
     // (a UN7300 on webOS 5 did), so the app hands these over.
-    var tvEnv = '';
+    // The app's language goes along too, for the messages the boot hook shows
+    var tvEnv = I18N && /^(en|ru)$/.test(I18N.lang) ? 'LGU2E_APP_LANG=' + I18N.lang + ' ' : '';
     function tvInfo(cb) {
         luna('luna://com.webos.service.tv.systemproperty/getSystemInfo',
             { keys: ['modelName', 'firmwareVersion', 'boardType'] }, function (r) {
@@ -96,7 +98,7 @@
             var data = null;
             try { data = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { data = null; }
             if (!data) {
-                showNoRoot(ok ? T('The script gave an unexpected answer.') : err);
+                showNoRoot(ok ? T('The script gave an unexpected answer.') : TS(err));
                 if (cb) { cb(null); }
                 return;
             }
@@ -200,7 +202,7 @@
         // point at the Upgrade from v1 row instead.
         var v1 = h.state === 'legacy' || h.state === 'legacy-disabled';
         var issues = s.issues.map(function (i) {
-            return v1 && /'install'/.test(i) ? T('An old v1 boot hook is installed.  Choose Upgrade from v1 to replace it, step by step.') : i;
+            return v1 && /'install'/.test(i) ? T('An old v1 boot hook is installed.  Choose Upgrade from v1 to replace it, step by step.') : TS(i);
         });
         if (issues.length) { dot = 'dot-bad'; sub = issues[0]; }
         else if (dot === 'dot-ok') { sub += T('  No problems found.'); }
@@ -233,12 +235,18 @@
         var hookText = { enabled: T('on'), disabled: T('off (disabled)'), none: T('off'), broken: T('broken link'), legacy: T('old v1 hook'), 'legacy-disabled': T('old v1 hook') }[h.state] || h.state;
         html += row(T('At boot'), esc(hookText + (h.running ? T(' · running') : '')));
         var last = s.log.length ? s.log[s.log.length - 1] : '';
-        if (last) { html += row(T('Last log'), esc(last)); }
+        // The last log line, unless there are problems or tips to make room for
+        if (last && !issues.length && !s.notes.length) { html += row(T('Last log'), esc(last)); }
         $('facts').innerHTML = html;
 
         // Notes (skip the first issue, already in the subline)
-        var notes = issues.slice(1).concat(s.notes).slice(0, 4);
+        var notes = issues.slice(1).concat(s.notes.map(TS)).slice(0, 4);
         $('notes').innerHTML = notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
+        // Drop notes from the end until the card fits the screen (a long
+        // problem plus several notes can run past it, more so in Russian)
+        var card = $('status'), list = $('notes');
+        card.className = 'card' + (issues.length || s.notes.length ? ' compact' : '');
+        while (list.lastChild && card.scrollHeight > card.clientHeight + 1) { list.removeChild(list.lastChild); }
 
         // Toggles
         var bootOn = h.state === 'enabled';

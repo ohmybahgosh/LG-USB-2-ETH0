@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.8.1] - 2026-11-07
+
+### Added
+
+- **More of the app in Russian.**  The problems and tips on the status screen (the script's messages) are translated now, and where they say to run a command, the Russian points at the app's menu row instead.  The messages the boot hook shows on the TV screen (a faster driver that didn't load, an adapter that couldn't become `eth0`, a hung adapter restarted) follow the app's language too: the app hands it to the script, which saves it with its settings, since those messages show at boot without the app.  A test checks that every status message the script can give has a translation.
+
+### Fixed
+
+- A long problem plus several tips could run the status card off the bottom of the screen, in English too.  The facts table tightens when there's something to say, the last log line steps aside, and tips that still don't fit are left off the screen (they're all in `status` and the report).
+
 ## [2.8.0] - 2026-11-07
 
 ### Added

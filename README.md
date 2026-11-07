@@ -206,7 +206,7 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
 - **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.  Either way, the new version opens with a short list of what's new.
 - **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.
-- **Language:** the app follows the TV's menu language, English or Russian for now, and the Language row picks one by hand.  What the script itself prints, like the log and test output, stays in English.  More languages are welcome: see [Translating the app](#translating-the-app).
+- **Language:** the app follows the TV's menu language, English or Russian for now, and the Language row picks one by hand.  That covers the app's screens, the problems and tips on the status screen, and the messages the boot hook shows on the TV.  The script's output after an action, the log, and anything over SSH stay in English.  More languages are welcome: see [Translating the app](#translating-the-app).
 
 <details>
 <summary><b>Screenshots</b></summary>
@@ -775,7 +775,7 @@ They're welcome too, held to the same standard as the rest of this project: say 
 
 ### Translating the app
 
-The app's text is in [`webos-app/src/i18n.js`](webos-app/src/i18n.js): copy the `ru` block, translate the values (keep the `{placeholders}`), and add the language to `NAMES`.  `node tests/check-i18n.js` checks that nothing is missing.  A partly done language works too: anything untranslated shows in English.
+The app's text is in [`webos-app/src/i18n.js`](webos-app/src/i18n.js): copy the `ru` block and the `ruScript` patterns (the script's status messages), translate them (keep the `{placeholders}` and `$1`s), and add the language to `NAMES`.  The four messages the boot hook shows on the TV are in the script's `toast_text()`.  `node tests/check-i18n.js` checks that nothing is missing.  A partly done language works too: anything untranslated shows in English.
 
 ## Thanks
 

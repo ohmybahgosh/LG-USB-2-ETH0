@@ -30,6 +30,12 @@ main { display: flex; margin-top: 48px; }
 .dot-bad { background: #ff5f57; box-shadow: 0 0 30px #ff5f57; }
 .dot-wait { background: #6f7f78; }
 .sub { color: #93a39b; font-size: 26px; margin: 10px 0 30px; min-height: 34px; }
+/* Long messages (some languages run longer) stay inside the card */
+.card { max-height: 730px; overflow: hidden; }
+/* With problems or tips to show, the facts table tightens to make room */
+.card.compact td { padding: 8px 0; }
+.card.compact .sub { margin-bottom: 18px; }
+.sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
 
 table { width: 100%; border-collapse: collapse; font-size: 25px; }
 td { padding: 14px 0; border-top: 1px solid rgba(255, 255, 255, .06); vertical-align: top; }
@@ -38,8 +44,8 @@ td:first-child { color: #6f7f78; width: 34%; }
 .warn { color: #febc2e; }
 
 #notes { list-style: none; padding: 0; margin: 24px 0 0; color: #93a39b; font-size: 21px; }
-#notes li { padding: 6px 0 6px 26px; position: relative; }
-#notes li:before { content: "•"; position: absolute; left: 6px; color: #febc2e; }
+#notes li { padding: 0 0 0 26px; margin: 6px 0 12px; position: relative; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+#notes li:before { content: "•"; position: absolute; left: 6px; top: 0; color: #febc2e; }
 
 .btn {
   display: flex; align-items: center; justify-content: space-between;
