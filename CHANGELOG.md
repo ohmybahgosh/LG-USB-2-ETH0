@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.5] - 2026-11-07
+
+### Added
+
+- **`r8152_oot` for kernel `5.4.268-320` is tested:** tirth0jain reported it working on a 2024 G4 (OLED65G46LA) on webOS 24 ([#8](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/8)).  It moves to **Faster driver**.  What it adds there is RTL8156 (2.5G) support: an RTL8153 already runs at the same speed on the TV's own `r8152` (about 290 Mbit/s both ways, the USB 2.0 port's limit).  297 drivers are still waiting for testers.
+- **The README lists the G4 with an RTL8153** ([#7](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/7)): 293 Mbit/s down, 285 up.
+
+### Fixed
+
+- **The driver test tests use a made-up kernel,** so promoting a real driver (as the promote workflow does) no longer breaks them.
+
 ## [2.6.4] - 2026-11-06
 
 ### Fixed
