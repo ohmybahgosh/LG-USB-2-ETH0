@@ -6,7 +6,7 @@ All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](htt
 
 ### Fixed
 
-- **Test a new driver shows up on TVs that don't report their chip through `nyx-cmd`.**  A 2020 UN7300 on webOS 5 ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)) answered nothing there, so drivers built for its chip (K6Lp) weren't offered and the row disappeared once the app loaded.  The script now falls back to the chip name LG's firmware keeps in `/etc/prefs/properties/machineName`, which is built per chip.  The report's `Chip:` line uses it too.
+- **Test a new driver shows up on TVs that don't report their chip through `nyx-cmd`.**  On a 2020 UN7300 on webOS 5 ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)) it named the chip over SSH but answered nothing when the app ran the script, so drivers built for its chip (K6Lp) weren't offered there and the row disappeared once the app loaded.  The script now falls back to the chip name LG's firmware keeps in `/etc/prefs/properties/machineName`, which is built per chip.  The report's `Chip:` line uses it too.
 
 ## [2.6.0] - 2026-11-06
 

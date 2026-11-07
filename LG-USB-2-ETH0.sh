@@ -536,7 +536,8 @@ tv_soc() {
     if command -v nyx-cmd >/dev/null 2>&1; then
         _ts=$({ if command -v timeout >/dev/null 2>&1; then timeout 5 nyx-cmd DeviceInfo query device_name; else nyx-cmd DeviceInfo query device_name; fi; } 2>/dev/null | head -n 1 | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_')
     fi
-    # Some TVs answer nothing there (a 2020 UN7300 on webOS 5 did).  The
+    # Some TVs answer nothing there when the app runs the script (a 2020
+    # UN7300 on webOS 5 did, though it answers over SSH).  The
     # firmware is built per chip and names it as the machine name too.
     if [ -z "$_ts" ] && [ -r "${LGU2E_ROOT}/etc/prefs/properties/machineName" ]; then
         _ts=$(head -n 1 "${LGU2E_ROOT}/etc/prefs/properties/machineName" 2>/dev/null | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_')
