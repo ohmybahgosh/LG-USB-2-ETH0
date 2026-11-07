@@ -30,7 +30,7 @@ BADGE = os.path.join(ROOT, 'assets', 'badge-drivers-to-test.svg')
 MIRROR = 'https://github.com/ohmybahgosh/lg-webos-usb-drivers'
 CHIPS = {'k24': 'K24', 'k24n': 'K24N', 'k24t': 'K24T', 'k25lp': 'K25Lp', 'k8hp': 'K8Hp', 'k8hpp': 'K8Hpp',
          'k8hpt': 'K8HpT', 'k8lp': 'K8Lp', 'k8lpn': 'K8LpN', 'k8lpn2': 'K8LpN2', 'k8ap': 'K8Ap', 'k6lp': 'K6Lp',
-         'k6hp': 'K6Hp', 'k7lp': 'K7LP', 'o208k': 'O208K', 'e60n': 'E60N', 'k5lp': 'K5LP', 'm3r': 'M3R'}
+         'k6hp': 'K6Hp', 'k7lp': 'K7LP', 'o208k': 'O208K', 'e60n': 'E60N', 'k5lp': 'K5LP', 'm3r': 'M3R', 'm3': 'M3', 'lm18a': 'LM18A'}
 # Drivers for chips other than Realtek's and ASIX's AX88179, as the list names them
 OTHER = {'aqc111.ko': 'Aquantia AQC111', 'dm9601.ko': 'Davicom DM9601', 'lan78xx.ko': 'Microchip LAN78xx'}
 START, END = '<!-- drivers:start -->', '<!-- drivers:end -->'
@@ -58,6 +58,8 @@ def folder(k, ch):
 
 
 def webos(k):
+    if k.startswith('4.4.84-404') or k.startswith('4.4.84-636'):
+        return 'webOS 4.0'
     if k.startswith('4.4.84-p.649') or k.startswith('4.4.84-417') or k.startswith('4.4.84-433'):
         return 'webOS 4.5'
     if k.startswith('4.4.84-61') or k.startswith('4.4.84-219'):
@@ -100,7 +102,7 @@ def listing(rows):
         if f in OTHER:
             e['other'].add(OTHER[f])
     out = []
-    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 6', 'webOS 5', 'webOS 4.5', 'other'):
+    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 6', 'webOS 5', 'webOS 4.5', 'webOS 4.0', 'other'):
         ks = sorted((k for k in kern if webos(k) == g), reverse=True)
         if not ks:
             continue

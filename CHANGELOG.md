@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.7.4] - 2026-11-07
+
+### Added
+
+- **Drivers for 2018 LCDs on webOS 4.0.**  The LK61 (M3 chip, `4.4.84-404.glacier.10`) and UK62 to UK69 (LM18A chip, `4.4.84-636.glacier.26`) have no USB network driver at all.  Realtek (`r8152.ko` and `r8152_oot.ko`), ASIX AX88179 and Davicom DM9601, with a `usbnet.ko` loaded first, are waiting for testers.  Their firmware's kernel has no built-in config, so they're built with the release config in LG's source for the same kernel revision and checked against the TV's kernel image.
+
 ## [2.7.3] - 2026-11-07
 
 ### Added
