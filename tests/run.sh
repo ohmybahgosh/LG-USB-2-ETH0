@@ -1703,6 +1703,15 @@ test_test_driver_k6lp() {
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
     check "jcl4tv.40, RTL8153: r8152" grep -q "af9e573.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
+    # A TV whose nyx-cmd doesn't name the chip (issue #6): the firmware's
+    # machine name does
+    mkdir -p "$ROOT/etc/prefs/properties" && echo k6lp > "$ROOT/etc/prefs/properties/machineName"
+    : > "$STATE/curl.log"
+    FAKE_SOC= FAKE_KERNEL=4.4.84-612.jcl4tv.40 run status --json
+    check "no nyx chip: offered from machineName" has '"driverTest":{"available":true'
+    FAKE_SOC= FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
+    check "no nyx chip: jcl4tv.40 r8152" grep -q "af9e573.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152.ko" "$STATE/curl.log"
+    rm -f "$ROOT/etc/prefs/properties/machineName"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     # webOS 22 K8 TVs: the Realtek build of their own chip

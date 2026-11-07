@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.0"
+VERSION="2.6.1"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -532,8 +532,16 @@ known_by_soc() {
 
 # The TV's chip (SoC), lowercase, like k5lp or o22
 tv_soc() {
-    command -v nyx-cmd >/dev/null 2>&1 || return 0
-    { if command -v timeout >/dev/null 2>&1; then timeout 5 nyx-cmd DeviceInfo query device_name; else nyx-cmd DeviceInfo query device_name; fi; } 2>/dev/null | head -n 1 | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_'
+    _ts=""
+    if command -v nyx-cmd >/dev/null 2>&1; then
+        _ts=$({ if command -v timeout >/dev/null 2>&1; then timeout 5 nyx-cmd DeviceInfo query device_name; else nyx-cmd DeviceInfo query device_name; fi; } 2>/dev/null | head -n 1 | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_')
+    fi
+    # Some TVs answer nothing there (a 2020 UN7300 on webOS 5 did).  The
+    # firmware is built per chip and names it as the machine name too.
+    if [ -z "$_ts" ] && [ -r "${LGU2E_ROOT}/etc/prefs/properties/machineName" ]; then
+        _ts=$(head -n 1 "${LGU2E_ROOT}/etc/prefs/properties/machineName" 2>/dev/null | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9_')
+    fi
+    [ -z "$_ts" ] || echo "$_ts"
 }
 
 # module_fits FILE: FILE is built for the kernel running now.  Its vermagic
