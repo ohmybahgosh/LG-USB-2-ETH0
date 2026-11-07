@@ -10,8 +10,8 @@ cat > "$T/index.json" <<'EOF'
 {"fws": {
  "a/has-drivers.zip": {"lookupInfo": {"releaseDate": "2026-10-01", "modelNames": ["55UN7300PUF"]},
    "epks": [{"kernelVersion": "4.4.84-612.jcl4tv.40", "file": "starfish-secured-k6lp-jcl4tv-04.64.00_x.epk", "firmwareversion": "04.64.00.01"}]},
- "a/audited.zip": {"lookupInfo": {"releaseDate": "2026-10-02", "modelNames": ["65QNED99UPA"]},
-   "epks": [{"kernelVersion": "4.4.84-229.kcl4tv.6", "file": "starfish-secured-e60n-koli-03.53.45_x.epk", "firmwareversion": "03.53.45.01"}]},
+ "a/audited.zip": {"lookupInfo": {"releaseDate": "2026-10-02", "modelNames": ["OLED65B4PUA"]},
+   "epks": [{"kernelVersion": "6.12.44-67.18.qilian.6", "file": "starfish-secured-k24-qilian-43.22.72_x.epk", "firmwareversion": "43.22.72.01"}]},
  "a/new.zip": {"lookupInfo": {"releaseDate": "2026-10-03", "modelNames": ["OLED65Z9PUA"]},
    "epks": [{"kernelVersion": "6.12.44-999.test.1", "file": "starfish-secured-z99-test-43.99.01_x.epk", "firmwareversion": "43.99.01.01"}]},
  "a/old.zip": {"lookupInfo": {"releaseDate": "2026-10-04", "modelNames": ["OLD"]},
@@ -27,7 +27,7 @@ check "only the new kernel" '[ "$(wc -l < "$T/new")" = 1 ] && grep -q "6.12.44-9
 check "with its chip" 'grep -q "\"chip\": \"z99\"" "$T/new"'
 python3 scripts/firmware-audit/monitor.py coverage "$T/index.json" > "$T/cov"
 check "coverage: drivers" 'grep -q "jcl4tv.40.*drivers to test or tested" "$T/cov"'
-check "coverage: audited" 'grep -q "229.kcl4tv.6.*audited, no drivers yet" "$T/cov"'
+check "coverage: audited" 'grep -q "qilian.6.*audited, no drivers yet" "$T/cov"'
 check "coverage: skips kernel 3.x" '! grep -q "3.10.19" "$T/cov"'
 cp "$T/new" "$T/pair.json"
 printf 'z99\t43.99.01\tz99\ttest\t6.12.44-999.test.1\tr8152 asix ax88179_178a usbnet\tnone\tconfig\n' > "$T/audit"
