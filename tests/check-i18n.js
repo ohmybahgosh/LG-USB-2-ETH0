@@ -64,8 +64,14 @@ const fill = (t) => t
   .replace(/\$\{_\w+:-[^}]*\}|\$_\w+|\$[A-Z_]+/g, 'eth1')
   .replace(/\\"/g, '"');
 const OK = /Block system updates|Homebrew Channel|sh \/home\/root\/r8152-autobind\.sh uninstall|Busybox run-parts|LG-USB-2-ETH0|Microchip LAN78xx/g;
-const english = /[A-Za-z']{2,}(?:\s+[A-Za-z'.-]{2,}){2,}/;
+// In a language with another alphabet, any run of three Latin words is left
+// over English.  In one with the same alphabet, English's small words are
+// the tell: none of these is a word in Spanish
+const latinRun = /[A-Za-z']{2,}(?:\s+[A-Za-z'.-]{2,}){2,}/;
+const smallWords = /\b(the|is|are|was|it|it's|its|this|that|and|but|or|to|of|on|in|with|your|for|run|has|have|isn't|won't|didn't|can|may|still|not|yet|only|which|when|after|from|there|so|because|again|now)\b/i;
+const latinScript = (lang) => /[A-Za-z]/.test(I.names[lang] || '');
 for (const [lang] of Object.entries(I.scripts)) {
+  const english = latinScript(lang) ? smallWords : latinRun;
   let n = 0;
   for (const raw of msgs) {
     const t = fill(raw).trim();

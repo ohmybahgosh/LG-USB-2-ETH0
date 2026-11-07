@@ -50,6 +50,8 @@ Four parts live in this repository:
 
 **The TV app is plain ES5.**  Old webOS browsers run it: no `let`, `const`, arrow functions, template literals, classes, `async`, `?.`, `??`, `Array.from` or CSS grid.  It works with the remote alone (arrows, OK, Back) and with the Magic Remote pointer.  Back closes an overlay, then exits.
 
+**Every text the app shows is translated.**  The app speaks English, Russian and Spanish (`webos-app/src/i18n.js`, picked from the TV's menu language or the Language row).  Text in `app.js` goes through `T('English text', { placeholder: value })` (or `TC()` when the values are commands, shown as code), and the English text is the key in each language's dictionary.  The script's status messages (`status_issue`, `status_note`) are translated in the app by each language's `*Script` patterns, and the boot hook's TV messages by `toast_text()` in the script, which follows `UI_LANG` (the app passes `LGU2E_APP_LANG` and `app_lang_sync` saves it).  New or changed text needs a translation in every language, or `node tests/check-i18n.js` fails.  The script's own output, the log and `report` stay English.
+
 **Writing style for anything a person reads** (README, CHANGELOG, script output, app text, issue forms): plain words for TV owners, not developers; two spaces between sentences; never an em dash (use a colon, a comma or a new sentence).  Say what happens and what to do next.
 
 ## How a change is made
@@ -65,6 +67,7 @@ Four parts live in this repository:
    shellcheck -s sh LG-USB-2-ETH0.sh tests/fakebin/* && shellcheck tests/run.sh
    python3 tests/check-issue-forms.py
    node --check webos-app/src/app.js
+   node tests/check-i18n.js       # every app text translated, no English left in status messages
    ```
 
 5. Anything a user would notice: a line in `CHANGELOG.md` and the README (commands table, options table, the TV app section, troubleshooting).
@@ -84,6 +87,10 @@ Four parts live in this repository:
 | Add something to the app | A button in `webos-app/src/index.html` (`data-action`), an entry in `actions` in `webos-app/src/app.js`, usually a script command with `--json`, and styles in `style.css` |
 | Change the GitHub report | `show_report` (the text), the report action in `app.js` (the QR link), `.github/ISSUE_TEMPLATE/compatibility-report.yml` (field ids must match the link's parameters) |
 | Change downloads | `fetch`, `get_driver`, `update_app`, `update_script`.  Keep them pinned and checked |
+| Add or change text in the app | `T()`/`TC()` in `app.js` (or the HTML in `index.html`), and the same English text as a key in every language block of `webos-app/src/i18n.js` with its translation.  Run `node tests/check-i18n.js` |
+| Add or change a status message | `status_issue`/`status_note` in the script, and a pattern for it in every `*Script` list in `i18n.js` (where the English says to run a command, the translation names the app's menu row) |
+| Add or change a message the boot hook shows on the TV | `toast_text()`: one case per language |
+| Add a language | A dictionary and a `*Script` list in `i18n.js`, its name in `NAMES`, `DICTS` and `SCRIPTS`, the code in the script's `app_lang`, `settings_ok` and `load_settings`, its `toast_text()` cases, and a check in `test_toast_in_app_language` |
 | Change what the app looks like | `webos-app/src/`, then the README screenshots: `scripts/screenshots/take.js` (and `demo.js` for new data) |
 | Change the release | `.github/workflows/release.yml`, `webos-app/build.sh`, `webos-app/gen-manifest.js` |
 

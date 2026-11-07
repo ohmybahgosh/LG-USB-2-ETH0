@@ -13,6 +13,7 @@ The short version:
 - The background check runs every few seconds on the TV: keep it free of subprocesses until something actually changed.
 - The TV app (`webos-app/src/`) is plain ES5 for old webOS browsers: no `let`, `const`, arrow functions, template literals, `async`, `?.` or `??`.
 - Text people read: plain words, two spaces between sentences, no em dashes.
-- Before you finish: `tests/run.sh busybox` (and `dash`, `bash`) passes, ShellCheck passes, a test covers the change, and `CHANGELOG.md` and `README.md` cover anything a user would notice.
+- The app is translated (`webos-app/src/i18n.js`: English, Russian, Spanish).  New app text goes through `T()` and needs a translation in every language; a new status message needs a pattern in every `*Script` list; a new boot message needs a `toast_text()` case per language.  `node tests/check-i18n.js` must pass.
+- Before you finish: `tests/run.sh busybox` (and `dash`, `bash`) passes, ShellCheck passes, `node tests/check-i18n.js` passes, a test covers the change, and `CHANGELOG.md` and `README.md` cover anything a user would notice.
 - Don't bump `VERSION`, tag, or publish releases.  The maintainer does that.
 - Say in the pull request that AI was used, and test on a real TV (model and webOS version).

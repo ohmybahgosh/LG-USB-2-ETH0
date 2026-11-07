@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.8.1"
+VERSION="2.9.0"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1163,6 +1163,10 @@ toast_text() {
         ru:old-kernel) echo "быстрый драйвер собран для старого ядра, поэтому после обновления прошивки он не загружен.  Откройте приложение, чтобы выбрать подходящий." ;;
         ru:not-loaded) echo "быстрый драйвер не загружен.  Подробности в приложении." ;;
         ru:no-swap) echo "USB-адаптер не удалось сделать проводным портом, поэтому телевизор работает через свой порт или Wi-Fi.  Подробности в приложении." ;;
+        es:hung) echo "el adaptador USB dejó de responder, así que se reinició." ;;
+        es:old-kernel) echo "el controlador más rápido estaba hecho para el kernel anterior, así que no se cargó tras la actualización de firmware.  Abra la aplicación para elegir uno que sirva." ;;
+        es:not-loaded) echo "el controlador más rápido no se cargó.  Abra la aplicación para ver los detalles." ;;
+        es:no-swap) echo "no se pudo hacer del adaptador USB el puerto cableado, así que el televisor usa su propio puerto o el Wi-Fi.  Abra la aplicación para ver los detalles." ;;
         *:hung) echo "the USB adapter stopped answering, so it was restarted." ;;
         *:old-kernel) echo "the faster driver was built for the old kernel, so it wasn't loaded after the firmware update.  Open the app for one that fits." ;;
         *:not-loaded) echo "the faster driver wasn't loaded.  Open the app for details." ;;
@@ -2188,7 +2192,7 @@ settings_ok() {
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
-    case "$UI_LANG" in en|ru) ;; *) return 1 ;; esac
+    case "$UI_LANG" in en|ru|es) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
     case "$MODULE" in ''|/*.ko) ;; *) return 1 ;; esac
     case "$MODULE" in *[!A-Za-z0-9._/-]*) return 1 ;; esac
@@ -2208,13 +2212,13 @@ load_settings() {
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
-    _v=$(hook_setting UI_LANG); case "$_v" in en|ru) UI_LANG=$_v ;; esac
+    _v=$(hook_setting UI_LANG); case "$_v" in en|ru|es) UI_LANG=$_v ;; esac
     _v=$(app_lang); [ -n "$_v" ] && UI_LANG=$_v
     return 0
 }
 
 # app_lang: the language the TV app runs in, when the app started this run
-app_lang() { case "${LGU2E_APP_LANG:-}" in en|ru) echo "$LGU2E_APP_LANG" ;; esac; }
+app_lang() { case "${LGU2E_APP_LANG:-}" in en|ru|es) echo "$LGU2E_APP_LANG" ;; esac; }
 
 # When the app's language changed since the hook was set up, save the new one,
 # so the next boot's messages are in it too.  Only for runs from the app, and

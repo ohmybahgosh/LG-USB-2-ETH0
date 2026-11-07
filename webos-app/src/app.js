@@ -69,7 +69,7 @@
     // Channel runs the script, nyx-cmd and luna-send can come back empty there
     // (a UN7300 on webOS 5 did), so the app hands these over.
     // The app's language goes along too, for the messages the boot hook shows
-    var tvEnv = I18N && /^(en|ru)$/.test(I18N.lang) ? 'LGU2E_APP_LANG=' + I18N.lang + ' ' : '';
+    var tvEnv = I18N && /^(en|ru|es)$/.test(I18N.lang) ? 'LGU2E_APP_LANG=' + I18N.lang + ' ' : '';
     function tvInfo(cb) {
         luna('luna://com.webos.service.tv.systemproperty/getSystemInfo',
             { keys: ['modelName', 'firmwareVersion', 'boardType'] }, function (r) {

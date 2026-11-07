@@ -80,6 +80,12 @@ js_functions() {
     echo
     js_functions webos-app/src/app.js
     echo
+    echo "## The app's languages"
+    echo
+    echo "From \`webos-app/src/i18n.js\`.  Each language is a dictionary keyed by the English text (\`T()\` and \`TC()\` in \`app.js\` look it up and fill in \`{placeholders}\`) and a list of patterns for the script's status messages (\`TS()\`).  \`tests/check-i18n.js\` checks every text in \`app.js\` and \`index.html\`, every status message and every \`toast_text()\` case.  Languages: $(sed -n "s/.*var NAMES = {\(.*\)};/\1/p" webos-app/src/i18n.js | sed "s/ *[a-z]*: '\([^']*\)'/\1/g; s/,/, /g; s/^ *//; s/ *$//")."
+    echo
+    js_functions webos-app/src/i18n.js
+    echo
     echo "## Tests"
     echo
     echo "Each line is one test in \`tests/run.sh\` (run one with \`tests/run.sh busybox NAME\`):"

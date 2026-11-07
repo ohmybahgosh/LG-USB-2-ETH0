@@ -2,6 +2,21 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.0] - 2026-11-07
+
+### Added
+
+- **The TV app speaks Spanish.**  It follows the TV's menu language like Russian does, and the Language row now goes Auto, English, Русский, Español.  That covers the app's screens, the problems and tips on the status screen, and the messages the boot hook shows on the TV.  [Screenshots in Spanish](assets/screenshots/es/).
+- The guide for contributors and AI assistants, `AGENTS.md`, `CONTRIBUTING.md` and the AI knowledge base (`lg-usb-2-eth0-for-ai.md`) now explain the translations: where new text goes, how to add a language, and `node tests/check-i18n.js`.
+
+### Changed
+
+- The translation check also catches English left over in languages that use the same alphabet, not only in Russian.
+
+### Fixed
+
+- The status screen no longer stops if the script's status has no tips list at all (an older script on the TV during an update).
+
 ## [2.8.1] - 2026-11-07
 
 ### Added

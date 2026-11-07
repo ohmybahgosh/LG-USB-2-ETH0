@@ -1290,6 +1290,20 @@ test_toast_in_app_language() {
     check "a run over SSH leaves it" grep -q '^UI_LANG="en"$' "$CONF"
     APP_LANG=xx run status --json
     check "an unknown language is ignored" grep -q '^UI_LANG="en"$' "$CONF"
+    APP_LANG=es run status --json
+    check "Spanish saved" grep -q '^UI_LANG="es"$' "$CONF"
+}
+
+test_toast_in_spanish() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
+    fake_ko "$SB/r8152_oot.ko" r8152_oot 5.4.268-old
+    APP_LANG=es FAKE_KERNEL=5.4.268-old run install -y --module "$SB/r8152_oot.ko"
+    check "installed" rc_is 0
+    check "language saved" grep -q '^UI_LANG="es"$' "$CONF"
+    run_hook
+    check "boot still swaps" wait_log "Done: the USB adapter is eth0"
+    check "message in Spanish" grep -q "createToast.*hecho para el kernel anterior" "$STATE/luna.log"
 }
 
 test_json_skips_p2p() {
@@ -2183,6 +2197,7 @@ t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
 t json_skips_p2p test_json_skips_p2p
 t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t toast_in_app_language test_toast_in_app_language
+t toast_in_spanish test_toast_in_spanish
 t boot_skips_changed_module test_boot_skips_changed_module
 t driver_offer_webos5_asix test_driver_offer_webos5_asix
 t get_driver_mirror test_get_driver_mirror

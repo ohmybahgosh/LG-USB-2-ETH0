@@ -18,6 +18,7 @@ The script is one POSIX `sh` file that runs as root under busybox on the TV.  Th
 tests/run.sh busybox     # the test suite, closest to the TV (also dash and bash)
 shellcheck -s sh LG-USB-2-ETH0.sh && shellcheck tests/run.sh
 python3 tests/check-issue-forms.py
+node tests/check-i18n.js # every text in the TV app translated
 webos-app/build.sh       # the TV app's IPK (needs ares-package from @webos-tools/cli)
 ```
 
@@ -34,6 +35,7 @@ Ground rules:
 - **Pinned and checked downloads.**  Anything downloaded comes from a fixed release or commit and is kept only if its SHA-256 matches.
 - **Leave Wi-Fi, tethering and other USB devices alone.**
 - **A test for every change in behavior,** in `tests/run.sh`.
+- **Translations.**  The TV app speaks English, Russian and Spanish.  New text in the app needs a translation in each, or `node tests/check-i18n.js` fails.  If you can't translate it, say so in the pull request and the maintainer will.  New languages are welcome: see [Translating the app](README.md#translating-the-app).
 - **Write for TV owners.**  Plain words in output, the app and docs, two spaces between sentences, no em dashes, and a line in `CHANGELOG.md` for anything they'd notice.
 
 Open a pull request against `main`; the template lists what to check.
