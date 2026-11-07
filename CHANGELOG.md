@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.6.2] - 2026-11-06
+
+### Added
+
+- **Drivers to test for LG's StanbyME** (27ART10AKPL, the rolling-stand screen, LM21UT chip) on webOS 24, kernel `5.4.268-955.16.nbr4tv.nmrm.10`: Realtek, ASIX AX88179, Davicom DM9601 and Aquantia AQC111, with the kernel's own `usbnet`.  LG lists its webOS 24 LMANN source for the StanbyME, which is a slightly later revision (`-966`) than its kernel, so these are a close match rather than the exact source.  The config and every symbol used check out against the StanbyME's own kernel.  299 drivers are now waiting for testers.
+
 ## [2.6.1] - 2026-11-06
 
 ### Fixed

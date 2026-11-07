@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.6.1"
+VERSION="2.6.2"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/af9e573dd6c0ebfea6db501c6845e4aa246d56df/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/f3f9d3c0257708564525ffbae5b26c1a20593bb8/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1723,7 +1723,13 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-899.19.koli.1 - r8152.ko b96d7c77b32ef351f7aac682379bef30fa4d9f116fb5e3cde90f31d5bb62d94e
 4.4.84-899.19.koli.1 - usbnet.ko 9674ec86e7e586bcd7dcd911c94d99afbc92293a954009e2cfcaa31e2e265817
 4.4.84-899.19.koli.1 - ax88179_178a.ko 316a5b93461285f2b77cd776af86046a22a70ae3aedb01eec034550ad8dcece5
-4.4.84-899.19.koli.1 - dm9601.ko 33b082bcd5c20961200939ffcf09492f4211bd30d0dda2fd7871f8e12d3f3106"
+4.4.84-899.19.koli.1 - dm9601.ko 33b082bcd5c20961200939ffcf09492f4211bd30d0dda2fd7871f8e12d3f3106
+5.4.268-955.16.nbr4tv.nmrm.10 - r8152_oot.ko fc9679dea933b32addb7c13d581a7cde6b3d176dcb5c4f7e13762d5b15d14cab
+5.4.268-955.16.nbr4tv.nmrm.10 - r8152.ko 18500334964272a9e59c34718890a765502c6f1b7bfdd578ad6aa1fb88cdb370
+5.4.268-955.16.nbr4tv.nmrm.10 - usbnet.ko 377d40c26e4fdac87ecb1fa8d3bd7bab002f571691f0e5de45e52758dda76c4d
+5.4.268-955.16.nbr4tv.nmrm.10 - ax88179_178a.ko fba0553635804a3b018049db64a31407f9c843428d82ef8a8c13befb8f2dab9c
+5.4.268-955.16.nbr4tv.nmrm.10 - dm9601.ko 7abbe41e5a84d2e7225dc00c6ae0e049842e436f407324caaf53ab666a335d14
+5.4.268-955.16.nbr4tv.nmrm.10 - aqc111.ko f0f7fd57031297f28e578e8cbae1e38617a7d77e4d68080101a70e1e30d72a23"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)

@@ -369,11 +369,11 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**294 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**299 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
-| `4.4.84-899.*`, `5.4.96-934.*`, `5.4.96-955.20.namtok.1`, `5.4.268-966.*` | 2021 UP and NANO, 2022 UQ and 2023 UR LCDs (LM21A-family chips), whose kernel has no USB network drivers at all | Realtek and ASIX, with the kernel's own `usbnet` |
+| `4.4.84-899.*`, `5.4.96-934.*`, `5.4.96-955.20.namtok.1`, `5.4.268-966.*`, `5.4.268-955.16.nbr4tv.nmrm.10` | 2021 UP and NANO, 2022 UQ and 2023 UR LCDs and the StanbyME (LM21A-family chips), whose kernel has no USB network drivers at all | Realtek and ASIX, with the kernel's own `usbnet` |
 | `5.4.268-329.ptl4tv.5` | 2022 to 2025 OLEDs on webOS 25 firmware 33.30 and 33.31, like the C2, C3, C4 and G4 | Aquantia, Davicom and Microchip (its Realtek driver is under [A faster driver](#a-faster-driver)) |
 | `5.4.268-329.ptl4tv.2` | 2022 to 2025 OLEDs on firmware 33.20 to 33.23 | Realtek |
 | `5.4.268-320` | OLEDs on webOS 24 firmware 23.20 to 23.25 | Realtek |
@@ -389,7 +389,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 294 drivers: 37 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
+<summary><b>All 299 drivers: 38 kernels, 13 Realtek chips and LG's own chips, from webOS 5 to webOS 25</b></summary>
 
 <br>
 
@@ -418,6 +418,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 | `5.4.96-223.9.oeta.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k24), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.9.oeta.2-k8lpn2) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.96-223.29.1.okapi.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-223.29.1.okapi.2-k24) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-966.8.4.okapi.pine.1` | [LM21ANN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-966.8.4.okapi.pine.1) | yes | yes | Aquantia AQC111, Davicom DM9601 |
+| `5.4.268-955.16.nbr4tv.nmrm.10` | [LM21UT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-955.16.nbr4tv.nmrm.10) | yes | yes | Aquantia AQC111, Davicom DM9601 |
 | `5.4.268-320` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-320) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-223.obr4tv.42` | [K8HpT](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.obr4tv.42-k8hpt) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-223.42.okapi.nmrm.2` | [K24T](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-223.42.okapi.nmrm.2-k24t) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
@@ -514,7 +515,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2024 G4 (OLED65G48LW), kernel `5.4.268-329.ptl4tv.5` | An ASIX AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  Settings show the wired connection and apps play.  292 Mbit/s down over USB 2.0. | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
 | webOS 25 on a 2025 B5 (OLED55B56LA), kernel `5.4.268-294.24.papikonda.2` | No ASIX driver: an AX88179A wasn't detected at all.  dd3git's `ax88179_178a` build fixes that, and `get-driver` offers it.  A Realtek build is [waiting for testers](#more-drivers-on-the-way).  Not yet tested with LG-USB-2-ETH0, so a report helps. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185), [dd3git/lg-webos-ax88179-driver](https://github.com/dd3git/lg-webos-ax88179-driver) |
 
-**LG's 2021 to 2023 LCDs with LM21A chips** (UP, NANO, UQ and UR models, and LG's rolling StanbyME screen): the [firmware audit](docs/firmware-audit.md) found no USB network drivers in their kernels at all, not even `usbnet`.  For the 2021 UP and NANO models (LM21A and LM21U, webOS 6), the 2022 UQ models (LM21AN, webOS 22) and the 2023 UR models (LM21ANN, webOS 23 to 25), drivers built from LG's source are [waiting for testers](#more-drivers-on-the-way): Realtek on its own, and ASIX AX88179, Davicom and (except on the 2021 models) Aquantia along with the kernel's own `usbnet.ko`, which the script loads first.  The StanbyME isn't covered yet.
+**LG's 2021 to 2023 LCDs with LM21A chips** (UP, NANO, UQ and UR models, and LG's rolling StanbyME screen): the [firmware audit](docs/firmware-audit.md) found no USB network drivers in their kernels at all, not even `usbnet`.  For the 2021 UP and NANO models (LM21A and LM21U, webOS 6), the 2022 UQ models (LM21AN, webOS 22) and the 2023 UR models (LM21ANN, webOS 23 to 25), drivers built from LG's source are [waiting for testers](#more-drivers-on-the-way): Realtek on its own, and ASIX AX88179, Davicom and (except on the 2021 models) Aquantia along with the kernel's own `usbnet.ko`, which the script loads first.  LG's StanbyME (LM21UT, webOS 24) has the same set, built from the closest source LG has published for it.
 
 **webOS 26** depends on the model, and on which webOS 26 update the TV got.  Root is only possible on firmware released before October 10, 2026, per the [EPK archive's rooting guide](https://tv.slada.sk/guides/rooting-guide).  The script and app work the same on a rooted webOS 26 TV, but none has reported in yet, so a report helps.
 

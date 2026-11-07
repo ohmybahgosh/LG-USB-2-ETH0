@@ -64,7 +64,7 @@ def webos(k):
         return 'webOS 6'
     if '-329.' in k or '-294.' in k or '-966.15.' in k:
         return 'webOS 25'
-    if k.startswith('5.4.268-320') or '-223.' in k or '-966.8.' in k:
+    if k.startswith('5.4.268-320') or '-223.' in k or '-966.8.' in k or '-955.16.' in k:
         return 'webOS 24'
     if k.startswith('5.4.96-307') or '-132.' in k or '-955.20.' in k:
         return 'webOS 23'
@@ -77,7 +77,7 @@ def webos(k):
 HELPERS = ('usbnet.ko',)
 # Kernels with no chip in their row: LG's LM21A-family LCD chips, or LG's own
 LM_CHIPS = (('-934.', 'LM21AN'), ('-955.20.namtok', 'LM21ANN'), ('-966.', 'LM21ANN'),
-            ('-899.', 'LM21A'))
+            ('-899.', 'LM21A'), ('-955.16.nbr4tv', 'LM21UT'))
 
 
 def lm_chip(k):
