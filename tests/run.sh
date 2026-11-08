@@ -2138,6 +2138,7 @@ test_driver_with_usbnet() {
     check "usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q 'usbnet.ko'"
     check "then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a'"
     check "result works" dt_is "result=works"
+    check "the report says usbnet loaded" dt_is "usbnet=loaded usbnet first: this kernel leaves it out"
 }
 
 # Where the kernel has usbnet, or for Realtek's driver, no usbnet.ko is fetched
@@ -2155,6 +2156,7 @@ test_driver_without_usbnet() {
         FAKE_SOC=k8lp FAKE_KERNEL=$k run test-driver -y
     check "kernel has usbnet: not fetched" sh -c "! grep -q usbnet.ko '$STATE/curl.log'"
     check "result works" dt_is "result=works"
+    check "the report says it's in the kernel" dt_is "usbnet=already in the kernel"
 }
 
 # At boot, a set-up driver built on usbnet loads the usbnet.ko beside it first

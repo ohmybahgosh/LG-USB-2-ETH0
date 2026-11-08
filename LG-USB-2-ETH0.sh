@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.4"
+VERSION="2.9.5"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -797,15 +797,23 @@ drv_try() {
     _dtb=""
     _dtn=$(find_usb_nic)
     [ -n "$_dtn" ] && _dtb=$(nic_driver "$_dtn")
-    _dte=""
+    _dte="" _dtu=""
     if [ -d "$SYS_MODULES/$DRIVER" ]; then
         _dtd=already
-    elif uses_usbnet "$MODULE" && ! _dte=$(load_usbnet "$(dirname "$MODULE")"); then
-        _dtd=no
-    elif _dte=$(insmod "$MODULE" 2>&1); then
-        _dtd=yes
     else
-        _dtd=no
+        _dtd=""
+        # A driver built on usbnet: load the pinned usbnet.ko first, and say
+        # what happened to it in the report
+        if uses_usbnet "$MODULE"; then
+            if ! needs_usbnet; then _dtu="already in the kernel"
+            elif ! usbnet_row "$(uname -r)" > /dev/null; then _dtu="none pinned for this kernel"
+            elif _dtu=$(load_usbnet "$(dirname "$MODULE")"); then _dtu=$(echo "$_dtu" | tail -n 1)
+            else _dtd=no; _dte=$_dtu; _dtu="failed to load"
+            fi
+        fi
+        if [ -z "$_dtd" ]; then
+            if _dte=$(insmod "$MODULE" 2>&1); then _dtd=yes; else _dtd=no; fi
+        fi
     fi
     echo "Loading $DRIVER: $_dtd${_dte:+ ($_dte)}"
     if [ "$_dtd" != no ]; then
@@ -849,6 +857,7 @@ drv_try() {
         echo "before=$_dtb"
         echo "loaded=$_dtd"
         [ -n "$_dte" ] && echo "insmod=$(echo "$_dte" | head -n 1)"
+        [ -n "$_dtu" ] && echo "usbnet=$_dtu"
         echo "iface=$_dtn"
         echo "driver=$_dtv"
         echo "carrier=$_dtc"
@@ -856,7 +865,7 @@ drv_try() {
         echo "address=$_dta"
         echo "ping=$_dtp"
         # What the kernel said about it, with MAC addresses hidden
-        dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|oops|bug|trace' | tail -n 20 \
+        dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|ax88|asix|dm96|lan78|symbol|oops|bug|trace' | tail -n 20 \
             | sed 's/\(\([0-9a-fA-F]\{2\}:\)\{3\}\)\([0-9a-fA-F]\{2\}:\)\{2\}[0-9a-fA-F]\{2\}/\1xx:xx:xx/g; s/^/dmesg=/'
     } > "$DRVTEST_FILE.new"
     mv -f "$DRVTEST_FILE.new" "$DRVTEST_FILE"
@@ -2029,6 +2038,8 @@ drvtest_report() {
     if [ "$_r" != crashed ]; then
         _ri=$(drvtest_get insmod)
         echo "Loaded:   $(drvtest_get loaded)${_ri:+ ($_ri)}"
+        _ru=$(drvtest_get usbnet)
+        [ -n "$_ru" ] && echo "usbnet:   $_ru"
         _dtbf=$(drvtest_get before)
         [ -n "$_dtbf" ] && echo "Before:   $_dtbf"
         _dls=$(drvtest_get speed)

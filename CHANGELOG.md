@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.5] - 2026-11-08
+
+### Fixed
+
+- **Driver test reports say what happened to `usbnet`.**  On kernels without `usbnet`, the test loads a `usbnet.ko` before an ASIX or Davicom driver.  The report now has a `usbnet:` line saying whether it loaded, was already in the kernel, or failed, and its kernel log includes "Unknown symbol" lines and the ASIX, Davicom and Microchip drivers' own messages.  A report from a 2018 B8 (issue #12) couldn't show which part was missing.
+
 ## [2.9.4] - 2026-11-08
 
 ### Added
