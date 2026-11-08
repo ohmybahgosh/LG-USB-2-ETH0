@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.5"
+VERSION="2.9.6"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2526,7 +2526,8 @@ known_nic_id() {
         0bda:8156) echo "Realtek RTL8156" ;;
         0bda:8157) echo "Realtek RTL8157" ;;
         0bda:8050|0bda:8052|0bda:8053|0bda:8151|0bda:8155|0bda:815a) echo "Realtek RTL815x" ;;
-        0b95:1790|0b95:178a|0b95:1780) echo "ASIX AX88179/178A" ;;
+        0b95:1790|0b95:178a) echo "ASIX AX88179/178A" ;;
+        0b95:1780) echo "ASIX AX88178" ;;
         0b95:7720|0b95:772a|0b95:772b|0b95:7e2b|0b95:1720|05ac:1402) echo "ASIX AX88772/88172" ;;
         0424:7500|0424:7505|0424:9500|0424:ec00) echo "Microchip/SMSC" ;;
         0424:7800|0424:7801|0424:7850|07c9:0012) echo "Microchip LAN78xx" ;;

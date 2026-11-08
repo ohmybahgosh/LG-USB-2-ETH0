@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.6] - 2026-11-08
+
+### Fixed
+
+- **The older ASIX AX88178 (`0b95:1780`, like the Plugable USB2-E1000) is named as itself.**  Reports and the app called it an AX88179/178A, a different chip on a different driver.  It runs on the TV's built-in `asix` driver, which is what it already used (issue #13).
+
 ## [2.9.5] - 2026-11-08
 
 ### Fixed
