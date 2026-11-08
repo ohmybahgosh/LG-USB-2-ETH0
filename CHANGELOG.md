@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.3] - 2026-11-08
+
+### Added
+
+- **Drivers to test for the 2017 UJ63, UJ67 and UJ70 (K3LP chip, webOS 3.5).**  Their kernel `4.4.3-208.drd4tv.3` (firmware 06.10.70 and 06.10.75) has `usbnet` and ASIX's AX88772 driver built in, so those adapters already work.  Realtek (`r8152.ko` and `r8152_oot.ko`, for RTL8152, RTL8153 and RTL8156), ASIX AX88179, Davicom and Microchip drivers are now ready to test, built from LG's DKLP3 kernel source with the TV's own config.
+
 ## [2.9.2] - 2026-11-08
 
 ### Added

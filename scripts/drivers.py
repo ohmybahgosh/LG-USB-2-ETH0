@@ -58,6 +58,8 @@ def folder(k, ch):
 
 
 def webos(k):
+    if k.startswith('4.4.3-208'):
+        return 'webOS 3.5'
     if k.startswith('4.4.84-404') or k.startswith('4.4.84-636') or k.startswith('4.4.84-150'):
         return 'webOS 4.0'
     if k.startswith('4.4.84-p.649') or k.startswith('4.4.84-417') or k.startswith('4.4.84-433') or k.startswith('4.4.84-432'):
@@ -82,7 +84,7 @@ HELPERS = ('usbnet.ko',)
 # Kernels with no chip in their row: LG's LM21A-family LCD chips, or LG's own
 LM_CHIPS = (('-934.', 'LM21AN'), ('-955.20.namtok', 'LM21ANN'), ('-966.', 'LM21ANN'),
             ('-899.', 'LM21A'), ('-955.16.nbr4tv', 'LM21UT'),
-            ('-150.glacier', 'O18, M16PP'))
+            ('-150.glacier', 'O18, M16PP'), ('-208.drd4tv', 'K3LP'))
 
 
 def lm_chip(k):
@@ -103,7 +105,7 @@ def listing(rows):
         if f in OTHER:
             e['other'].add(OTHER[f])
     out = []
-    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 6', 'webOS 5', 'webOS 4.5', 'webOS 4.0', 'other'):
+    for g in ('webOS 25', 'webOS 24', 'webOS 23', 'webOS 22', 'webOS 6', 'webOS 5', 'webOS 4.5', 'webOS 4.0', 'webOS 3.5', 'other'):
         ks = sorted((k for k in kern if webos(k) == g), reverse=True)
         if not ks:
             continue

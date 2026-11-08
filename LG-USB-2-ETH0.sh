@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.2"
+VERSION="2.9.3"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/49fd7517bfa819d54919e0dc66564cd2ce48eae8/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/1633683de2766866f012499e5bd99a9c3c3f128e/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1891,7 +1891,12 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-432 m3r r8152_oot.ko 6d066211ac18ed7106395b009ae093e70eb731811262410ab632716e39a659fc
 4.4.84-432 m3r usbnet.ko 491bd1cb111c13930631ebf70d69cbd2cfeec29f9e69fdeb71bf4640f4affbad
 4.4.84-432 m3r ax88179_178a.ko 79c377739f891c7a60b3998524de633e7767460ed78fc1e601b3626a24fb870e
-4.4.84-432 m3r dm9601.ko b1bbd20f24e3fd29b9c4c05b8a6f0e9672e39beba9ffb52b480166f733f914d9"
+4.4.84-432 m3r dm9601.ko b1bbd20f24e3fd29b9c4c05b8a6f0e9672e39beba9ffb52b480166f733f914d9
+4.4.3-208.drd4tv.3 - r8152.ko ebd2bfb6af3e0cad297c1e12c25332850a00b422441cae35deac73d439f8d7be
+4.4.3-208.drd4tv.3 - r8152_oot.ko d4fd0ba8929b1b61550b2618b3ed885d434f38ef2e076811f7f2d1e2fde49815
+4.4.3-208.drd4tv.3 - ax88179_178a.ko 352bacb1a20a3de1931e5d40c790eb86d1875463df03ad57956377fc8ab6d28c
+4.4.3-208.drd4tv.3 - dm9601.ko 235c18e00870f39e572879146be3fd3c4011d9b0701c1fc358b70c5decb9fcdf
+4.4.3-208.drd4tv.3 - lan78xx.ko d266c9c4220428bb30fa470fab7726c1bce701fdfff7e4ec3cbca8bb426529e6"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
