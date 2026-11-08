@@ -60,7 +60,7 @@ def folder(k, ch):
 def webos(k):
     if k.startswith('4.4.84-404') or k.startswith('4.4.84-636') or k.startswith('4.4.84-150'):
         return 'webOS 4.0'
-    if k.startswith('4.4.84-p.649') or k.startswith('4.4.84-417') or k.startswith('4.4.84-433'):
+    if k.startswith('4.4.84-p.649') or k.startswith('4.4.84-417') or k.startswith('4.4.84-433') or k.startswith('4.4.84-432'):
         return 'webOS 4.5'
     if k.startswith('4.4.84-61') or k.startswith('4.4.84-219'):
         return 'webOS 5'

@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.2] - 2026-11-08
+
+### Added
+
+- **Drivers for the 2019 LM63 on its older firmware.**  The LM63 and other small 2019 HD LCDs (M3R chip) on firmware 04.72.20 and 05.00.03 run kernel `4.4.84-432`, not the `4.4.84-433` that already had drivers to test.  The same set now covers them: Realtek (`r8152.ko` and `r8152_oot.ko`), ASIX AX88179 and Davicom, with a `usbnet.ko` loaded first.
+
 ## [2.9.1] - 2026-11-08
 
 ### Added
