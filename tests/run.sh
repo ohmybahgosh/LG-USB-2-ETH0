@@ -1791,7 +1791,7 @@ test_test_driver_checks() {
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/9af4a4f.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/0f22fcb.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
@@ -1810,7 +1810,7 @@ test_test_driver_checks() {
     check "tested: no new test" has "has a tested driver for your adapter"
     LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24 r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
         FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run get-driver -y
-    check "tested: get-driver downloads it" grep -q "9af4a4f.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "tested: get-driver downloads it" grep -q "0f22fcb.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
@@ -1827,18 +1827,18 @@ test_test_driver_k6lp() {
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run status --json
     check "offered with the adapter" has '"driverTest":{"available":true,"adapterOk":true,"folder":"4.4.84-612.40.jimna.1-k6lp"'
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "ASIX: the ASIX build" grep -q "9af4a4f.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
+    check "ASIX: the ASIX build" grep -q "0f22fcb.*/experimental/4.4.84-612.40.jimna.1-k6lp/ax88179_178a.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
-    check "Realtek: the r8152 build" grep -q "9af4a4f.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    check "Realtek: the r8152 build" grep -q "0f22fcb.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
-    check "RTL8156: Realtek's newer driver" grep -q "9af4a4f.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    check "RTL8156: Realtek's newer driver" grep -q "0f22fcb.*/experimental/4.4.84-612.40.jimna.1-k6lp/r8152_oot.ko" "$STATE/curl.log"
     # The UN7300's kernel: its r8152 for an RTL8153 was reported working
     # (issue #6), so it's offered as a known driver, not a test
     remove_usb 1-1
@@ -1850,7 +1850,7 @@ test_test_driver_k6lp() {
     add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "jcl4tv.40, RTL8156: r8152_oot" grep -q "9af4a4f.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    check "jcl4tv.40, RTL8156: r8152_oot" grep -q "0f22fcb.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
     # A TV whose nyx-cmd doesn't name the chip when the app runs the script
     # (issue #6): the firmware's machine name does
     mkdir -p "$ROOT/etc/prefs/properties" && echo k6lp > "$ROOT/etc/prefs/properties/machineName"
@@ -1858,22 +1858,22 @@ test_test_driver_k6lp() {
     FAKE_SOC='' FAKE_KERNEL=4.4.84-612.jcl4tv.40 run status --json
     check "no nyx chip: offered from machineName" has '"driverTest":{"available":true'
     FAKE_SOC='' FAKE_KERNEL=4.4.84-612.jcl4tv.40 run test-driver -y
-    check "no nyx chip: jcl4tv.40 r8152_oot" grep -q "9af4a4f.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
+    check "no nyx chip: jcl4tv.40 r8152_oot" grep -q "0f22fcb.*/experimental/4.4.84-612.jcl4tv.40-k6lp/r8152_oot.ko" "$STATE/curl.log"
     rm -f "$ROOT/etc/prefs/properties/machineName"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     # webOS 22 K8 TVs: the Realtek build of their own chip
     : > "$STATE/curl.log"
     FAKE_SOC=k8lp FAKE_KERNEL=5.4.96-115.30.mole.2 run test-driver -y
-    check "mole.2 K8Lp: r8152_oot" grep -q "9af4a4f.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
+    check "mole.2 K8Lp: r8152_oot" grep -q "0f22fcb.*/experimental/5.4.96-115.30.mole.2-k8lp/r8152_oot.ko" "$STATE/curl.log"
     # webOS 24 K24 TVs on a 5.4.268 223 kernel
     : > "$STATE/curl.log"
     FAKE_SOC=k24 FAKE_KERNEL=5.4.268-223.29.okapi.5 run test-driver -y
-    check "okapi.5 K24: r8152_oot" grep -q "9af4a4f.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
+    check "okapi.5 K24: r8152_oot" grep -q "0f22fcb.*/experimental/5.4.268-223.29.okapi.5-k24/r8152_oot.ko" "$STATE/curl.log"
     # paparoa.pine.2 has a tested r8152, but not for an RTL8156: the build to test is offered
     : > "$STATE/curl.log"
     FAKE_SOC=k8hp FAKE_KERNEL=5.4.268-294.17.paparoa.pine.2 run test-driver -y
-    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "9af4a4f.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
+    check "paparoa K8Hp, RTL8156: r8152_oot" grep -q "0f22fcb.*/experimental/5.4.268-294.17.paparoa.pine.2-k8hp/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # An adapter no driver has: the new one takes it as it loads (no cdc_ncm
@@ -2038,6 +2038,15 @@ test_new_chip_drivers() {
     FAKE_SOC=m3 FAKE_KERNEL=4.4.84-404.glacier.10 run status --json
     check "LK61 (M3): from its chip's folder" has '"folder":"4.4.84-404.glacier.10-m3"'
     remove_usb 1-10
+    # 2018 OLEDs and NanoCells: r8152 built in, no usbnet; one build for
+    # every chip on 4.4.84-150.glacier.2
+    add_unclaimed 1-11 0424 7800
+    FAKE_SOC=o18 FAKE_KERNEL=4.4.84-150.glacier.2 run status --json
+    check "C8 (O18), LAN78xx: a driver to test" dt_json "true true"
+    check "from the kernel's folder" has '"folder":"4.4.84-150.glacier.2"'
+    FAKE_SOC=m16pp FAKE_KERNEL=4.4.84-150.glacier.2 run status --json
+    check "SK9500 (M16PP): the same build" has '"folder":"4.4.84-150.glacier.2"'
+    remove_usb 1-11
 }
 
 # 2022 UQ LCDs (LM21AN): no USB network drivers at all.  Realtek's driver

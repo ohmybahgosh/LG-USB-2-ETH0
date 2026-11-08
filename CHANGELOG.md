@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.1] - 2026-11-08
+
+### Added
+
+- **Drivers for 2018 OLEDs and NanoCells.**  The B8, C8, E8 and other 2018 OLEDs, the SK NanoCells and some UK LCDs (O18, M16PP and M16PP LITE chips, kernel `4.4.84-150.glacier.2`, webOS 4.0) have Realtek's `r8152` built in but nothing else.  RTL8156 (`r8152_oot.ko`), ASIX AX88179, Davicom DM9601 and Microchip LAN78xx, with a `usbnet.ko` loaded first, are waiting for testers.  One build covers all three chips: their firmware has the same kernel config, and the drivers are built with it.
+
 ## [2.9.0] - 2026-11-07
 
 ### Added

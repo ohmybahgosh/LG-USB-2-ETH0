@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.0"
+VERSION="2.9.1"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/9af4a4f5a3daf57643b8f9810e9a3e770076455b/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/0f22fcb0022437cec92e8de548a32fe52ab96df1/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1881,7 +1881,12 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-636.glacier.26 lm18a r8152_oot.ko 99c81dd48fb3feb3cc0d289a28e3d606dc8631106fcc00c3fb141117d3507321
 4.4.84-636.glacier.26 lm18a usbnet.ko 7374f9c280858f21e24d23c46a28991ee92fbfe6a9b20b4c7dc2121ce0040d43
 4.4.84-636.glacier.26 lm18a ax88179_178a.ko 4bef243a4dc461521ba69a17706b4994e2ffa0de543f3b8d386bdcb8452008a6
-4.4.84-636.glacier.26 lm18a dm9601.ko 23c57483a3ebb10e9a6723f9333a0c69964036d17eb2c4c07744ac792a12cbd0"
+4.4.84-636.glacier.26 lm18a dm9601.ko 23c57483a3ebb10e9a6723f9333a0c69964036d17eb2c4c07744ac792a12cbd0
+4.4.84-150.glacier.2 - r8152_oot.ko e50889d81f41dfc4c8a3c36c4d22a27068d1c859aa560ea354ccf50fe6110997
+4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
+4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
+4.4.84-150.glacier.2 - dm9601.ko 276b96fc1f8ae61fab02afa68f2c65278d7397c128173713c9e14826fafcdf15
+4.4.84-150.glacier.2 - lan78xx.ko 92799ec232f1c0c680978bc95afd788eb021b1872b6ebd492d54ef78b7676639"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
