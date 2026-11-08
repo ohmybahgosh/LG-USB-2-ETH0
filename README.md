@@ -291,7 +291,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | Adapter | Chip | Tested on | Result |
 |---------|------|-----------|--------|
 | [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
-| TP-Link UE306 V1.6 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3)) | ASIX AX88179 (`0b95:1790`) | 2020 UN7300 (55UN7300PUF), webOS 5, USB 2.0 port | Works with OCT0PUSCRIME's `ax88179_178a` build from `get-driver`, since that kernel has no ASIX driver.  228 Mbit/s down, 325 up |
+| TP-Link UE306 V1.6 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [Amazon](https://www.amazon.com/dp/B09GRL3VCN)) | ASIX AX88179 (`0b95:1790`) | 2020 UN7300 (55UN7300PUF), webOS 5, USB 2.0 port | Works with OCT0PUSCRIME's `ax88179_178a` build from `get-driver`, since that kernel has no ASIX driver.  228 Mbit/s down, 325 up |
 | TP-Link UE306 ([Reddit](https://www.reddit.com/r/webos/s/mNSsjbQGqN)) | ASIX AX88179 | 2024 C4 (OLED65C46LA), USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver.  About 300 Mbit/s, and webOS now shows "wired network connected" |
 | RTL8153 adapter ([#7](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/7)) | Realtek RTL8153 (`0bda:8153`) | 2024 G4 (OLED65G46LA), webOS 24, USB 2.0 port | Works on the TV's own `r8152` once Realtek mode moves it off `cdc_ncm`.  293 Mbit/s down, 285 up, 3 ms, and webOS shows the wired connection |
 | Cable Matters USB Ethernet ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)) | Realtek RTL8153 (`0bda:8153`) | 2020 UN7300 (55UN7300AUD), webOS 5, USB 2.0 port | Works with the K6Lp `r8152` build from `get-driver`, since that kernel has no Realtek driver.  184 Mbit/s down, 229 up, and webOS shows "Wired Connection (Ethernet), connected to Internet" |
@@ -300,7 +300,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
 <details>
-<summary>A note on the UGREEN, and Realtek adapters with a USB-A plug</summary>
+<summary>A note on the UGREEN, and more adapters that should work</summary>
 
 <br>
 
@@ -314,7 +314,20 @@ These use the same RTL8156BG chip as the UGREEN, so they should work the same wa
 | [Cable Matters USB to 2.5Gb Ethernet, model 202485 (Amazon)](https://www.amazon.com/dp/B0GFHS6L87) | RTL8156BG | USB-A, USB 3.0 |
 | [SABRENT USB-A to 2.5Gbps Ethernet, NT-UA25 (Amazon)](https://www.amazon.com/dp/B0FMBXSNKL) | RTL8156BG | USB-A, USB 3.0 |
 
-Same deal: plain links, no affiliate codes.  Check the listing says RTL8156B or RTL8156BG before you buy, since sellers sometimes change parts.
+Gigabit adapters on the two chips LG kernels support best.  The chip is from the maker's datasheet or from owners' `lsusb` output (`0bda:8153` is Realtek RTL8153, `0b95:1790` is ASIX AX88179), since most listings don't say.  On a USB 2.0 port these do about as well as the 2.5G ones above, for less.
+
+| Adapter | Chip | Notes |
+|---------|------|-------|
+| [TP-Link UE300 (Amazon)](https://www.amazon.com/dp/B00YUU3KC6) | Realtek RTL8153 ([TP-Link's datasheet](https://static.tp-link.com/res/down/doc/UE300_V1_Datasheet.pdf)) | USB-A, USB 3.0.  Same chip as the adapters in [#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6) and [#7](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/7) |
+| [TP-Link UE306 (Amazon)](https://www.amazon.com/dp/B09GRL3VCN) | ASIX AX88179 | USB-A, USB 3.0.  Tested above, on two TVs |
+| [UGREEN USB 3.0 to Gigabit Ethernet, model 20256 (Amazon)](https://www.amazon.com/dp/B00MYTSN18) | ASIX AX88179 (`0b95:1790`) | USB-A, USB 3.0 |
+| [Amazon Basics USB 3.0 to Gigabit Ethernet, U3-GE-1P (Amazon)](https://www.amazon.com/dp/B00M77HMU0) | ASIX AX88179 (`0b95:1790`) | USB-A, USB 3.0 |
+| [Plugable USB3-E1000 (Amazon)](https://www.amazon.com/dp/B00AQM8586) | ASIX AX88179B | USB-A, USB 3.0.  A later revision of the AX88179 with the same USB ID, so it should use the same driver |
+| [Cable Matters USB 3.0 to Gigabit Ethernet, model 202013 (Amazon)](https://www.amazon.com/dp/B00BBD7NFU) | ASIX | USB-A, USB 3.0.  Cable Matters' support page points to ASIX's drivers.  Not the Realtek Cable Matters adapter in [#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6) |
+
+Which one fits your TV depends on its kernel: run `status` first, or look your TV up in the [firmware audit](docs/firmware-audit.md).  Realtek or ASIX, there's usually a driver built in or one to get.  Skip adapters listed with the ASIX AX88179A or AX88772D for now (the StarTech USB31000S is one): they're newer chips that the older kernels on TVs may not handle, and nobody has tried one on a TV yet.
+
+Same deal: plain links, no affiliate codes.  Sellers sometimes change parts without changing the listing, so check the chip in the listing or the reviews before you buy.
 
 </details>
 
