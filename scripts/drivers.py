@@ -58,7 +58,7 @@ def folder(k, ch):
 
 
 def webos(k):
-    if k.startswith('4.4.3-208'):
+    if k.startswith('4.4.3-208') or k.startswith('4.4.3-78'):
         return 'webOS 3.5'
     if k.startswith('4.4.84-404') or k.startswith('4.4.84-636') or k.startswith('4.4.84-150'):
         return 'webOS 4.0'
@@ -84,7 +84,7 @@ HELPERS = ('usbnet.ko',)
 # Kernels with no chip in their row: LG's LM21A-family LCD chips, or LG's own
 LM_CHIPS = (('-934.', 'LM21AN'), ('-955.20.namtok', 'LM21ANN'), ('-966.', 'LM21ANN'),
             ('-899.', 'LM21A'), ('-955.16.nbr4tv', 'LM21UT'),
-            ('-150.glacier', 'O18, M16PP'), ('-208.drd4tv', 'K3LP'))
+            ('-150.glacier', 'O18, M16PP'), ('-208.drd4tv', 'K3LP'), ('-78.drd4tv', 'M2R'))
 
 
 def lm_chip(k):

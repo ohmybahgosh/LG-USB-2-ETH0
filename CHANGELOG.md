@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.4] - 2026-11-08
+
+### Added
+
+- **Drivers to test for the 2017 LJ HD and Full HD LCDs (M2R chip, webOS 3.5), like the 32LJ590U and 43LJ614V.**  Their kernel `4.4.3-78.drd4tv.2` (firmware 05.80.35 to 06.10.60) has no USB network driver at all, not even `usbnet`.  Realtek (`r8152.ko` and `r8152_oot.ko`, for RTL8152, RTL8153 and RTL8156), ASIX AX88179 and Davicom drivers are now ready to test, with a `usbnet.ko` the script loads first, built from LG's DMR kernel source.  There's no Microchip build: this kernel leaves out the PHY library it needs.
+
 ## [2.9.3] - 2026-11-08
 
 ### Added
