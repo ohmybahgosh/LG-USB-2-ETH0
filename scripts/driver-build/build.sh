@@ -36,8 +36,11 @@
 # has MODVERSIONS off, and every symbol it imports is exported by the kernel
 # image.  On o22-family 5.4.268 kernels the USB struct offsets the driver
 # relies on are checked too (tv_abi_checks.h, a compile error otherwise).
-# Elsewhere the report says "struct offsets unchecked" and the module needs
-# a tester.
+# With the TV's kernel image, a few kernel functions are also built from the
+# source and compared with the same functions in the image (abi-check.py).
+# When every struct offset matches, the report says "struct offsets checked
+# against the image"; differences are listed and leave it unchecked
+# (ABI_CHECK=0 skips this).  An unchecked module needs a tester.
 set -eu
 
 KDIR=$1
@@ -226,6 +229,33 @@ case "$KERNEL" in
 esac
 make "$@" M="$M" ${KCFLAGS:+"KCFLAGS=$KCFLAGS"} modules >> "$LOG" 2>&1 || {
     echo "build failed (struct offsets differ, or a compile error): $LOG" >&2; exit 1; }
+
+# Struct offsets against the TV's own kernel: build the kernel objects with
+# the functions abi-check.py compares (a tree may fail on others in their
+# folders, so only these) and compare them with the image
+if [ -f "$KDIR/Image" ] && [ "${ABI_CHECK:-1}" = 1 ]; then
+    _objs="net/core/dev.o net/ethernet/eth.o net/core/skbuff.o drivers/usb/core/urb.o drivers/usb/core/driver.o"
+    # shellcheck disable=SC2086 # split the list on purpose
+    make "$@" ${ARCH_CFLAGS:+"KCFLAGS=$ARCH_CFLAGS"} -j"$(nproc)" -k $_objs >> "$LOG" 2>&1 || true
+    _have=""
+    for _o in $_objs; do [ -f "$B/$_o" ] && _have="$_have $B/$_o"; done
+    _rc=2
+    if [ -n "$_have" ]; then
+        _rc=0
+        # shellcheck disable=SC2086
+        python3 "$HERE/abi-check.py" "$KDIR/Image" "${CROSS_COMPILE}objdump" $_have > "$WORK/abi-check.txt" || _rc=$?
+    fi
+    case "$_rc" in
+        0) [ "$ABI" = checked ] || ABI="checked against the image" ;;
+        1)  # Kept, but not called checked: a difference can also be LG
+            # changing the code of a function rather than a struct, so
+            # look at abi-check.txt before offering the module
+            [ "$ABI" = checked ] || ABI="unchecked (differences from the image, see abi-check.txt)"
+            echo "struct offsets: the TV's kernel image uses some this source doesn't:" >&2
+            grep DIFFERS "$WORK/abi-check.txt" | sed 's/^/  /' >&2 ;;
+        *) : ;;
+    esac
+fi
 
 KO=$M/$MODULE
 "${CROSS_COMPILE}readelf" -p .modinfo "$KO" > "$WORK/modinfo.txt"

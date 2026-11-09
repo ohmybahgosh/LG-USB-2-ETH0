@@ -13,7 +13,10 @@ It's [DonZoomik's](https://github.com/DonZoomik/webos-r8152), whose `r8152_oot.k
    - its `vermagic` is exactly the kernel's,
    - the kernel has `MODVERSIONS` off (true for every LG kernel so far), so there are no symbol CRCs to match, and no module signing either,
    - every symbol it imports is exported by that kernel image,
-   - on kernels for LG's own chips (o22 family) with 5.4.268, the USB struct offsets the driver relies on match the ones DonZoomik measured on a real TV.  Elsewhere the layout depends on that chip's config, so the module is reported as "struct offsets unchecked".
+   - on kernels for LG's own chips (o22 family) with 5.4.268, the USB struct offsets the driver relies on match the ones DonZoomik measured on a real TV,
+   - with the TV's kernel image, the struct offsets are compared with the TV's own kernel.  `abi-check.py` reads the image's symbol table (kallsyms), builds a few kernel files from the source with the TV's config (`net/core/dev.c`, `skbuff.c`, `eth.c`, and the USB core's `urb.c` and `driver.c`), and compares the loads and stores in 17 small functions a USB network driver depends on (`ether_setup`, `skb_put`, `usb_register_driver` and others) with the same functions in the image, plus the size of `struct net_device`, which decides where the driver's own data starts.  When every access matches, the report says "struct offsets checked against the image".  When the TV's code uses an offset the source never does, the differences are listed and the module stays "unchecked": a struct laid out differently can freeze the TV the moment the driver registers, but LG changing what a function does looks the same, so someone has to read `abi-check.txt` before the module is offered.  `ABI_CHECK=0` skips it, and an image it can't read also leaves the module "unchecked".
+
+   Without either, the layout depends on that chip's config, so the module is reported as "struct offsets unchecked" and needs a tester.
 
 `scripts/driver-build/build.sh` does steps 3 and 4:
 

@@ -52,6 +52,8 @@ jobs:
         run: sh tests/check-monitor.sh
       - name: Every text in the TV app is translated
         run: node tests/check-i18n.js
+      - name: The driver build's struct offset check reads kallsyms and offsets right
+        run: python3 tests/check-abi-check.py
 
   test:
     name: Tests (${{ matrix.shell }})

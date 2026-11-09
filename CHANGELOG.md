@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Driver builds check struct offsets against the TV's own kernel.**  A driver built against headers that don't match the TV's kernel can freeze it the moment it registers, the likely reason a C7 owner's own build from vanilla 4.4.3 froze in `register_netdev` (discussion #4).  `scripts/driver-build/abi-check.py` reads the symbol table out of the TV's kernel image and compares 17 small network and USB core functions, built from LG's source with the TV's config, with the same functions in the image, plus the size of `struct net_device`.  `build.sh` runs it whenever it has the image: the C7's drivers in 2.9.7 match, and so do the K24 kernels.  A module only passes as "checked against the image" when everything matches; differences are listed and leave it unchecked, for a person to look at.
+
 ## [2.9.7] - 2026-11-09
 
 ### Added
