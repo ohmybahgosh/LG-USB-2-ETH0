@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.6"
+VERSION="2.9.7"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -53,7 +53,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/13fbe62cccd2a9ac0cd8e5fd6e7826eaea87ea16/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/e32c0596841074a7cc33379cca1bed364922fe16/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1910,7 +1910,12 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.3-78.drd4tv.2 - r8152_oot.ko 98972012d355256d764418d9c54f3b3617a0fe29f52174b82487763c1c7cb939
 4.4.3-78.drd4tv.2 - usbnet.ko 911cdde2d5f1924f8c9c456981cd40a8be45b9f8ce960a1119eba543edef82cf
 4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
-4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c"
+4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
+4.4.3-119.drd4tv.6 m16p r8152_oot.ko af80711e8fea081b836281223660b721dd26ba995f5f5e312e133885f7ad2c84
+4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
+4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
+4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
+4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)

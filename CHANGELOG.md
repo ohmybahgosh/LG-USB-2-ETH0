@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.7] - 2026-11-09
+
+### Added
+
+- **Drivers to test for the 2017 OLEDs like the C7, and the UJ7 4K LCDs (M16P chip, webOS 3.5).**  Their kernel `4.4.3-119.drd4tv.6` (firmware 06.10.65) has `r8152` built in, but it's too old for the RTL8153B (`Unknown version 0x6010`) and the RTL8156, and there's no `usbnet`.  Realtek's newer `r8152_oot`, ASIX AX88179, Davicom and Microchip drivers are ready to test, with a `usbnet.ko` the script loads first.  LG hasn't published this TV's kernel, so they're built from its sibling DKLP3 source with the TV's own config, read from its firmware (discussion #4).
+
 ## [2.9.6] - 2026-11-08
 
 ### Fixed
