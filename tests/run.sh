@@ -2148,6 +2148,30 @@ test_driver_with_usbnet() {
     check "the report says usbnet loaded" dt_is "usbnet=loaded usbnet first: this kernel leaves it out"
 }
 
+# 4.x kernels' modules have no name= line (issue #16: a C7's AX88179 driver
+# failed with "unknown symbol" because usbnet.ko was never loaded first): the
+# driver is still known to need usbnet by the usbnet_probe it calls
+test_driver_with_usbnet_44() {
+    add_builtin
+    drvtest_file
+    add_unclaimed 1-1 0b95 1790
+    echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
+    echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
+    local k=4.4.3-119.drd4tv.6
+    printf 'junk\0vermagic=%s SMP preempt mod_unload ARMv7 p2v8\0alias=usb:v0B95p1790d*dc*dsc*dp*ic*isc*ip*in*\0usbnet_probe\0' "$k" > "$STATE/download"
+    printf 'junk\0vermagic=%s SMP preempt mod_unload ARMv7 p2v8\0usbnet_probe\0' "$k" > "$STATE/download_usbnet"
+    local xs us
+    xs=$(sha256sum "$STATE/download" | awk '{print $1}')
+    us=$(sha256sum "$STATE/download_usbnet" | awk '{print $1}')
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k-m16p/ax88179_178a.ko $xs ax88179_178a.ko $k-m16p 0b95:1790" \
+        LGU2E_TEST_USBNET="https://example.test/$k-m16p/usbnet.ko $us" \
+        FAKE_SOC=m16p FAKE_KERNEL=$k run test-driver -y
+    check "4.4: downloaded usbnet.ko" grep -q "/$k-m16p/usbnet.ko" "$STATE/curl.log"
+    check "4.4: usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q 'usbnet.ko'"
+    check "4.4: then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a'"
+    check "4.4: the report says usbnet loaded" dt_is "usbnet=loaded usbnet first: this kernel leaves it out"
+}
+
 # Where the kernel has usbnet, or for Realtek's driver, no usbnet.ko is fetched
 test_driver_without_usbnet() {
     add_builtin
@@ -2185,6 +2209,7 @@ test_boot_loads_usbnet() {
 
 t report test_report
 t driver_with_usbnet test_driver_with_usbnet
+t driver_with_usbnet_44 test_driver_with_usbnet_44
 t driver_without_usbnet test_driver_without_usbnet
 t boot_loads_usbnet test_boot_loads_usbnet
 t webos26_signed_modules test_webos26_signed_modules

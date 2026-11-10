@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.7"
+VERSION="2.9.8"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -437,10 +437,15 @@ sig_enforced() { [ "$(sysval "$SYS_MODULES/module/parameters/sig_enforce")" = Y 
 # usbnet.ko, pinned like any driver, and it's loaded first.
 needs_usbnet() { [ ! -d "$SYS_MODULES/usbnet" ] && ! grep -q '/usbnet\.ko$' "$(mod_dir)/modules.builtin" 2>/dev/null; }
 # uses_usbnet FILE: the driver is one of those built on usbnet (Realtek's and
-# lan78xx aren't)
+# lan78xx aren't).  Modules for 4.x kernels have no name= line, so for those
+# it's told by the usbnet function every such driver calls.
 uses_usbnet() {
     _un=$(tr -c '[:alnum:]_=.-' '\n' < "$1" 2>/dev/null | sed -n 's/^name=//p' | head -n 1)
-    case "$_un" in r8152|r8152_oot|lan78xx|'') return 1 ;; *) return 0 ;; esac
+    case "$_un" in
+        r8152|r8152_oot|lan78xx) return 1 ;;
+        '') grep -q 'usbnet_probe' "$1" 2>/dev/null ;;
+        *) return 0 ;;
+    esac
 }
 # usbnet_row KERNEL: "url sha256" of the usbnet.ko built for KERNEL (and this
 # TV's chip), from the tested or experimental tables.  A background job only

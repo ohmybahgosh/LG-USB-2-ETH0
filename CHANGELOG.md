@@ -2,7 +2,11 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.9.8] - 2026-11-10
+
+### Fixed
+
+- **Drivers to test on older TVs now load `usbnet` first.**  On 4.x kernels without `usbnet` (the 2017 C7 and LJ, the 2018 B8, and some 2019 and 2021 models), the ASIX, Davicom and other drivers built on it come with their own `usbnet.ko`, which has to load first.  The script told those drivers apart by a `name=` line that modules for 4.x kernels don't have, so it skipped `usbnet.ko` and the driver failed with "unknown symbol in module".  It now also goes by the `usbnet_probe` they call.  Nothing froze: the driver just never loaded.  Run **Test a new driver** again (issues #16 and #12).
 
 ### Added
 
