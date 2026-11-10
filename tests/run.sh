@@ -180,7 +180,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_RESUB=1 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -663,6 +663,7 @@ test_wifi_wake() {
     check "ahead of Wi-Fi" cm_has "connmanctl move-before $WAKE_US $WAKE_WS"
     check "mark gone" test ! -f "$(wake_mark)"
     check "address back" grep -q ' eth0 ' "$STATE/addr"
+    check "first try worked" wait_log "connected again (try 1)"
     # A second standby works too
     power "Active Standby"
     sleep 3
@@ -700,6 +701,41 @@ test_wifi_wake_skips() {
     sleep 2
     check "no subscription" sh -c "! grep -q getPowerState '$STATE/luna.log' 2>/dev/null"
     stop_bg
+}
+
+test_wifi_wake_retry_reasons() {
+    wake_setup
+    run install -y --wifi-wake --wait 4
+    run_hook
+    check "following standby" wait_log "Following standby for Wi-Fi wake"
+    power "Active Standby"
+    check "handed over" wait_log "disconnected the adapter's network session"
+    # On wake the adapter's cable link isn't back yet: the try says so
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    power Active
+    check "says no link" wait_log "awake: try 1 of 10: the adapter has no cable link yet"
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    check "connected on a later try" wait_log "the adapter is connected again (try [2-9])"
+    # Connected, but no address comes: the try says that, with ConnMan's error
+    power "Active Standby"
+    check "handed over again" wait_count "disconnected the adapter's network session" 2
+    touch "$STATE/cm_fail"
+    power Active
+    check "says no address" wait_log "no address after 1s (connect failed: Error $WAKE_US: Operation failed)"
+    rm -f "$STATE/cm_fail"
+    check "connected after" wait_count "connected again" 2
+    stop_bg
+}
+# wait_count PATTERN N: wait up to 20s for N lines matching PATTERN in the log
+wait_count() {
+    local i=0
+    while [ "$i" -lt 20 ]; do
+        [ "$(grep -c "$1" "$LOG" 2>/dev/null)" -ge "$2" ] && return 0
+        sleep 1
+        i=$((i + 1))
+    done
+    echo "    log has $(grep -c "$1" "$LOG" 2>/dev/null) of $2: $1"
+    return 1
 }
 
 test_wifi_wake_power_cut() {
@@ -1153,6 +1189,7 @@ t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
 t wifi_wake test_wifi_wake
 t wifi_wake_skips test_wifi_wake_skips
+t wifi_wake_retry_reasons test_wifi_wake_retry_reasons
 t wifi_wake_power_cut test_wifi_wake_power_cut
 t block_updates test_block_updates
 t block_updates_undo test_block_updates_undo

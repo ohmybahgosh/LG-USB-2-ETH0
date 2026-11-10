@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.1"
+VERSION="2.11.2"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -232,6 +232,8 @@ HANG_EVERY=${LGU2E_HANG_EVERY:-1800}
 # --wifi-wake: tries to connect the adapter again on wake, seconds apart
 WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
 WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
+# and seconds each try waits for an address once it's connected
+WAKE_ADDR_SECS=${LGU2E_WAKE_ADDR_SECS:-10}
 # After standby: seconds to let webOS bring the network back up before the
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
@@ -1053,7 +1055,8 @@ wake_handoff() {
 
 # Awake again (or booted after a power cut in standby): connect the adapter
 # again and put it back ahead of Wi-Fi.  Tries a few times (or TRIES), since
-# the adapter can take a moment to come back after standby.
+# the adapter can take a moment to come back after standby, and logs why
+# each try that didn't work failed.
 wake_restore() {
     [ -f "$WAKE_MARK" ] || return 0
     _wn=${1:-$WAKE_TRIES}
@@ -1063,17 +1066,29 @@ wake_restore() {
     _wt=0
     while [ "$_wt" -lt "$_wn" ]; do
         _wt=$((_wt + 1))
-        if [ "$(sysval "$NET/eth0/carrier")" = 1 ]; then
-            [ -n "$(iface_ipv4 eth0)" ] || connmanctl connect "$_us" > /dev/null 2>&1
+        _wy=""
+        if [ ! -e "$NET/eth0" ]; then
+            _wy="there's no eth0 yet"
+        elif ! is_usb_nic eth0; then
+            _wy="eth0 isn't the adapter yet"
+        elif [ "$(sysval "$NET/eth0/carrier")" != 1 ]; then
+            _wy="the adapter has no cable link yet"
+        else
+            _wc=""
+            [ -n "$(iface_ipv4 eth0)" ] || _wc=$(connmanctl connect "$_us" 2>&1) || _wc="connect failed: $(echo "$_wc" | head -n 1 | sed 's/[^ -~]//g' | cut -c1-120)"
+            case "$_wc" in "connect failed: "*) ;; *) _wc="" ;; esac
             _wi=0
-            while [ "$_wi" -lt 10 ] && [ -z "$(iface_ipv4 eth0)" ]; do sleep 1; _wi=$((_wi + 1)); done
+            while [ "$_wi" -lt "$WAKE_ADDR_SECS" ] && [ -z "$(iface_ipv4 eth0)" ]; do sleep 1; _wi=$((_wi + 1)); done
             if [ -n "$(iface_ipv4 eth0)" ]; then
-                connmanctl move-before "$_us" "$_ws" > /dev/null 2>&1
+                _wm=""
+                connmanctl move-before "$_us" "$_ws" > /dev/null 2>&1 || _wm=", but couldn't put it ahead of Wi-Fi"
                 rm -f "$WAKE_MARK"
-                echo "=== $(date) awake: the adapter is connected again (try $_wt) ==="
+                echo "=== $(date) awake: the adapter is connected again (try $_wt)$_wm ==="
                 return 0
             fi
+            _wy="no address after ${WAKE_ADDR_SECS}s${_wc:+ ($_wc)}"
         fi
+        echo "=== $(date) awake: try $_wt of $_wn: $_wy ==="
         [ "$_wt" -lt "$_wn" ] && sleep "$WAKE_RETRY_SECS"
     done
     echo "=== $(date) awake: couldn't connect the adapter again after $_wt tries.  Trying again at the next wake. ==="

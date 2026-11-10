@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.2] - 2026-11-10
+
+### Changed
+
+- **Wi-Fi wake in standby logs why each try to reconnect the adapter didn't work.**  On wake, every try that fails now gets its own line: no `eth0` yet, `eth0` isn't the adapter yet, the adapter has no cable link yet, or no address after 10 seconds (with ConnMan's error if connecting failed).  The log also says if the adapter couldn't be put back ahead of Wi-Fi.  On a G6, the adapter came back on the second try with nothing saying why the first one failed (discussion #19).
+
 ## [2.11.1] - 2026-11-10
 
 ### Fixed
