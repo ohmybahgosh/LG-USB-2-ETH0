@@ -41,15 +41,18 @@ python3 "$T/scripts/drivers.py" promote "$T/report.txt" > /dev/null && fail "pro
 # Realtek's driver doesn't use usbnet, so promoting it leaves a usbnet.ko
 # for the same kernel among the drivers to test (it goes along with the
 # ASIX and other drivers built on usbnet instead)
-u=$(sed -n 's/^\([0-9][^ ]*\) \([a-z0-9-]*\) usbnet\.ko \([0-9a-f]*\)$/\1 \2/p' "$T/LG-USB-2-ETH0.sh" | while read -r k c; do
-    grep -q "^$k $c r8152_oot\.ko " "$T/LG-USB-2-ETH0.sh" && { echo "$k $c"; break; }
+# Only rows still waiting for testers count: a kernel whose drivers were
+# already promoted doesn't
+awk '/^EXPERIMENTAL_DRIVERS="/ {t = 1} t {l = $0; sub(/^EXPERIMENTAL_DRIVERS="/, "", l); sub(/"$/, "", l); print l} t && /"$/ {t = 0}' "$T/LG-USB-2-ETH0.sh" > "$T/exp.txt"
+u=$(sed -n 's/^\([0-9][^ ]*\) \([a-z0-9-]*\) usbnet\.ko \([0-9a-f]*\)$/\1 \2/p' "$T/exp.txt" | while read -r k c; do
+    grep -q "^$k $c r8152_oot\.ko " "$T/exp.txt" && { echo "$k $c"; break; }
 done)
 if [ -n "$u" ]; then
     # shellcheck disable=SC2086 # split into kernel and chip on purpose
     set -- $u
     folder=$1
     [ "$2" = - ] || folder=$1-$2
-    short=$(grep "^$1 $2 r8152_oot\.ko " "$T/LG-USB-2-ETH0.sh" | cut -d' ' -f4 | cut -c1-16)
+    short=$(grep "^$1 $2 r8152_oot\.ko " "$T/exp.txt" | cut -d' ' -f4 | cut -c1-16)
     report "$1" works r8152_oot.ko
     python3 "$T/scripts/drivers.py" promote "$T/report.txt" > /dev/null || fail "didn't promote $folder/r8152_oot.ko"
     awk -v k="$1" -v c="$2" '/^EXPERIMENTAL_DRIVERS="/ {t = 1} t {l = $0; sub(/^EXPERIMENTAL_DRIVERS="/, "", l); if (l ~ "^" k " " c " usbnet\\.ko ") f = 1} t && /"$/ {t = 0} END {exit !f}' "$T/LG-USB-2-ETH0.sh" || fail "usbnet.ko went along with Realtek's driver"
