@@ -125,6 +125,7 @@
         if (h.module) { o.push('--module'); }
         if (h.wait && h.wait !== '120') { o.push('--wait'); }
         if (h.wifiFallback) { o.push('--wifi-fallback'); }
+        if (h.wifiWake) { o.push('--wifi-wake'); }
         return o.length ? o.join(' ') : 'None, the defaults';
     }
 
@@ -253,6 +254,7 @@
         $('tog-boot').className = 'tog' + (bootOn ? ' on' : '');
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
+        $('tog-wake').className = 'tog' + (bootOn && h.wifiWake ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
         // Realtek mode: on kernels with their own r8152, or when it's been
         // turned off (so it can be turned back on)
@@ -631,6 +633,17 @@
                 confirmThen(T('Use Wi-Fi as a backup?'),
                     T('If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.'),
                     function () { act(T('Wi-Fi backup'), installArgs('--wifi-fallback')); });
+            }
+        },
+        wake: function () {
+            if (!state) { return; }
+            var on = state.hook.state === 'enabled' && state.hook.wifiWake;
+            if (on) {
+                act(T('Wi-Fi wake off'), installArgs('--no-wifi-wake'));
+            } else {
+                confirmThen(T('Keep Wi-Fi wake in standby?'),
+                    T('On some TVs, Turn on via Wi-Fi stops working in standby while the adapter is the main connection.  Just before standby, this disconnects only the adapter\'s network session (it stays plugged in), so Wi-Fi stays ready, and connects it again on wake.  Only when Wi-Fi is connected and Turn on via Wi-Fi is on.  Starts from the next boot.'),
+                    function () { act(T('Wi-Fi wake in standby'), installArgs('--wifi-wake')); });
             }
         },
         updates: function () {

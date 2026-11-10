@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fake `busctl` for the test suite, only ConnMan's properties over D-Bus.
+# Logs each call to $FAKE_STATE/cm.log.  The Manager's WOLWOWLMode (the TV's
+# network wake setting) is $FAKE_STATE/wowlmode, default true.
+echo "busctl $*" >> "$FAKE_STATE/cm.log"
+case "$*" in
+    *net.connman.Manager\ GetProperties*)
+        printf 'a{sv} 2 "State" s "online" "WOLWOWLMode" b %s\n' "$(cat "$FAKE_STATE/wowlmode" 2>/dev/null || echo true)" ;;
+    *SetProperty*) ;;
+    *) exit 1 ;;
+esac

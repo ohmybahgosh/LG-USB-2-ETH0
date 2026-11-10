@@ -1,0 +1,30 @@
+#!/bin/sh
+# Fake `connmanctl` (webOS's connection manager) for the test suite: logs the
+# call to $FAKE_STATE/cm.log.  `services` lists $FAKE_STATE/cm_services.
+# Disconnecting an ethernet_ service takes eth0's address away and connecting
+# it gives it back (in $FAKE_STATE/addr, like the fake ip).
+# $FAKE_STATE/cm_fail makes disconnect and connect fail, and
+# $FAKE_STATE/cm_noconnect makes connect do nothing.
+echo "connmanctl $*" >> "$FAKE_STATE/cm.log"
+case "$1" in
+    services) cat "$FAKE_STATE/cm_services" 2>/dev/null ;;
+    disconnect)
+        [ -e "$FAKE_STATE/cm_fail" ] && { echo "Error $2: Operation failed" >&2; exit 1; }
+        case "$2" in
+            ethernet_*)
+                if [ -f "$FAKE_STATE/addr" ]; then
+                    awk '$2 != "eth0"' "$FAKE_STATE/addr" > "$FAKE_STATE/addr.new"
+                    mv "$FAKE_STATE/addr.new" "$FAKE_STATE/addr"
+                fi ;;
+        esac
+        echo "Disconnected $2" ;;
+    connect)
+        [ -e "$FAKE_STATE/cm_fail" ] && { echo "Error $2: Operation failed" >&2; exit 1; }
+        [ -e "$FAKE_STATE/cm_noconnect" ] && exit 0
+        case "$2" in
+            ethernet_*) grep -q '^[0-9]*: eth0 ' "$FAKE_STATE/addr" 2>/dev/null || echo "2: eth0 inet 192.168.1.42/24" >> "$FAKE_STATE/addr" ;;
+        esac
+        echo "Connected $2" ;;
+    move-before) echo "Moved $2 before $3" ;;
+    *) exit 1 ;;
+esac

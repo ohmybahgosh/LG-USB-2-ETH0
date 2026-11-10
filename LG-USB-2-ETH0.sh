@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.10.1"
+VERSION="2.11.0"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -41,6 +41,8 @@ LOG_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.log"
 # Per-boot state (RAM): background job PID, takeover tries, live-switch output
 RUN_DIR="${LGU2E_ROOT}/tmp"
 PID_FILE="$RUN_DIR/lg-usb-2-eth0.pid"
+# --wifi-wake's standby follower, and the luna-send it reads
+WAKE_PID_FILE="$RUN_DIR/lg-usb-2-eth0.wake.pid"
 # Where a copy of the script lives when it isn't run from the TV app
 SCRIPT_HOME="${LGU2E_ROOT}/home/root/lg-usb-2-eth0"
 OS_INFO="${LGU2E_ROOT}/var/run/nyx/os_info.json"
@@ -68,6 +70,10 @@ HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
 # Kept while --wifi-fallback has turned Wi-Fi on, so it's turned off again
 # once the cable works, even after a reboot in between
 WIFI_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wifi"
+# Kept while --wifi-wake has disconnected the adapter's network session for
+# standby: "usb-service wifi-service", so it's connected again on wake, or
+# at the next boot after a power cut
+WAKE_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.wake"
 # The last speed tests, kept across reboots: "time down up ping interface
 # driver kernel", newest last
 SPEED_HIST="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.speeds"
@@ -90,6 +96,7 @@ DRIVER=""
 MODULE_SHA=""
 WATCH=0
 WIFI_FALLBACK=0
+WIFI_WAKE=0
 BLOCK_UPDATES=0
 # The TV app's language (en or ru), for the messages the boot hook shows on
 # the TV screen.  The app hands it over (LGU2E_APP_LANG) and it's saved with
@@ -97,7 +104,7 @@ BLOCK_UPDATES=0
 UI_LANG=en
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_BLOCK=0 SET_RTK=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0
 JSON=0
 PHASE=""
 CHECK_ONLY=0
@@ -175,6 +182,11 @@ Options:
   --wifi-fallback    Turn Wi-Fi on if eth0 loses its cable link for a minute,
                      and off again once the cable works.  Only when Wi-Fi was
                      off, and only Wi-Fi networks the TV already knows
+  --wifi-wake        Keep Wake on LAN over Wi-Fi working in standby: just
+                     before standby, disconnect only the adapter's network
+                     session (it stays plugged in), so the TV keeps Wi-Fi
+                     ready for wake, and connect it again on wake.  Only
+                     when Wi-Fi is connected and network wake is on
   --block-updates    Block firmware updates more thoroughly, on top of the
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
@@ -183,7 +195,8 @@ Options:
                      By default, a Realtek RTL8152 or RTL8153 adapter that
                      the kernel left on the generic driver is switched over
                      to the kernel's own r8152, when it has one
-  --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-block-updates
+  --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-wifi-wake,
+  --no-block-updates
                      Turn that setting off again (--realtek-mode turns it on)
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
@@ -216,6 +229,9 @@ WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
 # software, and seconds before that's done again
 HANG_SECS=${LGU2E_HANG_SECS:-60}
 HANG_EVERY=${LGU2E_HANG_EVERY:-1800}
+# --wifi-wake: tries to connect the adapter again on wake, seconds apart
+WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
+WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
 # After standby: seconds to let webOS bring the network back up before the
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
@@ -982,6 +998,111 @@ wifi_back() {
     _wifi_on=""
 }
 
+# --wifi-wake.  On some TVs (an LG G6 on webOS 26, discussion #19), Wake on
+# LAN over Wi-Fi stops working in standby while the USB adapter is the main
+# connection: the TV drops off the Wi-Fi network.  Disconnecting only the
+# adapter's network session just before standby keeps Wi-Fi ready for wake.
+# The adapter stays plugged in and stays eth0, and on wake it's connected
+# again and put back ahead of Wi-Fi.  ConnMan is webOS's connection manager.
+
+# cm_service KIND MAC [active]: ConnMan's service for the interface with that
+# MAC (ethernet_<mac>_cable, or wifi_<mac>_...), the connected one with
+# "active".  Fails unless there's exactly one.
+cm_service() {
+    _cmm=$(echo "$2" | tr -d ':' | tr 'A-F' 'a-f')
+    connmanctl services 2>/dev/null | awk -v p="${1}_${_cmm}_" -v a="${3:-}" '
+        { id = $NF; f = substr($0, 1, 3) }
+        index(id, p) == 1 && (a == "" || f ~ /[OR]/) { print id; n++ }
+        END { exit n == 1 ? 0 : 1 }'
+}
+
+# cm_on OBJECT INTERFACE PROPERTY: a ConnMan property is true
+cm_on() {
+    busctl --system call net.connman "$1" "$2" GetProperties 2>/dev/null | grep -q "\"$3\" b true"
+}
+
+# Just before standby: hand over to Wi-Fi, when that's safe
+wake_handoff() {
+    [ -f "$WAKE_MARK" ] && return 0
+    _wh="=== $(date) standby:"
+    if ! is_usb_nic eth0 || [ -z "$(iface_ipv4 eth0)" ]; then
+        echo "$_wh eth0 isn't a connected USB adapter, so nothing to hand over ==="; return 0
+    fi
+    _ww=""
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        is_wifi "$_n" && [ -n "$(iface_ipv4 "$_n")" ] && { _ww=$_n; break; }
+    done
+    if [ -z "$_ww" ]; then echo "$_wh Wi-Fi isn't connected, so the adapter stays connected ==="; return 0; fi
+    if ! command -v connmanctl >/dev/null 2>&1 || ! command -v busctl >/dev/null 2>&1; then
+        echo "$_wh this webOS has no connmanctl or busctl, so the adapter stays connected ==="; return 0
+    fi
+    if ! cm_on / net.connman.Manager WOLWOWLMode; then
+        echo "$_wh network wake is off in the TV's settings, so the adapter stays connected ==="; return 0
+    fi
+    _us=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || { echo "$_wh no single connection for the adapter, so it stays connected ==="; return 0; }
+    _ws=$(cm_service wifi "$(sysval "$NET/$_ww/address")" active) || { echo "$_wh no single Wi-Fi connection, so the adapter stays connected ==="; return 0; }
+    ( umask 077; echo "$_us $_ws" > "$WAKE_MARK" ) || return 0
+    if ! connmanctl disconnect "$_us" > /dev/null 2>&1; then
+        rm -f "$WAKE_MARK"
+        echo "$_wh couldn't disconnect the adapter, so it stays connected ==="; return 0
+    fi
+    busctl --system call net.connman /net/connman/technology/wifi net.connman.Technology SetProperty sv WOWL b true > /dev/null 2>&1
+    echo "$_wh disconnected the adapter's network session, so Wi-Fi stays ready for wake ==="
+}
+
+# Awake again (or booted after a power cut in standby): connect the adapter
+# again and put it back ahead of Wi-Fi.  Tries a few times (or TRIES), since
+# the adapter can take a moment to come back after standby.
+wake_restore() {
+    [ -f "$WAKE_MARK" ] || return 0
+    _wn=${1:-$WAKE_TRIES}
+    _us="" _ws=""
+    read -r _us _ws < "$WAKE_MARK" 2>/dev/null
+    case "$_us$_ws" in ''|*[!A-Za-z0-9_]*) rm -f "$WAKE_MARK"; return 0 ;; esac
+    _wt=0
+    while [ "$_wt" -lt "$_wn" ]; do
+        _wt=$((_wt + 1))
+        if [ "$(sysval "$NET/eth0/carrier")" = 1 ]; then
+            [ -n "$(iface_ipv4 eth0)" ] || connmanctl connect "$_us" > /dev/null 2>&1
+            _wi=0
+            while [ "$_wi" -lt 10 ] && [ -z "$(iface_ipv4 eth0)" ]; do sleep 1; _wi=$((_wi + 1)); done
+            if [ -n "$(iface_ipv4 eth0)" ]; then
+                connmanctl move-before "$_us" "$_ws" > /dev/null 2>&1
+                rm -f "$WAKE_MARK"
+                echo "=== $(date) awake: the adapter is connected again (try $_wt) ==="
+                return 0
+            fi
+        fi
+        [ "$_wt" -lt "$_wn" ] && sleep "$WAKE_RETRY_SECS"
+    done
+    echo "=== $(date) awake: couldn't connect the adapter again after $_wt tries.  Trying again at the next wake. ==="
+    return 1
+}
+
+# Follows the TV's power state through webOS's own power service, and hands
+# over before standby and back on wake.  Subscribes again if luna-send ends.
+wake_watch() {
+    command -v luna-send >/dev/null 2>&1 || { echo "No luna-send, so --wifi-wake can't follow standby."; return 0; }
+    echo "Following standby for Wi-Fi wake."
+    _wf="${RUN_DIR:-/tmp}/lg-usb-2-eth0.power"
+    while :; do
+        rm -f "$_wf"
+        mkfifo "$_wf" 2>/dev/null || { echo "Couldn't make $_wf, so --wifi-wake can't follow standby."; return 0; }
+        luna-send -i luna://com.webos.service.tvpower/power/getPowerState '{"subscribe":true}' > "$_wf" 2>/dev/null &
+        echo $! > "$WAKE_PID_FILE.luna"
+        while IFS= read -r _pl; do
+            case "$_pl" in *'"state"'*) ;; *) continue ;; esac
+            case "$(echo "$_pl" | sed -n 's/.*"state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')" in
+                "Active Standby") wake_handoff ;;
+                Active|"Screen Saver"|"Screen Off") wake_restore ;;
+            esac
+        done < "$_wf"
+        rm -f "$_wf" "$WAKE_PID_FILE.luna"
+        sleep "${LGU2E_WAKE_RESUB:-10}"
+    done
+}
+
 # --block-updates: close more of LG's firmware update path, on top of the
 # Homebrew Channel's own Block system updates.  It never touches that
 # setting, and only adds: webOS's own update switch turned off, every update
@@ -1248,6 +1369,12 @@ boot_run() {
         [ $? = 1 ] && toast no-swap
     else
         echo "No USB Ethernet adapter after ${WAIT_SECS}s. Leaving the built-in port as eth0."
+    fi
+    # Off for standby when the TV lost power: connect it again
+    [ -f "$WAKE_MARK" ] && wake_restore
+    if [ "$WIFI_WAKE" = 1 ]; then
+        ( wake_watch ) &
+        echo $! > "$WAKE_PID_FILE"
     fi
     if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ]; then watch_run; fi
     return 0
@@ -2224,6 +2351,19 @@ stop_watcher() {
         kill "$_pid" 2>/dev/null && info "Stopped the hook's background job (PID $_pid)."
     fi
     rm -f "$PID_FILE"
+    stop_wake
+}
+
+# Stop --wifi-wake's standby follower and its luna-send, checking each PID
+stop_wake() {
+    for _wpf in "$WAKE_PID_FILE" "$WAKE_PID_FILE.luna"; do
+        _pid=$(cat "$_wpf" 2>/dev/null)
+        rm -f "$_wpf"
+        case "$_pid" in ''|*[!0-9]*) continue ;; esac
+        if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth\|luna-send'; then
+            kill "$_pid" 2>/dev/null
+        fi
+    done
 }
 
 watcher_pid() {
@@ -2248,6 +2388,7 @@ settings_ok() {
     case "$WAIT_SECS" in ''|*[!0-9]*) return 1 ;; esac
     case "$WATCH" in 0|1) ;; *) return 1 ;; esac
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
+    case "$WIFI_WAKE" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
     case "$UI_LANG" in en|ru|es) ;; *) return 1 ;; esac
@@ -2267,6 +2408,7 @@ load_settings() {
     if [ "$SET_MODULE" = 0 ]; then MODULE=$(hook_setting MODULE); DRIVER=$(hook_setting DRIVER); MODULE_SHA=$(hook_setting MODULE_SHA); fi
     if [ "$SET_WATCH" = 0 ]; then _v=$(hook_setting WATCH); [ -n "$_v" ] && WATCH=$_v; fi
     if [ "$SET_WIFI" = 0 ]; then _v=$(hook_setting WIFI_FALLBACK); [ -n "$_v" ] && WIFI_FALLBACK=$_v; fi
+    if [ "$SET_WAKE" = 0 ]; then _v=$(hook_setting WIFI_WAKE); [ -n "$_v" ] && WIFI_WAKE=$_v; fi
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
@@ -2333,6 +2475,7 @@ write_hook() {
         echo "MODULE_SHA=\"$MODULE_SHA\""
         echo "WATCH=\"$WATCH\""
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
+        echo "WIFI_WAKE=\"$WIFI_WAKE\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
         echo "UI_LANG=\"$UI_LANG\""
@@ -2447,6 +2590,7 @@ install_fix() {
     echo "  3. If none shows up, change nothing, so the built-in port keeps working"
     [ "$WATCH" = 1 ] && echo "  4. Keep watching: swap the adapter in when it's plugged in, give eth0 back when it's unplugged"
     [ "$WIFI_FALLBACK" = 1 ] && echo "  -  If eth0 loses its cable link for ${WIFI_GRACE}s while Wi-Fi is off, turn Wi-Fi on, and off again once the cable works"
+    [ "$WIFI_WAKE" = 1 ] && echo "  -  Before standby, disconnect only the adapter's network session so Wi-Fi stays ready for Wake on LAN, and connect it again on wake"
     [ "$BLOCK_UPDATES" = 1 ] && echo "  -  Block firmware updates more thoroughly, on top of the Homebrew Channel's own block (starts now)"
     echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
@@ -2461,6 +2605,7 @@ install_fix() {
     stop_watcher
     write_hook
     success "Boot hook installed: $HOOK"
+    [ -f "$WAKE_MARK" ] && wake_restore 1
     if [ "$BLOCK_UPDATES" = 1 ]; then
         updates_block
     elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
@@ -2487,6 +2632,7 @@ uninstall_fix() {
         success "Boot hook removed."
     fi
     rm -f "$SPEED_HIST"
+    [ -f "$WAKE_MARK" ] && { wake_restore 1 || rm -f "$WAKE_MARK"; }
     if [ -f "$WIFI_MARK" ]; then
         rm -f "$WIFI_MARK"
         warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
@@ -2600,6 +2746,7 @@ show_status() {
             [ -n "$(hook_setting DRIVER)" ] && _s="$_s (driver $(hook_setting DRIVER))"
             [ "$(hook_setting WATCH)" = 1 ] && _s="$_s, keeps watching (--watch)"
             [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _s="$_s, Wi-Fi as a backup (--wifi-fallback)"
+            [ "$(hook_setting WIFI_WAKE)" = 1 ] && _s="$_s, Wi-Fi wake in standby (--wifi-wake)"
             [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _s="$_s, blocks firmware updates (--block-updates)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
@@ -2901,10 +3048,11 @@ show_json() {
     printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"blockUpdates":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
-        "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
+        "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
+        "$(jb "$(hook_setting WIFI_WAKE)")" "$(jb "$([ -f "$WAKE_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
         "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"kernelAtSetup":%s,"sigEnforced":%s,' "$(js "$(hook_setting KERNEL)")" "$(jb "$(sig_enforced && echo 1)")"
@@ -3277,6 +3425,7 @@ show_report() {
         [ -n "$(hook_setting MODULE)" ] && _h="$_h, module $(basename "$(hook_setting MODULE)")"
         [ "$(hook_setting WATCH)" = 1 ] && _h="$_h, watch"
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
+        [ "$(hook_setting WIFI_WAKE)" = 1 ] && _h="$_h, wifi-wake"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
         [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
         _hk=$(hook_setting KERNEL)
@@ -3415,6 +3564,8 @@ while [ $# -gt 0 ]; do
         --no-watch) WATCH=0; SET_WATCH=1 ;;
         --wifi-fallback) WIFI_FALLBACK=1; SET_WIFI=1 ;;
         --no-wifi-fallback) WIFI_FALLBACK=0; SET_WIFI=1 ;;
+        --wifi-wake) WIFI_WAKE=1; SET_WAKE=1 ;;
+        --no-wifi-wake) WIFI_WAKE=0; SET_WAKE=1 ;;
         --block-updates) BLOCK_UPDATES=1; SET_BLOCK=1 ;;
         --no-block-updates) BLOCK_UPDATES=0; SET_BLOCK=1 ;;
         --realtek-mode) REALTEK_MODE=1; SET_RTK=1 ;;

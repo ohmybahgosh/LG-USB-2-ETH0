@@ -180,7 +180,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_RESUB=1 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -197,8 +197,12 @@ wait_log() {
 }
 
 stop_bg() {
-    local p
+    local p f
     p=$(cat "$ROOT/tmp/lg-usb-2-eth0.pid" 2>/dev/null) && kill "$p" 2>/dev/null
+    # --wifi-wake's follower first, so it can't subscribe again, then its luna-send
+    for f in lg-usb-2-eth0.wake.pid lg-usb-2-eth0.wake.pid.luna; do
+        p=$(cat "$ROOT/tmp/$f" 2>/dev/null) && kill "$p" 2>/dev/null
+    done
     return 0
 }
 
@@ -615,6 +619,130 @@ test_wifi_fallback_settings() {
     check "bad value refused" wait_log "invalid settings"
 }
 
+# --wifi-wake: an adapter, LG's Wi-Fi connected too, and what ConnMan lists
+WAKE_US=ethernet_00e04c680001_cable
+WAKE_WS=wifi_001122334455_486f6d65_managed_psk
+wake_setup() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    add_wifi wlan0 1-2
+    printf '*AO Wired                %s\n*AR Home                 %s\n    Wired                ethernet_a823fe000001_cable\n' "$WAKE_US" "$WAKE_WS" > "$STATE/cm_services"
+    printf '2: eth0 inet 192.168.1.42/24\n3: wlan0 inet 192.168.1.50/24\n' > "$STATE/addr"
+}
+power() { echo "$1" >> "$STATE/power_events"; }
+cm_has() { grep -q "$1" "$STATE/cm.log" 2>/dev/null || { echo "    connman calls lack: $1"; return 1; }; }
+cm_lacks() { ! grep -q "$1" "$STATE/cm.log" 2>/dev/null || { echo "    connman calls have: $1"; return 1; }; }
+wake_mark() { echo "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.wake"; }
+
+test_wifi_wake() {
+    wake_setup
+    run install -y --wifi-wake --wait 4
+    check "setting saved" grep -q '^WIFI_WAKE="1"' "$CONF"
+    check "plan mentions it" has "Wi-Fi stays ready for Wake on LAN"
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    check "following standby" wait_log "Following standby for Wi-Fi wake"
+    check "subscribed" grep -q 'luna-send -i luna://com.webos.service.tvpower/power/getPowerState' "$STATE/luna.log"
+    power Active
+    sleep 2
+    check "nothing while on" cm_lacks "disconnect"
+    power "Active Standby"
+    check "handed over" wait_log "disconnected the adapter's network session"
+    check "only the adapter's session" cm_has "connmanctl disconnect $WAKE_US"
+    check "Wi-Fi wake kept on" cm_has "WOWL b true"
+    check "Wi-Fi left alone" cm_lacks "disconnect $WAKE_WS"
+    check "mark kept" test -f "$(wake_mark)"
+    check "adapter still eth0" is eth0 usb:1-1
+    run status --json
+    check "json shows it" json_ok "$OUT" "d['hook']['wifiWake'] is True and d['hook']['wifiWakeHandoff'] is True"
+    run status
+    check "status hook line" has "Wi-Fi wake in standby"
+    power Active
+    check "connected again" wait_log "the adapter is connected again"
+    check "connect" cm_has "connmanctl connect $WAKE_US"
+    check "ahead of Wi-Fi" cm_has "connmanctl move-before $WAKE_US $WAKE_WS"
+    check "mark gone" test ! -f "$(wake_mark)"
+    check "address back" grep -q ' eth0 ' "$STATE/addr"
+    # A second standby works too
+    power "Active Standby"
+    sleep 3
+    check "second standby" test "$(grep -c 'disconnected the adapter' "$LOG")" = 2
+    stop_bg
+}
+
+test_wifi_wake_skips() {
+    wake_setup
+    run install -y --wifi-wake --wait 4
+    echo false > "$STATE/wowlmode"
+    run_hook
+    check "following standby" wait_log "Following standby for Wi-Fi wake"
+    power "Active Standby"
+    check "network wake off" wait_log "network wake is off in the TV's settings"
+    power Active
+    echo true > "$STATE/wowlmode"
+    sed -i '/wlan0/d' "$STATE/addr"
+    power "Active Standby"
+    check "no Wi-Fi" wait_log "Wi-Fi isn't connected, so the adapter stays connected"
+    printf '3: wlan0 inet 192.168.1.50/24\n' >> "$STATE/addr"
+    touch "$STATE/cm_fail"
+    power Active
+    power "Active Standby"
+    check "disconnect failed" wait_log "couldn't disconnect the adapter"
+    check "never disconnected" test ! -f "$(wake_mark)"
+    check "address kept" grep -q ' eth0 ' "$STATE/addr"
+    stop_bg
+    # Without the option, standby isn't followed at all
+    rm -f "$STATE/luna.log" "$LOG" "$STATE/cm_fail"
+    run install -y --no-wifi-wake --watch
+    check "setting off" grep -q '^WIFI_WAKE="0"' "$CONF"
+    run_hook
+    check "boot runs" wait_log "Watching for the adapter"
+    sleep 2
+    check "no subscription" sh -c "! grep -q getPowerState '$STATE/luna.log' 2>/dev/null"
+    stop_bg
+}
+
+test_wifi_wake_power_cut() {
+    wake_setup
+    run install -y --wifi-wake --wait 4
+    # The TV lost power in standby, with the adapter's session disconnected
+    printf '%s %s\n' "$WAKE_US" "$WAKE_WS" > "$(wake_mark)"
+    sed -i '/ eth0 /d' "$STATE/addr"
+    run_hook
+    check "connected again at boot" wait_log "the adapter is connected again"
+    check "connect" cm_has "connmanctl connect $WAKE_US"
+    check "mark gone" test ! -f "$(wake_mark)"
+    stop_bg
+    # Install puts it back right away, and so does uninstall
+    rm -f "$STATE/cm.log"
+    printf '%s %s\n' "$WAKE_US" "$WAKE_WS" > "$(wake_mark)"
+    sed -i '/ eth0 /d' "$STATE/addr"
+    run install -y
+    check "kept by a later install" grep -q '^WIFI_WAKE="1"' "$CONF"
+    check "install connects it" cm_has "connmanctl connect $WAKE_US"
+    check "mark gone after install" test ! -f "$(wake_mark)"
+    printf '%s %s\n' "$WAKE_US" "$WAKE_WS" > "$(wake_mark)"
+    touch "$STATE/cm_noconnect"
+    sed -i '/ eth0 /d' "$STATE/addr"
+    run uninstall -y
+    check "uninstall clears it" test ! -f "$(wake_mark)"
+    # A mark that isn't two service names is dropped, not used
+    rm -f "$STATE/cm.log" "$STATE/cm_noconnect" "$LOG"
+    run install -y --wifi-wake --wait 4
+    printf 'ethernet_x;y wifi_y\n' > "$(wake_mark)"
+    run_hook
+    check "boot runs" wait_log "Following standby for Wi-Fi wake"
+    check "bad mark dropped" test ! -f "$(wake_mark)"
+    check "bad mark not used" cm_lacks "connect"
+    stop_bg
+    run --help
+    check "help lists it" has "--wifi-wake"
+    sed -i 's/^WIFI_WAKE=.*/WIFI_WAKE="yes"/' "$CONF"
+    rm -f "$LOG"
+    run_hook
+    check "bad value refused" wait_log "invalid settings"
+}
+
 # wait_for_file FILE TEXT: wait up to 15s for TEXT to show up in FILE
 wait_for_file() {
     local i=0
@@ -1023,6 +1151,9 @@ t link_speed test_link_speed
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
+t wifi_wake test_wifi_wake
+t wifi_wake_skips test_wifi_wake_skips
+t wifi_wake_power_cut test_wifi_wake_power_cut
 t block_updates test_block_updates
 t block_updates_undo test_block_updates_undo
 t block_updates_without_hbc test_block_updates_without_hbc

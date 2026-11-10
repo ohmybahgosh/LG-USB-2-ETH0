@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.0] - 2026-11-10
+
+### Added
+
+- **Wi-Fi wake in standby (`--wifi-wake`), for Turn on via Wi-Fi.**  On some TVs, Turn on via Wi-Fi stops working in standby while the USB adapter is the main connection: on an LG G6 with webOS 26, the TV dropped off Wi-Fi.  With this on, just before standby the boot hook disconnects only the adapter's network session in webOS's connection manager (the adapter stays plugged in and stays `eth0`), so Wi-Fi stays ready for wake, and on wake it connects the adapter again and puts it back ahead of Wi-Fi, retrying while the adapter comes back.  It only does this when Wi-Fi is connected and Turn on via Wi-Fi is on, and if the TV loses power in standby, the next boot connects the adapter again.  Off by default.  The TV app has it as **Wi-Fi wake in standby**.  Thanks to romansat for tracking this down and sharing a working approach (discussion #19).
+
 ## [2.10.1] - 2026-11-10
 
 ### Added

@@ -4,8 +4,24 @@
 # Wi-Fi's switch is $FAKE_STATE/wifi ("enabled" or "disabled", default off);
 # $FAKE_STATE/wifi-broken makes setstate fail.  webOS's update check
 # (support/softwareUpdateEnable) is $FAKE_STATE/updcheck, default true.
+# getPowerState sends the states listed in $FAKE_STATE/power_events.
 printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
 case "$*" in
+    *getPowerState*)
+        # The TV's power state: each line of $FAKE_STATE/power_events, as
+        # it's added.  With -i (subscribed) it keeps following the file.
+        _n=0
+        while :; do
+            if [ -f "$FAKE_STATE/power_events" ]; then
+                _c=$(wc -l < "$FAKE_STATE/power_events")
+                while [ "$_n" -lt "$_c" ]; do
+                    _n=$((_n + 1))
+                    printf '{"returnValue":true,"subscribed":true,"state":"%s"}\n' "$(sed -n "${_n}p" "$FAKE_STATE/power_events")"
+                done
+            fi
+            [ "$1" = -i ] || exit 0
+            sleep 1
+        done ;;
     *getAppInfo*) printf '{"appInfo":{"version":"%s"},"returnValue":true}\n' "$(cat "$FAKE_STATE/appver" 2>/dev/null)" ;;
     *wifi/getstatus*)
         if [ "$(cat "$FAKE_STATE/wifi" 2>/dev/null)" = enabled ]; then
