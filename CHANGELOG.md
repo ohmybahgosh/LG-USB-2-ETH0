@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.1] - 2026-11-10
+
+### Fixed
+
+- **The TV app's menu no longer runs into the footer while it starts.**  Until the first status came in, the menu rows kept their full size, so the last ones ran past the bottom of the screen and the GitHub link sat on top of **Speed test**.  The rows now get their fitted size right away.
+
 ## [2.11.0] - 2026-11-10
 
 ### Added

@@ -298,6 +298,14 @@
         if (current >= buttons().length) { current = buttons().length - 1; }
     }
 
+    // Squeeze the rows a little when there are more of them, so they fit
+    // above the footer.  Also run before the first status, so the menu
+    // doesn't run into the footer while the app is still checking the TV.
+    function fitRows() {
+        var n = buttons().length;
+        $('actions').className = 'actions' + (n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
+    }
+
     // The update row only shows when a newer release is out.  If the
     // Homebrew Channel knows this app's repo, updates come from there.
     function renderUpdate() {
@@ -307,9 +315,7 @@
         var btn = document.querySelector('[data-action="update"]');
         var show = !!(upd && upd.newer);
         btn.style.display = show ? '' : 'none';
-        // Squeeze the rows a little when there are more of them, so they fit
-        var n = buttons().length;
-        $('actions').className = 'actions' + (n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
+        fitRows();
         if (!show) { return; }
         $('update-title').textContent = T('Update to v{v}', { v: upd.latest });
         $('update-hint').textContent = upd.source === 'homebrew' ? T('opens the Homebrew Channel') : T('you have v{v}, downloads and installs', { v: upd.current });
@@ -893,6 +899,7 @@
             current = buttons().indexOf(document.querySelector('[data-action="lang"]'));
         }
     } catch (e) { /* first row */ }
+    fitRows();
     focusCurrent();
     tvInfo(function () { refresh(function (s) { whatsNew(s); drvtestOffer(s); }); });
     checkUpdate();
