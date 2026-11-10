@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.10.1] - 2026-11-10
+
+### Added
+
+- **A tested ASIX AX88179 driver for the 2017 C7 and UJ7 too (M16P chip, webOS 3.5).**  On a C7, `ax88179_178a` took a UGREEN AX88179B as `eth0` after loading its `usbnet.ko` first (the 2.9.8 fix), and got a link on USB 3 and a working connection (issues #16 and #18).  **Faster driver** and `get-driver` offer it with its `usbnet.ko`, no testing needed.
+
 ## [2.10.0] - 2026-11-10
 
 ### Added

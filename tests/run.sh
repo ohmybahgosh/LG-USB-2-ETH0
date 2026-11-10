@@ -2070,15 +2070,19 @@ test_new_chip_drivers() {
     check "LJ: from its kernel's folder" has '"folder":"4.4.3-78.drd4tv.2"'
     remove_usb 1-12
     # 2017 C7 and UJ7 (M16P, webOS 3.5): r8152 built in but too old for an RTL8153B.
-    # Realtek's r8152_oot is reported working (issue #17), the rest are builds
-    # to test for the M16P chip only
+    # Realtek's r8152_oot (issue #17) and ASIX's ax88179_178a (issue #18) are
+    # reported working, the rest are builds to test for the M16P chip only
     add_unclaimed 1-12 0bda 8153
     FAKE_SOC=m16p FAKE_KERNEL=4.4.3-119.drd4tv.6 run status --json
     check "C7 (M16P), Realtek: the tested driver is offered" has '"driverOffer":"available"'
     remove_usb 1-12
     add_unclaimed 1-12 0b95 1790
     FAKE_SOC=m16p FAKE_KERNEL=4.4.3-119.drd4tv.6 run status --json
-    check "C7 (M16P), ASIX AX88179: a driver to test" dt_json "true true"
+    check "C7 (M16P), ASIX AX88179: the tested driver is offered" has '"driverOffer":"available"'
+    remove_usb 1-12
+    add_unclaimed 1-12 0424 7800
+    FAKE_SOC=m16p FAKE_KERNEL=4.4.3-119.drd4tv.6 run status --json
+    check "C7 (M16P), Microchip LAN7800: a driver to test" dt_json "true true"
     check "C7: from its chip's folder" has '"folder":"4.4.3-119.drd4tv.6-m16p"'
     remove_usb 1-12
     # 2018 webOS 4.0: the UK63 (LM18A) and LK61 (M3) have no USB network driver
@@ -2176,25 +2180,26 @@ test_driver_with_usbnet() {
     check "the report says usbnet loaded" dt_is "usbnet=loaded usbnet first: this kernel leaves it out"
 }
 
-# 4.x kernels' modules have no name= line (issue #16: a C7's AX88179 driver
-# failed with "unknown symbol" because usbnet.ko was never loaded first): the
-# driver is still known to need usbnet by the usbnet_probe it calls
+# 4.x kernels' modules have no name= line (issues #16 and #12: AX88179 drivers
+# on a C7 and a B8 failed with "unknown symbol" because usbnet.ko was never
+# loaded first): the driver is still known to need usbnet by the usbnet_probe
+# it calls.  The 2018 OLEDs' kernel, whose AX88179 driver is still to test
 test_driver_with_usbnet_44() {
     add_builtin
     drvtest_file
     add_unclaimed 1-1 0b95 1790
     echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
     echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
-    local k=4.4.3-119.drd4tv.6
-    printf 'junk\0vermagic=%s SMP preempt mod_unload ARMv7 p2v8\0alias=usb:v0B95p1790d*dc*dsc*dp*ic*isc*ip*in*\0usbnet_probe\0' "$k" > "$STATE/download"
-    printf 'junk\0vermagic=%s SMP preempt mod_unload ARMv7 p2v8\0usbnet_probe\0' "$k" > "$STATE/download_usbnet"
+    local k=4.4.84-150.glacier.2
+    printf 'junk\0vermagic=%s SMP preempt mod_unload aarch64\0alias=usb:v0B95p1790d*dc*dsc*dp*ic*isc*ip*in*\0usbnet_probe\0' "$k" > "$STATE/download"
+    printf 'junk\0vermagic=%s SMP preempt mod_unload aarch64\0usbnet_probe\0' "$k" > "$STATE/download_usbnet"
     local xs us
     xs=$(sha256sum "$STATE/download" | awk '{print $1}')
     us=$(sha256sum "$STATE/download_usbnet" | awk '{print $1}')
-    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k-m16p/ax88179_178a.ko $xs ax88179_178a.ko $k-m16p 0b95:1790" \
-        LGU2E_TEST_USBNET="https://example.test/$k-m16p/usbnet.ko $us" \
-        FAKE_SOC=m16p FAKE_KERNEL=$k run test-driver -y
-    check "4.4: downloaded usbnet.ko" grep -q "/$k-m16p/usbnet.ko" "$STATE/curl.log"
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/$k/ax88179_178a.ko $xs ax88179_178a.ko $k 0b95:1790" \
+        LGU2E_TEST_USBNET="https://example.test/$k/usbnet.ko $us" \
+        FAKE_SOC=o18 FAKE_KERNEL=$k run test-driver -y
+    check "4.4: downloaded usbnet.ko" grep -q "/$k/usbnet.ko" "$STATE/curl.log"
     check "4.4: usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q 'usbnet.ko'"
     check "4.4: then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a'"
     check "4.4: the report says usbnet loaded" dt_is "usbnet=loaded usbnet first: this kernel leaves it out"

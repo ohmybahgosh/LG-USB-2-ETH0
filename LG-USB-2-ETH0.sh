@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.10.0"
+VERSION="2.10.1"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1567,7 +1567,9 @@ R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:
 # scripts/drivers.py promote moves a row here from a driver test report.
 TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717
 5.4.268-320 - r8152_oot.ko 952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0
-4.4.3-119.drd4tv.6 m16p r8152_oot.ko af80711e8fea081b836281223660b721dd26ba995f5f5e312e133885f7ad2c84"
+4.4.3-119.drd4tv.6 m16p r8152_oot.ko af80711e8fea081b836281223660b721dd26ba995f5f5e312e133885f7ad2c84
+4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
+4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -1934,8 +1936,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.3-78.drd4tv.2 - usbnet.ko 911cdde2d5f1924f8c9c456981cd40a8be45b9f8ce960a1119eba543edef82cf
 4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
 4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
-4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
-4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
 4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
 4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b"
 
