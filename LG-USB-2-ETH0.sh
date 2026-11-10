@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.9.8"
+VERSION="2.9.9"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -834,6 +834,23 @@ drv_try() {
             sleep 2
             _dtt=$((_dtt + 2))
         done
+        # Still no address: take the link down and up so webOS sees it, as
+        # after standby, and wait again.  An older webOS can be slow to
+        # notice the new eth0 (issue #17: it came up and worked a bit later).
+        _dtn=$(find_usb_nic)
+        if [ -n "$_dtn" ] && [ -z "$(iface_ipv4 "$_dtn")" ]; then
+            echo "No address yet on $_dtn.  Taking the link down and up so webOS sees it."
+            ip link set dev "$_dtn" down
+            sleep 2
+            ip link set dev "$_dtn" up
+            _dtt=0
+            while [ "$_dtt" -lt "$NET_CHECK" ]; do
+                _dtn=$(find_usb_nic)
+                [ -n "$_dtn" ] && [ -n "$(iface_ipv4 "$_dtn")" ] && break
+                sleep 2
+                _dtt=$((_dtt + 2))
+            done
+        fi
     fi
     _dtn=$(find_usb_nic)
     _dtv="" _dtc="" _dts="" _dta=no _dtp=""

@@ -1686,6 +1686,19 @@ drvtest_setup() {
     drvtest_file
 }
 
+# webOS hasn't given the adapter an address within the wait (an older webOS
+# can be slow, issue #17): the link goes down and up, webOS reconnects, and
+# the test reports it works
+test_test_driver_link_bounce() {
+    drvtest_setup
+    touch "$STATE/dhcp_on_up"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "exit 0" rc_is 0
+    check "took the link down and up" has "Taking the link down and up so webOS sees it"
+    check "bounced the adapter, not the built-in port" grep -q "ip link set dev eth1 up" "$STATE/ip.log"
+    check "result works" dt_is "result=works"
+}
+
 test_test_driver_works() {
     drvtest_setup
     # webOS gives the adapter an address once it's on the new driver
@@ -2268,6 +2281,7 @@ t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
+t test_driver_link_bounce test_test_driver_link_bounce
 t test_driver_from_r8152 test_test_driver_from_r8152
 t test_driver_no_wait test_test_driver_no_wait
 t test_driver_eth0_kept test_test_driver_eth0_kept

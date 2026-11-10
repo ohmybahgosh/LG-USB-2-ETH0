@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.9.9] - 2026-11-10
+
+### Fixed
+
+- **Test a new driver waits for slow webOS versions.**  When the adapter has no address after the wait, the test now takes its link down and up so webOS notices it, the way the boot hook already does after standby, and waits again before reporting.  On a 2017 C7 (webOS 3.5), Realtek's driver was reported as "no link" though it came up and ran a 500 Mbit/s speed test a moment later (issue #17).
+
 ## [2.9.8] - 2026-11-10
 
 ### Fixed
