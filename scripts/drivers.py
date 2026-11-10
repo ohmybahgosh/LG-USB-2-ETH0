@@ -81,6 +81,7 @@ def webos(k):
 
 # usbnet.ko rows are a helper some drivers load first, not a driver to list
 HELPERS = ('usbnet.ko',)
+NO_USBNET = ('r8152.ko', 'r8152_oot.ko', 'lan78xx.ko')
 # Kernels with no chip in their row: LG's LM21A-family LCD chips, or LG's own
 LM_CHIPS = (('-934.', 'LM21AN'), ('-955.20.namtok', 'LM21ANN'), ('-966.', 'LM21ANN'),
             ('-899.', 'LM21A'), ('-955.16.nbr4tv', 'LM21UT'),
@@ -229,8 +230,8 @@ def promote(report_file):
     exp.remove(row)
     tested.append(row)
     # A driver built on usbnet, for a kernel that leaves it out, takes its
-    # usbnet.ko along
-    helper = [r for r in exp if folder(r[0], r[1]) == fo and r[2] in HELPERS]
+    # usbnet.ko along (Realtek's and lan78xx don't use usbnet)
+    helper = [] if f in NO_USBNET else [r for r in exp if folder(r[0], r[1]) == fo and r[2] in HELPERS]
     for h in helper:
         exp.remove(h)
         tested.append(h)

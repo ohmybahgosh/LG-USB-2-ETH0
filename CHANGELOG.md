@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.10.0] - 2026-11-10
+
+### Added
+
+- **A tested Realtek driver for 2017 OLEDs like the C7 and UJ7 LCDs (M16P chip, webOS 3.5).**  `r8152_oot` for kernel `4.4.3-119.drd4tv.6` works on a C7: a speed test ran at 500 Mbit/s, and the boot hook loads it and makes the adapter `eth0` at 1000 Mbit/s on USB 3 (issue #17, discussion #4).  **Faster driver** and `get-driver` now offer it, no testing needed.  It's the first driver for a 2017 TV built from LG's own source that's been reported working.
+
+### Fixed
+
+- **Promoting Realtek's driver leaves `usbnet.ko` with the drivers that need it.**  `scripts/drivers.py promote` moved a kernel's `usbnet.ko` along with any driver, though Realtek's and Microchip's don't use it.
+
 ## [2.9.9] - 2026-11-10
 
 ### Fixed

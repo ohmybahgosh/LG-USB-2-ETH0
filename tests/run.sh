@@ -1413,9 +1413,19 @@ test_update_check() {
     check "same version is not newer" json_ok "$OUT" "d['current'] == '$v' and d['latest'] == '$v' and d['newer'] is False and d['kind'] == 'script' and d['source'] == 'sideloaded'"
     run update --check
     check "says up to date" has "Up to date"
-    release 2.10.0
+    # Versions compare by number, not as text: X.(Y+1).0 is newer, and
+    # X.(Y-1).99 isn't (as text, "2.9.99" would beat "2.10.0")
+    local ma mi
+    ma=${v%%.*} mi=${v#*.}; mi=${mi%%.*}
+    release "$ma.$((mi + 1)).0"
     run update --check --json
-    check "2.10 is newer than 2.3.x" json_ok "$OUT" "d['newer'] is True and d['notes'].endswith('/tag/v2.10.0')"
+    check "the next minor version is newer" json_ok "$OUT" "d['newer'] is True and d['notes'].endswith('/tag/v$ma.$((mi + 1)).0')"
+    if [ "$mi" -gt 0 ]; then
+        release "$ma.$((mi - 1)).99"
+        run update --check --json
+        check "an older minor with a bigger patch isn't newer" json_ok "$OUT" "d['newer'] is False"
+    fi
+    release "$ma.$((mi + 1)).0"
     mkdir -p "$ROOT/var/lib/wam/Default/Local Storage/leveldb"
     printf 'xx\001repositoriesConfig\001{"repositories":[{"url":"https://ohmybahgosh.dev/repo"}]}' \
         > "$ROOT/var/lib/wam/Default/Local Storage/leveldb/000003.log"
@@ -2059,11 +2069,16 @@ test_new_chip_drivers() {
     check "LJ (M2R), Realtek: a driver to test" dt_json "true true"
     check "LJ: from its kernel's folder" has '"folder":"4.4.3-78.drd4tv.2"'
     remove_usb 1-12
-    # 2017 C7 and UJ7 (M16P, webOS 3.5): r8152 built in but too old for an RTL8153B,
-    # builds to test for the M16P chip only
+    # 2017 C7 and UJ7 (M16P, webOS 3.5): r8152 built in but too old for an RTL8153B.
+    # Realtek's r8152_oot is reported working (issue #17), the rest are builds
+    # to test for the M16P chip only
     add_unclaimed 1-12 0bda 8153
     FAKE_SOC=m16p FAKE_KERNEL=4.4.3-119.drd4tv.6 run status --json
-    check "C7 (M16P), Realtek: a driver to test" dt_json "true true"
+    check "C7 (M16P), Realtek: the tested driver is offered" has '"driverOffer":"available"'
+    remove_usb 1-12
+    add_unclaimed 1-12 0b95 1790
+    FAKE_SOC=m16p FAKE_KERNEL=4.4.3-119.drd4tv.6 run status --json
+    check "C7 (M16P), ASIX AX88179: a driver to test" dt_json "true true"
     check "C7: from its chip's folder" has '"folder":"4.4.3-119.drd4tv.6-m16p"'
     remove_usb 1-12
     # 2018 webOS 4.0: the UK63 (LM18A) and LK61 (M3) have no USB network driver
