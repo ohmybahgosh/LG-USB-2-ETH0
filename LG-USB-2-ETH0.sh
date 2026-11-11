@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.4"
+VERSION="2.11.5"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -3030,7 +3030,12 @@ status_note() { NOTES="$NOTES
   - $1"; }
 
 # === JSON status (for the TV app) ===
-json_esc() { printf '%s' "$1" | tr -d '\000-\011\013-\037' | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 {printf "\\n"} {printf "%s", $0}'; }
+# Control characters (all but newline), listed one by one: older busybox tr
+# (a 2018 B8 on webOS 4) doesn't read a range after an escape like \000-\011,
+# so it deleted every '-' instead and paths in the JSON lost their dashes
+# (issue #22)
+JSON_CTRL=$(printf '\001\002\003\004\005\006\007\010\011\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037')
+json_esc() { printf '%s' "$1" | tr -d "$JSON_CTRL" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 {printf "\\n"} {printf "%s", $0}'; }
 js() { printf '"%s"' "$(json_esc "$1")"; }
 jb() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
 # A JSON array from lines, skipping empty ones and the "  - " note prefix

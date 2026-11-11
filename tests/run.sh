@@ -1923,6 +1923,16 @@ test_module_path_hint() {
     check "suggests the right path" has "Did you mean $ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko?"
 }
 
+# Older busybox tr (webOS 4, a 2018 B8) reads "\000-\037" as \000, a
+# literal '-' and \037, so a range after an escape deleted every dash from
+# the app's JSON (issue #22).  Never use one.
+test_no_tr_escape_ranges() {
+    check "no tr range after an escape" sh -c "! grep -nE 'tr [^|]*\\\\[0-7]{3}-' '$SCRIPT'"
+    add_builtin
+    run status --json
+    check "dashes survive in the JSON" has '"driver":"lg-eth"'
+}
+
 test_test_driver_works() {
     drvtest_setup
     # webOS gives the adapter an address once it's on the new driver
@@ -2515,6 +2525,7 @@ t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
+t no_tr_escape_ranges test_no_tr_escape_ranges
 t module_path_hint test_module_path_hint
 t test_driver_reconnects test_test_driver_reconnects
 t test_driver_link_bounce test_test_driver_link_bounce

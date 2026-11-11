@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.5] - 2026-11-11
+
+### Fixed
+
+- **Faster driver works on TVs with an older busybox, like the 2018 B8 (webOS 4).**  The script stripped control characters from its JSON for the app with `tr -d '\000-\011...'`, and the older busybox `tr` on those TVs doesn't read a range after an escape, so it deleted every `-` instead.  Every path the app got lost its dashes, so **Faster driver** asked to install `/home/root/lgusb2eth0/drivers/ax88179_178a.ko`, which doesn't exist (issue #22).  The control characters are now listed one by one, and a test checks the script never uses a range after an escape in `tr` again.
+
 ## [2.11.4] - 2026-11-11
 
 ### Fixed
