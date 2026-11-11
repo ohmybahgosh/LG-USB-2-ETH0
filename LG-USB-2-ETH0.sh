@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.5"
+VERSION="2.11.6"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1042,9 +1042,31 @@ cm_service() {
         END { exit n == 1 ? 0 : 1 }'
 }
 
+# busctl on the system bus.  webOS 25 on a C2 keeps it at
+# /var/run/dbus/system_bus_socket (/var/run is /tmp/var/run there), not where
+# busctl looks, so it said "Failed to connect to bus"
+cm_busctl() {
+    if [ -z "${DBUS_SYSTEM_BUS_ADDRESS:-}" ] && [ ! -S /run/dbus/system_bus_socket ] && [ -S /var/run/dbus/system_bus_socket ]; then
+        DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket busctl --system "$@"
+    else
+        busctl --system "$@"
+    fi
+}
+
 # cm_on OBJECT INTERFACE PROPERTY: a ConnMan property is true
 cm_on() {
-    busctl --system call net.connman "$1" "$2" GetProperties 2>/dev/null | grep -q "\"$3\" b true"
+    cm_busctl call net.connman "$1" "$2" GetProperties 2>/dev/null | grep -q "\"$3\" b true"
+}
+
+# The TV's own Turn on via Wi-Fi setting: ConnMan's WOLWOWLMode, or webOS's
+# setting for it (wolwowlOnOff) when busctl can't tell
+wake_setting_on() {
+    _wso=$(cm_busctl call net.connman / net.connman.Manager GetProperties 2>/dev/null)
+    case "$_wso" in
+        *'"WOLWOWLMode" b true'*) return 0 ;;
+        *'"WOLWOWLMode" b false'*) return 1 ;;
+    esac
+    luna-send -n 1 luna://com.webos.settingsservice/getSystemSettings '{"category":"network","keys":["wolwowlOnOff"]}' 2>/dev/null | grep -q '"wolwowlOnOff"[[:space:]]*:[[:space:]]*"*true'
 }
 
 # Just before standby: hand over to Wi-Fi, when that's safe
@@ -1060,10 +1082,10 @@ wake_handoff() {
         is_wifi "$_n" && [ -n "$(iface_ipv4 "$_n")" ] && { _ww=$_n; break; }
     done
     if [ -z "$_ww" ]; then echo "$_wh Wi-Fi isn't connected, so the adapter stays connected ==="; return 0; fi
-    if ! command -v connmanctl >/dev/null 2>&1 || ! command -v busctl >/dev/null 2>&1; then
-        echo "$_wh this webOS has no connmanctl or busctl, so the adapter stays connected ==="; return 0
+    if ! command -v connmanctl >/dev/null 2>&1; then
+        echo "$_wh this webOS has no connmanctl, so the adapter stays connected ==="; return 0
     fi
-    if ! cm_on / net.connman.Manager WOLWOWLMode; then
+    if ! wake_setting_on; then
         echo "$_wh network wake is off in the TV's settings, so the adapter stays connected ==="; return 0
     fi
     _us=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || { echo "$_wh no single connection for the adapter, so it stays connected ==="; return 0; }
@@ -1073,7 +1095,7 @@ wake_handoff() {
         rm -f "$WAKE_MARK"
         echo "$_wh couldn't disconnect the adapter, so it stays connected ==="; return 0
     fi
-    busctl --system call net.connman /net/connman/technology/wifi net.connman.Technology SetProperty sv WOWL b true > /dev/null 2>&1
+    cm_busctl call net.connman /net/connman/technology/wifi net.connman.Technology SetProperty sv WOWL b true > /dev/null 2>&1
     echo "$_wh disconnected the adapter's network session, so Wi-Fi stays ready for wake ==="
 }
 
@@ -1121,6 +1143,10 @@ wake_restore() {
 
 # Follows the TV's power state through webOS's own power service, and hands
 # over before standby and back on wake.  Subscribes again if luna-send ends.
+# It hands over as soon as webOS says it's going to standby ("processing",
+# like "Request Active Standby"): on a C2 the adapter and Wi-Fi were already
+# down by the time the state itself said Active Standby.  Each change of
+# state is logged, to see what a TV sends.
 wake_watch() {
     command -v luna-send >/dev/null 2>&1 || { echo "No luna-send, so --wifi-wake can't follow standby."; return 0; }
     echo "Following standby for Wi-Fi wake."
@@ -1130,10 +1156,18 @@ wake_watch() {
         mkfifo "$_wf" 2>/dev/null || { echo "Couldn't make $_wf, so --wifi-wake can't follow standby."; return 0; }
         luna-send -i luna://com.webos.service.tvpower/power/getPowerState '{"subscribe":true}' > "$_wf" 2>/dev/null &
         echo $! > "$WAKE_PID_FILE.luna"
+        _plast=""
         while IFS= read -r _pl; do
             case "$_pl" in *'"state"'*) ;; *) continue ;; esac
-            case "$(echo "$_pl" | sed -n 's/.*"state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')" in
-                "Active Standby") wake_handoff ;;
+            _ps=$(echo "$_pl" | sed -n 's/.*"state"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            _pp=$(echo "$_pl" | sed -n 's/.*"processing"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            if [ "$_ps|$_pp" != "$_plast" ]; then
+                echo "=== $(date) power: $_ps${_pp:+ ($_pp)} ==="
+                _plast="$_ps|$_pp"
+            fi
+            case "$_pp" in *Standby*|*Suspend*|*"Power Off"*|*"Power off"*) wake_handoff; continue ;; esac
+            case "$_ps" in
+                "Active Standby"|Suspend) wake_handoff ;;
                 Active|"Screen Saver"|"Screen Off") wake_restore ;;
             esac
         done < "$_wf"
@@ -1412,6 +1446,7 @@ boot_run() {
     # Off for standby when the TV lost power: connect it again
     [ -f "$WAKE_MARK" ] && wake_restore
     if [ "$WIFI_WAKE" = 1 ]; then
+        stop_wake
         ( wake_watch ) &
         echo $! > "$WAKE_PID_FILE"
     fi
@@ -2392,6 +2427,8 @@ hook_state() {
 # Stop the boot hook's background job (it only stays around with --watch, or
 # while it is still waiting for the adapter). Checks the PID is really the hook.
 stop_watcher() {
+    # The Wi-Fi wake follower too, which can run without the hook's job
+    stop_wake
     [ -r "$PID_FILE" ] || return 0
     _pid=$(cat "$PID_FILE" 2>/dev/null)
     case "$_pid" in ''|*[!0-9]*) rm -f "$PID_FILE"; return 0 ;; esac
@@ -2399,7 +2436,23 @@ stop_watcher() {
         kill "$_pid" 2>/dev/null && info "Stopped the hook's background job (PID $_pid)."
     fi
     rm -f "$PID_FILE"
+}
+
+# --wifi-wake's standby follower, started now rather than at the next boot,
+# so turning it on works right away.  Stops one already running first.
+start_wake() {
     stop_wake
+    [ "$WIFI_WAKE" = 1 ] || return 0
+    mkdir -p "$RUN_DIR" "${LOG_FILE%/*}" 2>/dev/null
+    _wj="LOG_FILE=\"$LOG_FILE\"; RUN_DIR=\"$RUN_DIR\"; WAKE_MARK=\"$WAKE_MARK\"; WAKE_PID_FILE=\"$WAKE_PID_FILE\"
+$CORE
+wake_watch"
+    if command -v setsid >/dev/null 2>&1; then
+        setsid sh -c "$_wj" >> "$LOG_FILE" 2>&1 < /dev/null &
+    else
+        nohup sh -c "$_wj" >> "$LOG_FILE" 2>&1 < /dev/null &
+    fi
+    echo $! > "$WAKE_PID_FILE"
 }
 
 # Stop --wifi-wake's standby follower and its luna-send, checking each PID
@@ -2408,7 +2461,7 @@ stop_wake() {
         _pid=$(cat "$_wpf" 2>/dev/null)
         rm -f "$_wpf"
         case "$_pid" in ''|*[!0-9]*) continue ;; esac
-        if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth\|luna-send'; then
+        if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth\|luna-send\|wake_watch'; then
             kill "$_pid" 2>/dev/null
         fi
     done
@@ -2654,6 +2707,11 @@ install_fix() {
     write_hook
     success "Boot hook installed: $HOOK"
     [ -f "$WAKE_MARK" ] && wake_restore 1
+    # Wi-Fi wake follows standby from now on, not only after the next boot
+    if [ "$WIFI_WAKE" = 1 ]; then
+        start_wake
+        success "Wi-Fi wake in standby is on now, no restart needed."
+    fi
     if [ "$BLOCK_UPDATES" = 1 ]; then
         updates_block
     elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
@@ -3011,6 +3069,8 @@ wake_path() {
     if [ -n "$_bp" ] && [ "$(sysval "$NET/$_bp/carrier" 2>/dev/null)" = 1 ]; then echo builtin; return 0; fi
     for _wp in "$NET"/*; do
         is_wifi "${_wp##*/}" || continue
+        # p2p0 is Wi-Fi Direct, not the Wi-Fi the TV wakes on
+        case "${_wp##*/}" in p2p*) continue ;; esac
         [ "$(sysval "$_wp/carrier" 2>/dev/null)" = 1 ] && { echo "wifi ${_wp##*/}"; return 0; }
     done
     echo none

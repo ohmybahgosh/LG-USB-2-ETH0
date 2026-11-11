@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.6] - 2026-11-11
+
+### Fixed
+
+- **Wi-Fi wake in standby works on webOS 25 (a 2022 C2), and starts right away.**  Turning it on had no effect until the next restart; now it starts following standby as soon as it's on.  On a C2, `busctl` couldn't reach the system bus (it's at `/var/run/dbus/system_bus_socket` there), so the check for Turn on via Wi-Fi always said it was off; it now uses that bus, or webOS's own setting (`wolwowlOnOff`) when `busctl` can't tell.  It also hands over as soon as webOS says it's going to standby, since on the C2 the adapter and Wi-Fi were already down by the time the state said Active Standby, and it logs each power state change.
+- **status names the right Wi-Fi to wake the TV by.**  It picked `p2p0` (Wi-Fi Direct) on a C2, whose MAC doesn't wake the TV, instead of `wlan0`.
+
 ## [2.11.5] - 2026-11-11
 
 ### Fixed

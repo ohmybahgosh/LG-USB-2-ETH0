@@ -639,6 +639,7 @@ test_wifi_wake() {
     run install -y --wifi-wake --wait 4
     check "setting saved" grep -q '^WIFI_WAKE="1"' "$CONF"
     check "plan mentions it" has "Wi-Fi stays ready for Wake on LAN"
+    check "on right away" has "no restart needed"
     run_hook
     check "boot swaps" wait_log "Done: the USB adapter is eth0"
     check "following standby" wait_log "Following standby for Wi-Fi wake"
@@ -668,6 +669,40 @@ test_wifi_wake() {
     power "Active Standby"
     sleep 3
     check "second standby" test "$(grep -c 'disconnected the adapter' "$LOG")" = 2
+    stop_bg
+}
+
+# Turned on while the TV runs, with no restart (Bob's C2): it follows standby
+# at once.  The C2's busctl can't reach the bus, so webOS's own setting
+# decides, and it hands over as soon as webOS says it's going to standby.
+# status names wlan0's MAC to wake it by, not p2p0's (Wi-Fi Direct).
+test_wifi_wake_right_away() {
+    wake_setup
+    netdev "$SYS/devices/usb1/1-2/net/p2p0" p2p0 "02:11:22:33:44:55" 1
+    mkdir -p "$SYS/devices/usb1/1-2/net/p2p0/wireless"
+    run install -y --wifi-wake --wait 4
+    check "on right away" has "no restart needed"
+    check "following standby" wait_log "Following standby for Wi-Fi wake"
+    run apply -y
+    check "adapter is eth0" is eth0 usb:1-1
+    touch "$STATE/busctl_nobus"
+    power "Active|Request Active Standby"
+    check "logs the change" wait_log "power: Active (Request Active Standby)"
+    check "handed over early" wait_log "disconnected the adapter's network session"
+    check "only the adapter's session" cm_has "connmanctl disconnect $WAKE_US"
+    check "asked webOS's setting" grep -q wolwowlOnOff "$STATE/luna.log"
+    power Active
+    check "connected again" wait_log "the adapter is connected again"
+    # Turn on via Wi-Fi off in webOS's settings: no hand-over
+    echo false > "$STATE/wolwowl"
+    power "Active|Request Active Standby"
+    check "setting off" wait_log "network wake is off in the TV's settings"
+    run status
+    check "wake by wlan0" has "Wake it by wlan0's MAC"
+    check "not p2p0" lacks "p2p0's MAC"
+    run install -y --no-wifi-wake
+    check "follower stopped" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.wake.pid' 2>/dev/null || echo 999999) 2>/dev/null"
+    check "pid file gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0.wake.pid"
     stop_bg
 }
 
@@ -767,7 +802,8 @@ test_wifi_wake_power_cut() {
     run install -y --wifi-wake --wait 4
     printf 'ethernet_x;y wifi_y\n' > "$(wake_mark)"
     run_hook
-    check "boot runs" wait_log "Following standby for Wi-Fi wake"
+    # install started one follower already; the boot hook's is the second
+    check "boot runs" wait_count "Following standby for Wi-Fi wake" 2
     check "bad mark dropped" test ! -f "$(wake_mark)"
     check "bad mark not used" cm_lacks "connect"
     stop_bg
@@ -1188,6 +1224,7 @@ t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
 t wifi_wake test_wifi_wake
+t wifi_wake_right_away test_wifi_wake_right_away
 t wifi_wake_skips test_wifi_wake_skips
 t wifi_wake_retry_reasons test_wifi_wake_retry_reasons
 t wifi_wake_power_cut test_wifi_wake_power_cut

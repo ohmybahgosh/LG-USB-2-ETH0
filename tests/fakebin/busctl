@@ -2,7 +2,10 @@
 # Fake `busctl` for the test suite, only ConnMan's properties over D-Bus.
 # Logs each call to $FAKE_STATE/cm.log.  The Manager's WOLWOWLMode (the TV's
 # network wake setting) is $FAKE_STATE/wowlmode, default true.
+# $FAKE_STATE/busctl_nobus makes it fail to reach the bus.
 echo "busctl $*" >> "$FAKE_STATE/cm.log"
+# $FAKE_STATE/busctl_nobus: no system bus where busctl looks (a C2)
+if [ -e "$FAKE_STATE/busctl_nobus" ]; then echo "Failed to connect to bus: No such file or directory" >&2; exit 1; fi
 case "$*" in
     *net.connman.Manager\ GetProperties*)
         printf 'a{sv} 2 "State" s "online" "WOLWOWLMode" b %s\n' "$(cat "$FAKE_STATE/wowlmode" 2>/dev/null || echo true)" ;;

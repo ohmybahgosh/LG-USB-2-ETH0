@@ -4,7 +4,8 @@
 # Wi-Fi's switch is $FAKE_STATE/wifi ("enabled" or "disabled", default off);
 # $FAKE_STATE/wifi-broken makes setstate fail.  webOS's update check
 # (support/softwareUpdateEnable) is $FAKE_STATE/updcheck, default true.
-# getPowerState sends the states listed in $FAKE_STATE/power_events.
+# getPowerState sends the states listed in $FAKE_STATE/power_events, and
+# network settings' wolwowlOnOff is $FAKE_STATE/wolwowl, default true.
 printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
 case "$*" in
     *getPowerState*)
@@ -16,7 +17,12 @@ case "$*" in
                 _c=$(wc -l < "$FAKE_STATE/power_events")
                 while [ "$_n" -lt "$_c" ]; do
                     _n=$((_n + 1))
-                    printf '{"returnValue":true,"subscribed":true,"state":"%s"}\n' "$(sed -n "${_n}p" "$FAKE_STATE/power_events")"
+                    # "state|processing", like "Active|Request Active Standby"
+                    _ev=$(sed -n "${_n}p" "$FAKE_STATE/power_events")
+                    case "$_ev" in
+                        *'|'*) printf '{"returnValue":true,"subscribed":true,"state":"%s","processing":"%s"}\n' "${_ev%%|*}" "${_ev#*|}" ;;
+                        *) printf '{"returnValue":true,"subscribed":true,"state":"%s"}\n' "$_ev" ;;
+                    esac
                 done
             fi
             [ "$1" = -i ] || exit 0
@@ -36,6 +42,8 @@ case "$*" in
             *'"wifi":"disabled"'*) echo disabled > "$FAKE_STATE/wifi" ;;
         esac
         echo '{"returnValue":true}' ;;
+    *getSystemSettings*wolwowlOnOff*)
+        printf '{"returnValue":true,"category":"network","settings":{"wolwowlOnOff":"%s"}}\n' "$(cat "$FAKE_STATE/wolwowl" 2>/dev/null || echo true)" ;;
     *getSystemSettings*softwareUpdateEnable*)
         printf '{"returnValue":true,"category":"support","settings":{"softwareUpdateEnable":"%s"}}\n' "$(cat "$FAKE_STATE/updcheck" 2>/dev/null || echo true)" ;;
     *setSystemSettings*softwareUpdateEnable*)

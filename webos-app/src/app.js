@@ -648,7 +648,7 @@
                 act(T('Wi-Fi wake off'), installArgs('--no-wifi-wake'));
             } else {
                 confirmThen(T('Keep Wi-Fi wake in standby?'),
-                    T('On some TVs, Turn on via Wi-Fi stops working in standby while the adapter is the main connection.  Just before standby, this disconnects only the adapter\'s network session (it stays plugged in), so Wi-Fi stays ready, and connects it again on wake.  Only when Wi-Fi is connected and Turn on via Wi-Fi is on.  Starts from the next boot.'),
+                    T('On some TVs, Turn on via Wi-Fi stops working in standby while the adapter is the main connection.  Just before standby, this disconnects only the adapter\'s network session (it stays plugged in), so Wi-Fi stays ready, and connects it again on wake.  Only when Wi-Fi is connected and Turn on via Wi-Fi is on.  Starts right away.'),
                     function () { act(T('Wi-Fi wake in standby'), installArgs('--wifi-wake')); });
             }
         },
