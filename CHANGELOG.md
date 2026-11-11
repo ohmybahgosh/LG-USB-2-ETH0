@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.4] - 2026-11-11
+
+### Fixed
+
+- **Test a new driver follows an adapter that reconnects during the test.**  Some adapters, like an AX88179A on a 2018 B8, disconnect and come back as a new USB device once a new driver takes them.  Nothing set up the new interface, so the test reported "no link" for a driver that works (issue #20).  The test now notices the adapter came back, sets it up again and waits for its address, and the report says `Reconnected: yes`.
+- **`install --module` with a path that doesn't exist says what to do.**  If the driver is in LG-USB-2-ETH0's drivers folder under that name, it asks "Did you mean" with the right path, and if it hasn't been downloaded yet, it points at `get-driver` (or **Faster driver** in the app), which downloads it and prints the install command (issue #22).
+
 ## [2.11.3] - 2026-11-11
 
 ### Added

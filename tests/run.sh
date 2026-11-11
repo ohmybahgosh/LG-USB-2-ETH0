@@ -1877,6 +1877,52 @@ test_test_driver_link_bounce() {
     check "result works" dt_is "result=works"
 }
 
+# The adapter disconnects and comes back as a new USB device while its new
+# driver takes it (an AX88179A on a B8, issue #20): the test sets up the
+# new interface too, and the report says it reconnected
+test_test_driver_reconnects() {
+    add_builtin
+    add_unclaimed 1-1 0b95 1790
+    echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
+    local k=5.4.268-999
+    fake_ko "$STATE/download" ax88179_178a $k 0b95:1790
+    drvtest_file
+    # Once the link has been bounced on the first interface, the adapter
+    # comes back as USB device 2, and only then does webOS give it an address
+    (
+        i=0
+        while [ "$i" -lt 60 ] && ! grep -q "ip link set dev eth1 up" "$STATE/ip.log" 2>/dev/null; do sleep 0.5; i=$((i + 1)); done
+        remove_usb 1-1
+        add_usb eth1 1-1 ax88179_178a 1 "6c:1f:f7:00:00:02" 0b95 1790 480
+        echo 2 > "$SYS/devices/usb1/1-1/devnum"
+        touch "$STATE/dhcp_on_up"
+    ) &
+    LGU2E_TEST_EXPERIMENTAL="https://example.test/ax88179_178a.ko $(sha256sum "$STATE/download" | awk '{print $1}') ax88179_178a.ko $k 0b95:1790" \
+        FAKE_KERNEL=$k run test-driver -y
+    wait
+    check "exit 0" rc_is 0
+    check "noticed it reconnected" has "The adapter reconnected as a new USB device"
+    check "result works" dt_is "result=works"
+    check "recorded" dt_is "reconnected=yes"
+    check "report says so" has "Reconnected: yes"
+}
+
+# install --module with a mistyped path (issue #22): the error points at
+# the right file, or at get-driver when it isn't downloaded yet
+test_module_path_hint() {
+    add_builtin
+    add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8153 5000
+    LGU2E_TEST_DRIVER="https://example.test/r8152_oot.ko 1111111111111111111111111111111111111111111111111111111111111111 r8152_oot.ko https://example.test 0bda:8153" \
+        FAKE_KERNEL=5.4.268-999 run install -y --module /home/root/lgusb2eth0/drivers/r8152_oot.ko
+    check "refused" rc_is 1
+    check "points at get-driver" has "get-driver' first"
+    mkdir -p "$ROOT/home/root/lg-usb-2-eth0/drivers"
+    fake_ko "$ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko" r8152_oot 5.4.268-999
+    FAKE_KERNEL=5.4.268-999 run install -y --module /home/root/lgusb2eth0/drivers/r8152_oot.ko
+    check "refused again" rc_is 1
+    check "suggests the right path" has "Did you mean $ROOT/home/root/lg-usb-2-eth0/drivers/r8152_oot.ko?"
+}
+
 test_test_driver_works() {
     drvtest_setup
     # webOS gives the adapter an address once it's on the new driver
@@ -2469,6 +2515,8 @@ t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
+t module_path_hint test_module_path_hint
+t test_driver_reconnects test_test_driver_reconnects
 t test_driver_link_bounce test_test_driver_link_bounce
 t test_driver_from_r8152 test_test_driver_from_r8152
 t test_driver_no_wait test_test_driver_no_wait

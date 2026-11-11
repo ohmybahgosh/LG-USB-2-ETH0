@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.3"
+VERSION="2.11.4"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -812,6 +812,26 @@ takeover_pending() {
 
 iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
 
+# nic_usb_id IFACE: the interface's name and the USB device it sits on (its
+# bus and device number), which change when the adapter disconnects and
+# comes back as a new USB device
+nic_usb_id() {
+    _ul=$(readlink -f "$NET/$1/device" 2>/dev/null) || return 0
+    echo "$1 $(cat "${_ul%/*}/busnum" 2>/dev/null)-$(cat "${_ul%/*}/devnum" 2>/dev/null)"
+}
+
+# drv_wait_addr: wait up to NET_CHECK seconds for the adapter to get an address
+drv_wait_addr() {
+    _dtt=0
+    while [ "$_dtt" -lt "$NET_CHECK" ]; do
+        _dtn=$(find_usb_nic)
+        [ -n "$_dtn" ] && [ -n "$(iface_ipv4 "$_dtn")" ] && return 0
+        sleep 2
+        _dtt=$((_dtt + 2))
+    done
+    return 1
+}
+
 # test-driver's detached part: load $MODULE, move the adapter to $DRIVER,
 # and write how it went to $DRVTEST_FILE (key=value lines).  It runs
 # detached because moving the adapter can drop the session that started it.
@@ -820,7 +840,7 @@ drv_try() {
     _dtb=""
     _dtn=$(find_usb_nic)
     [ -n "$_dtn" ] && _dtb=$(nic_driver "$_dtn")
-    _dte="" _dtu=""
+    _dte="" _dtu="" _dtr2=""
     if [ -d "$SYS_MODULES/$DRIVER" ]; then
         _dtd=already
     else
@@ -844,14 +864,10 @@ drv_try() {
         take_over
         wait_for_nic
         [ "${DRVTEST_SWAP:-0}" = 1 ] && swap_in
+        # Which USB device the adapter is on now, to notice if it reconnects
+        _dtid=$(nic_usb_id "$(find_usb_nic)")
         # Give webOS time to bring the network up on it
-        _dtt=0
-        while [ "$_dtt" -lt "$NET_CHECK" ]; do
-            _dtn=$(find_usb_nic)
-            [ -n "$_dtn" ] && [ -n "$(iface_ipv4 "$_dtn")" ] && break
-            sleep 2
-            _dtt=$((_dtt + 2))
-        done
+        drv_wait_addr
         # Still no address: take the link down and up so webOS sees it, as
         # after standby, and wait again.  An older webOS can be slow to
         # notice the new eth0 (issue #17: it came up and worked a bit later).
@@ -861,13 +877,20 @@ drv_try() {
             ip link set dev "$_dtn" down
             sleep 2
             ip link set dev "$_dtn" up
-            _dtt=0
-            while [ "$_dtt" -lt "$NET_CHECK" ]; do
-                _dtn=$(find_usb_nic)
-                [ -n "$_dtn" ] && [ -n "$(iface_ipv4 "$_dtn")" ] && break
-                sleep 2
-                _dtt=$((_dtt + 2))
-            done
+            drv_wait_addr
+        fi
+        # Still nothing, and the adapter came back as a new USB device while
+        # its driver took it (an AX88179A does, issue #20): nothing has set
+        # up the new interface yet, so do that once more and wait again
+        wait_for_nic
+        _dtn=$(find_usb_nic)
+        if [ -n "$_dtn" ] && [ -z "$(iface_ipv4 "$_dtn")" ] && [ -n "$_dtid" ] && [ "$(nic_usb_id "$_dtn")" != "$_dtid" ]; then
+            _dtr2=yes
+            echo "The adapter reconnected as a new USB device ($_dtn).  Setting it up again."
+            [ "${DRVTEST_SWAP:-0}" = 1 ] && swap_in
+            _dtn=$(find_usb_nic)
+            [ -n "$_dtn" ] && ip link set dev "$_dtn" up
+            drv_wait_addr
         fi
     fi
     _dtn=$(find_usb_nic)
@@ -898,6 +921,7 @@ drv_try() {
         echo "loaded=$_dtd"
         [ -n "$_dte" ] && echo "insmod=$(echo "$_dte" | head -n 1)"
         [ -n "$_dtu" ] && echo "usbnet=$_dtu"
+        [ -n "$_dtr2" ] && echo "reconnected=yes"
         echo "iface=$_dtn"
         echo "driver=$_dtv"
         echo "carrier=$_dtc"
@@ -1469,7 +1493,15 @@ module_name() {
 resolve_driver() {
     [ -n "$MODULE" ] || return 0
     sig_enforced && error_exit "$SIG_MSG"
-    [ -r "$MODULE" ] || error_exit "Module file $MODULE does not exist."
+    if [ ! -r "$MODULE" ]; then
+        # A mistyped folder (issue #22), or a driver not downloaded yet
+        if [ -r "$DRIVER_DIR/${MODULE##*/}" ]; then
+            error_exit "Module file $MODULE does not exist.  Did you mean $DRIVER_DIR/${MODULE##*/}?"
+        elif pick_driver "$(uname -r)" >/dev/null 2>&1; then
+            error_exit "Module file $MODULE does not exist.  Run 'sh $0 get-driver' first: it downloads the driver for this TV to $DRIVER_DIR and prints the install command.  In the TV app, Faster driver does both."
+        fi
+        error_exit "Module file $MODULE does not exist."
+    fi
     if [ -z "$DRIVER" ]; then
         DRIVER=$(module_name "$MODULE")
         [ -n "$DRIVER" ] || { DRIVER=${MODULE##*/}; DRIVER=${DRIVER%.ko}; }
@@ -2211,6 +2243,7 @@ drvtest_report() {
         [ -n "$_ru" ] && echo "usbnet:   $_ru"
         _dtbf=$(drvtest_get before)
         [ -n "$_dtbf" ] && echo "Before:   $_dtbf"
+        [ "$(drvtest_get reconnected)" = yes ] && echo "Reconnected: yes, the adapter came back as a new USB device during the test"
         _dls=$(drvtest_get speed)
         case "$_dls" in ''|-1|*[!0-9]*) _dls=unknown ;; *) _dls="${_dls}M" ;; esac
         echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $_dls, address $(drvtest_get address), ping $(drvtest_get ping)"
