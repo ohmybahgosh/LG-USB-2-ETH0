@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.6"
+VERSION="2.11.7"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -185,8 +185,9 @@ Options:
   --wifi-wake        Keep Wake on LAN over Wi-Fi working in standby: just
                      before standby, disconnect only the adapter's network
                      session (it stays plugged in), so the TV keeps Wi-Fi
-                     ready for wake, and connect it again on wake.  Only
-                     when Wi-Fi is connected and network wake is on
+                     ready for wake, and connect it again on wake.  Turns
+                     Wi-Fi on and joins the saved network if webOS left it
+                     off.  Only when Turn on via Wi-Fi is on
   --block-updates    Block firmware updates more thoroughly, on top of the
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
@@ -1130,6 +1131,7 @@ wake_restore() {
                 connmanctl move-before "$_us" "$_ws" > /dev/null 2>&1 || _wm=", but couldn't put it ahead of Wi-Fi"
                 rm -f "$WAKE_MARK"
                 echo "=== $(date) awake: the adapter is connected again (try $_wt)$_wm ==="
+                wake_wifi_ready
                 return 0
             fi
             _wy="no address after ${WAKE_ADDR_SECS}s${_wc:+ ($_wc)}"
@@ -1141,6 +1143,59 @@ wake_restore() {
     return 1
 }
 
+# wake_ip_clash WIFI: Wi-Fi has the adapter's address too (a fixed IP set on
+# both, like a C2 with 192.168.50.96 on each), which breaks the TV's
+# connection: traffic goes out either way at random.  Disconnect Wi-Fi.
+wake_ip_clash() {
+    _ca=$(iface_ipv4 eth0)
+    _cb=$(iface_ipv4 "$1")
+    [ -n "$_ca" ] && [ "${_ca%/*}" = "${_cb%/*}" ] || return 1
+    _cw=$(cm_service wifi "$(sysval "$NET/$1/address")" active || cm_service wifi "$(sysval "$NET/$1/address")") && connmanctl disconnect "$_cw" > /dev/null 2>&1
+    echo "=== $(date) Wi-Fi for wake: Wi-Fi has the adapter's address too (${_ca%/*}), which breaks the TV's connection, so Wi-Fi is disconnected.  Give Wi-Fi its own address in the TV's network settings. ==="
+    return 0
+}
+
+# --wifi-wake needs Wi-Fi on and connected next to the adapter.  webOS on a
+# C2 turned Wi-Fi off at boot while the cable was connected, and didn't join
+# Wi-Fi on its own after it was turned on, so turn it on and join the network
+# it already knows (its autoconnect one), keeping the adapter first.
+wake_wifi_ready() {
+    _wr="=== $(date) Wi-Fi for wake:"
+    case "$(luna-send -n 1 luna://com.webos.service.wifi/getstatus '{}' 2>/dev/null)" in
+        *'"serviceDisabled"'*)
+            if wifi_set enabled; then echo "$_wr turned Wi-Fi on ==="
+            else echo "$_wr couldn't turn Wi-Fi on ==="; return 1
+            fi ;;
+    esac
+    _wl=""
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        case "$_n" in p2p*) continue ;; esac
+        is_wifi "$_n" && { _wl=$_n; break; }
+    done
+    [ -n "$_wl" ] || { echo "$_wr no Wi-Fi interface ==="; return 1; }
+    _wlm=$(sysval "$NET/$_wl/address" | tr -d ':' | tr 'A-F' 'a-f')
+    _wsv="" _wt=0
+    while [ "$_wt" -lt 30 ]; do
+        if [ -n "$(iface_ipv4 "$_wl")" ]; then
+            wake_ip_clash "$_wl" && return 1
+            return 0
+        fi
+        _wsv=$(connmanctl services 2>/dev/null | awk -v p="wifi_${_wlm}_" '{ id = $NF; f = substr($0, 1, 3) } index(id, p) == 1 && f ~ /A/ { print id; exit }')
+        [ -n "$_wsv" ] && break
+        sleep 2
+        _wt=$((_wt + 2))
+    done
+    [ -n "$_wsv" ] || { echo "$_wr no saved network to join, so join one in the TV's settings ==="; return 1; }
+    connmanctl connect "$_wsv" > /dev/null 2>&1
+    _wt=0
+    while [ "$_wt" -lt 15 ] && [ -z "$(iface_ipv4 "$_wl")" ]; do sleep 1; _wt=$((_wt + 1)); done
+    if [ -z "$(iface_ipv4 "$_wl")" ]; then echo "$_wr couldn't join the saved network ==="; return 1; fi
+    wake_ip_clash "$_wl" && return 1
+    _wus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") && connmanctl move-before "$_wus" "$_wsv" > /dev/null 2>&1
+    echo "$_wr joined the saved network, with the adapter still first ==="
+}
+
 # Follows the TV's power state through webOS's own power service, and hands
 # over before standby and back on wake.  Subscribes again if luna-send ends.
 # It hands over as soon as webOS says it's going to standby ("processing",
@@ -1150,6 +1205,7 @@ wake_restore() {
 wake_watch() {
     command -v luna-send >/dev/null 2>&1 || { echo "No luna-send, so --wifi-wake can't follow standby."; return 0; }
     echo "Following standby for Wi-Fi wake."
+    wake_wifi_ready
     _wf="${RUN_DIR:-/tmp}/lg-usb-2-eth0.power"
     while :; do
         rm -f "$_wf"
@@ -3031,6 +3087,18 @@ show_status() {
     fi
     if [ "$_usb" = eth0 ] && [ "$(sysval "$NET/eth0/carrier" 2>/dev/null)" = 1 ] && [ -n "$_def" ] && [ "$_def" != eth0 ]; then
         status_note "Traffic goes out $_def, not the adapter. webOS prefers Wi-Fi while it's connected: turn Wi-Fi off in the TV's settings, or unplug and replug the network cable."
+    fi
+    # The same address on Wi-Fi and eth0 breaks the TV's connection
+    _e4=$(iface_ipv4 eth0)
+    _e4=${_e4%/*}
+    if [ -n "$_e4" ]; then
+        for _p in "$NET"/*; do
+            _n=${_p##*/}
+            case "$_n" in eth0|p2p*) continue ;; esac
+            is_wifi "$_n" || continue
+            _w4=$(iface_ipv4 "$_n")
+            [ "${_w4%/*}" = "$_e4" ] && status_issue "Wi-Fi and eth0 both use $_e4, so traffic goes out either one at random and apps lose their connection.  Give Wi-Fi its own address: in the TV's Wi-Fi settings, under Advanced settings, turn on Set automatically."
+        done
     fi
     if [ "$(hook_setting BLOCK_UPDATES)" != 1 ]; then
         if [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ]; then

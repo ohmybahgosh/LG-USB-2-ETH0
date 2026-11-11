@@ -23,6 +23,7 @@ case "$1" in
         [ -e "$FAKE_STATE/cm_noconnect" ] && exit 0
         case "$2" in
             ethernet_*) grep -q '^[0-9]*: eth0 ' "$FAKE_STATE/addr" 2>/dev/null || echo "2: eth0 inet 192.168.1.42/24" >> "$FAKE_STATE/addr" ;;
+            wifi_*) grep -q '^[0-9]*: wlan0 ' "$FAKE_STATE/addr" 2>/dev/null || echo "3: wlan0 inet 192.168.1.50/24" >> "$FAKE_STATE/addr" ;;
         esac
         echo "Connected $2" ;;
     move-before) echo "Moved $2 before $3" ;;

@@ -628,6 +628,7 @@ wake_setup() {
     add_wifi wlan0 1-2
     printf '*AO Wired                %s\n*AR Home                 %s\n    Wired                ethernet_a823fe000001_cable\n' "$WAKE_US" "$WAKE_WS" > "$STATE/cm_services"
     printf '2: eth0 inet 192.168.1.42/24\n3: wlan0 inet 192.168.1.50/24\n' > "$STATE/addr"
+    echo enabled > "$STATE/wifi"
 }
 power() { echo "$1" >> "$STATE/power_events"; }
 cm_has() { grep -q "$1" "$STATE/cm.log" 2>/dev/null || { echo "    connman calls lack: $1"; return 1; }; }
@@ -703,6 +704,34 @@ test_wifi_wake_right_away() {
     run install -y --no-wifi-wake
     check "follower stopped" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.wake.pid' 2>/dev/null || echo 999999) 2>/dev/null"
     check "pid file gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0.wake.pid"
+    stop_bg
+}
+
+# webOS left Wi-Fi off after a restart, and didn't join it on its own once on
+# (Bob's C2): Wi-Fi wake turns it on and joins the saved network, adapter first
+test_wifi_wake_wifi_ready() {
+    wake_setup
+    echo disabled > "$STATE/wifi"
+    sed -i '/wlan0/d' "$STATE/addr"
+    printf '*AO Wired                %s\n*A  Home                 %s\n' "$WAKE_US" "$WAKE_WS" > "$STATE/cm_services"
+    run apply -y
+    run install -y --wifi-wake --wait 4
+    check "turned Wi-Fi on" wait_log "Wi-Fi for wake: turned Wi-Fi on"
+    check "joined" wait_log "joined the saved network, with the adapter still first"
+    check "connected the saved one" cm_has "connmanctl connect $WAKE_WS"
+    check "adapter first" cm_has "connmanctl move-before $WAKE_US $WAKE_WS"
+    check "Wi-Fi is on" wifi_is enabled
+    stop_bg
+    # Wi-Fi with the adapter's own address (a fixed IP on both, Bob's C2):
+    # it's disconnected, and status says why
+    run status
+    check "no clash yet" lacks "both use"
+    sed -i 's/^3: wlan0 inet .*/3: wlan0 inet 192.168.1.42\/24/' "$STATE/addr"
+    run status
+    check "status warns" has "Wi-Fi and eth0 both use 192.168.1.42"
+    run install -y
+    check "clash found" wait_log "Wi-Fi has the adapter's address too (192.168.1.42)"
+    check "Wi-Fi disconnected" cm_has "connmanctl disconnect $WAKE_WS"
     stop_bg
 }
 
@@ -1225,6 +1254,7 @@ t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
 t wifi_wake test_wifi_wake
 t wifi_wake_right_away test_wifi_wake_right_away
+t wifi_wake_wifi_ready test_wifi_wake_wifi_ready
 t wifi_wake_skips test_wifi_wake_skips
 t wifi_wake_retry_reasons test_wifi_wake_retry_reasons
 t wifi_wake_power_cut test_wifi_wake_power_cut

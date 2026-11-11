@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.7] - 2026-11-11
+
+### Fixed
+
+- **Wi-Fi wake in standby keeps Wi-Fi ready after a restart.**  On a 2022 C2, webOS turned Wi-Fi off at boot while the cable was connected, and once it was on again it didn't join Wi-Fi on its own, so nothing could wake the TV.  Wi-Fi wake now turns Wi-Fi on when webOS left it off, joins the network the TV already knows, and keeps the adapter first for traffic.  It checks at boot, when it's turned on, and after each wake.
+- **Wi-Fi with the same address as the adapter is caught.**  With the same fixed IP set on Wi-Fi and on the adapter, traffic went out either one at random and apps like Aerial lost their connection.  `status` and the app now say so, with how to give Wi-Fi its own address, and Wi-Fi wake disconnects Wi-Fi in that case so the adapter keeps working.
+
 ## [2.11.6] - 2026-11-11
 
 ### Fixed
