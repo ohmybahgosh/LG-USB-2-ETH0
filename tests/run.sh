@@ -2358,7 +2358,7 @@ test_driver_with_usbnet_44() {
     add_unclaimed 1-1 0b95 1790
     echo 6c:1f:f7:00:00:02 > "$STATE/mac_1-1"
     echo "2: eth1 inet 192.168.1.43/24" > "$STATE/addr"
-    local k=4.4.84-150.glacier.2
+    local k=4.4.84-636.glacier.26
     printf 'junk\0vermagic=%s SMP preempt mod_unload aarch64\0alias=usb:v0B95p1790d*dc*dsc*dp*ic*isc*ip*in*\0usbnet_probe\0' "$k" > "$STATE/download"
     printf 'junk\0vermagic=%s SMP preempt mod_unload aarch64\0usbnet_probe\0' "$k" > "$STATE/download_usbnet"
     local xs us
@@ -2366,7 +2366,7 @@ test_driver_with_usbnet_44() {
     us=$(sha256sum "$STATE/download_usbnet" | awk '{print $1}')
     LGU2E_TEST_EXPERIMENTAL="https://example.test/$k/ax88179_178a.ko $xs ax88179_178a.ko $k 0b95:1790" \
         LGU2E_TEST_USBNET="https://example.test/$k/usbnet.ko $us" \
-        FAKE_SOC=o18 FAKE_KERNEL=$k run test-driver -y
+        FAKE_SOC=lm18a FAKE_KERNEL=$k run test-driver -y
     check "4.4: downloaded usbnet.ko" grep -q "/$k/usbnet.ko" "$STATE/curl.log"
     check "4.4: usbnet loaded first" sh -c "head -n 1 '$STATE/insmod.log' | grep -q 'usbnet.ko'"
     check "4.4: then the driver" sh -c "sed -n 2p '$STATE/insmod.log' | grep -q 'ax88179_178a'"

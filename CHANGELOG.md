@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.3] - 2026-11-11
+
+### Added
+
+- **A tested ASIX AX88179 driver for 2018 OLEDs like the B8, C8 and E8, SK NanoCells and some UK LCDs (O18 and M16PP chips, webOS 4.0).**  On a B8 with kernel `4.4.84-150.glacier.2`, `ax88179_178a` took an AX88179A adapter as `eth0` at 1000 Mbit/s after loading its `usbnet.ko` first, with settings showing the wired connection and 222 Mbit/s over USB 2.0 (issues #12, #20 and #21).  **Faster driver** and `get-driver` offer it with its `usbnet.ko`, no testing needed.
+
 ## [2.11.2] - 2026-11-10
 
 ### Changed
