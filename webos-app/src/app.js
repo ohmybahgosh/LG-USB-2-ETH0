@@ -738,7 +738,8 @@
                 overlay(done ? 'message' : 'busy', done ? T('Speed test') : T('Speed test: {stage}', { stage: T(stage) }),
                     '<div class="speed">' + tile(esc(T('Download')), r.downMbps, esc(T('Mbit/s')), stage === 'download') +
                     tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
-                    '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' + (done ? history(s) : ''),
+                    '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' +
+                    (r.limited ? '<div class="speed-meta warn">' + esc(T('Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low.  Try again in 10 to 15 minutes.')) + '</div>' : '') + (done ? history(s) : ''),
                     done ? T('Press OK or BACK to close.') : T('This takes about 15 seconds.'));
             }
             function fail(text) {

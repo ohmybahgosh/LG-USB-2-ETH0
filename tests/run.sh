@@ -1675,6 +1675,27 @@ test_speedtest() {
     check "kept across reboots" test -s "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speeds"
 }
 
+# Cloudflare answers 429 to tests run back to back (a C2 showed "0 Mbit/s")
+test_speedtest_limited() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    touch "$STATE/speed_429"
+    run speedtest
+    check "says it was limited" has "Cloudflare limited this test"
+    check "no 0 Mbit/s" lacks "Download  0 Mbit/s"
+    run status --json
+    check "not in the history" json_ok "$OUT" "len(d['speedHistory']) == 0"
+    run speedtest --json --phase ping
+    run speedtest --json --phase down
+    check "json says limited" json_ok "$OUT" "d['limited'] is True"
+    rm -f "$STATE/speed_429"
+    run speedtest --json --phase ping
+    run speedtest --json --phase down
+    check "fresh test not limited" json_ok "$OUT" "d['limited'] is False and d['downMbps'] == 1600"
+}
+
 test_speedtest_offline() {
     add_builtin
     run speedtest
@@ -2622,6 +2643,7 @@ t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
 t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
+t speedtest_limited test_speedtest_limited
 t takeover_cdc_ether test_takeover_cdc_ether
 t takeover_only_supported_ids test_takeover_only_supported_ids
 t driver_offer_2024 test_driver_offer_2024

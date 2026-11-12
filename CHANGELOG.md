@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.14] - 2026-11-12
+
+### Fixed
+
+- **The speed test no longer shows 0 Mbit/s when Cloudflare limits it.**  Run a few speed tests back to back and Cloudflare answers "429 Too Many Requests" for a while.  Those quick error answers were counted as tiny transfers, so a test showed 0 Mbit/s, or lower numbers when only some requests were limited.  Now only real transfers count, the app and `speedtest` say when Cloudflare limited a test, and a limited test stays out of the history.
+
 ## [2.11.13] - 2026-11-12
 
 ### Fixed

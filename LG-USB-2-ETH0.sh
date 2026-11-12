@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.13"
+VERSION="2.11.14"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -3361,6 +3361,8 @@ SPEED_SECS=${LGU2E_SPEED_SECS:-6}
 SPEED_STREAMS=4
 SPEED_CHUNK=25000000
 SPEED_FILE="$RUN_DIR/lg-usb-2-eth0.speed"
+# Cloudflare answered 429 (too many tests in a row from this address)
+SPEED_LIMITED="$RUN_DIR/lg-usb-2-eth0.speed.limited"
 
 # speed_worker down|up OUTFILE: write "bytes seconds" for this stream
 speed_worker() {
@@ -3374,11 +3376,20 @@ speed_worker() {
             _sl=1
         fi
         if [ "$1" = down ]; then
-            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
+            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{http_code}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
         else
             _sr=$(head -c "$SPEED_CHUNK" /dev/zero | curl -s -o /dev/null --max-time "$_sl" -X POST \
-                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total}' "$SPEED_URL/__up" 2>/dev/null)
+                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{http_code}' "$SPEED_URL/__up" 2>/dev/null)
         fi
+        # Only a 2xx counts: a "429 Too Many Requests" (Cloudflare limits
+        # tests run back to back) came back in milliseconds with a few bytes,
+        # and was counted as a transfer, which showed 0 Mbit/s
+        _sc=${_sr##* }
+        case "$_sc" in
+            2??) _sr=${_sr% *} ;;
+            429) : > "$SPEED_LIMITED"; break ;;
+            *) break ;;
+        esac
         case "$_sr" in *[0-9]' '[0-9]*) ;; *) break ;; esac
         _sb=$(awk -v a="$_sb" -v b="${_sr% *}" 'BEGIN { printf "%.0f", a + b }')
         _st=$(awk -v a="$_st" -v b="${_sr#* }" 'BEGIN { printf "%.3f", a + b }')
@@ -3446,7 +3457,7 @@ speed_test() {
         _colo=$(curl -s -D - -o /dev/null --max-time 10 "$SPEED_URL/__down?bytes=0" 2>/dev/null | tr -d '\r' | sed -n 's/^[Cc]olo: *//p' | head -n 1)
         _ping=$(speed_ping)
         [ -n "$_ping" ] || error_exit "Couldn't reach $SPEED_URL.  Check the TV's internet connection."
-        rm -f "$SPEED_FILE"
+        rm -f "$SPEED_FILE" "$SPEED_LIMITED"
         speed_set ping "$_ping"; speed_set iface "$_iface"; speed_set server "$_colo"; speed_set at "$(date +%s)"
     fi
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then
@@ -3456,11 +3467,14 @@ speed_test() {
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then
         _up=$(speed_run up)
         speed_set up "$_up"
-        speed_remember
+        # A limited test's numbers are too low, so they stay out of the history
+        [ -e "$SPEED_LIMITED" ] || speed_remember
     fi
+    _lim=0
+    [ -e "$SPEED_LIMITED" ] && _lim=1
     if [ "$JSON" = 1 ]; then
-        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s}\n' \
-            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}"
+        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s}\n' \
+            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")"
         return 0
     fi
     _where=Cloudflare
@@ -3469,6 +3483,7 @@ speed_test() {
     [ -n "$_ping" ] && echo "  Latency   $_ping ms"
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then echo "  Download  ${_down:-failed} ${_down:+Mbit/s}"; fi
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
+    [ "$_lim" = 1 ] && warn "Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low and weren't saved.  Try again in 10 to 15 minutes."
     if [ "$(wc -l < "$SPEED_HIST" 2>/dev/null || echo 0)" -gt 1 ]; then
         echo "Earlier tests (down / up Mbit/s, driver, kernel):"
         tail -n 6 "$SPEED_HIST" | sed '$d' | awk '{ printf "  %s  %s / %s  %s  %s\n", $1, $2, $3, $6, $7 }' | while read -r _ht _hrest; do

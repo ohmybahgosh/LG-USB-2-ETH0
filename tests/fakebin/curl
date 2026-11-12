@@ -32,7 +32,8 @@ case "$url" in
         sleep 0.2
         case "$fmt" in
             *time_connect*) printf '0.013 0.001\n' ;;
-            *size_*) printf '25000000 %s' "$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)" ;;
+            # $FAKE_STATE/speed_429: Cloudflare limiting tests run back to back
+            *size_*) if [ -e "$FAKE_STATE/speed_429" ]; then printf '13 0.010 429'; else printf '25000000 %s 200' "$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)"; fi ;;
         esac
         exit 0 ;;
 esac
