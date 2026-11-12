@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.15"
+VERSION="2.11.16"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2661,18 +2661,52 @@ load_settings() {
 # app_lang: the language the TV app runs in, when the app started this run
 app_lang() { case "${LGU2E_APP_LANG:-}" in en|ru|es) echo "$LGU2E_APP_LANG" ;; esac; }
 
+# One writer of $CONF at a time.  The app runs the script for its status
+# every 30 seconds and for each action, and any run from the app can save its
+# language, so two runs could write the settings at once through the same
+# $CONF.new, and a G6's settings ended up as only UI_LANG (issue #26).
+# A directory is the lock, with the holder's PID in it; one left by a run
+# that's gone is taken over, and one held over 10 seconds is stale (a save
+# takes milliseconds).
+conf_lock() {
+    _lk="$CONF.lock"
+    _li=0
+    mkdir -p "${CONF%/*}" 2>/dev/null
+    while ! mkdir "$_lk" 2>/dev/null; do
+        _lp=$(cat "$_lk/pid" 2>/dev/null)
+        if [ -n "$_lp" ] && ! kill -0 "$_lp" 2>/dev/null; then rm -rf "$_lk"; continue; fi
+        _li=$((_li + 1))
+        if [ "$_li" -ge 50 ]; then rm -rf "$_lk"; continue; fi
+        sleep 0.2 2>/dev/null || sleep 1
+    done
+    echo $$ > "$_lk/pid"
+}
+conf_unlock() { rm -rf "$CONF.lock"; }
+
 # When the app's language changed since the hook was set up, save the new one,
 # so the next boot's messages are in it too.  Only for runs from the app, and
-# only the one setting.
+# only the one setting: written to a file of this run's own and swapped in
+# whole, only when every other line made it.
 app_lang_sync() {
     _al=$(app_lang)
     [ -n "$_al" ] && [ -f "$CONF" ] && [ ! -L "$CONF" ] || return 0
     [ "$(hook_setting UI_LANG)" != "$_al" ] || return 0
-    if grep -q '^UI_LANG=' "$CONF"; then
-        sed "s/^UI_LANG=.*/UI_LANG=\"$_al\"/" "$CONF" > "$CONF.new" && mv -f "$CONF.new" "$CONF"
-    else
-        echo "UI_LANG=\"$_al\"" >> "$CONF"
+    conf_lock
+    # Again under the lock: another run may have just saved it, or removed it
+    if [ -f "$CONF" ] && [ ! -L "$CONF" ] && [ "$(hook_setting UI_LANG)" != "$_al" ]; then
+        _ct="$CONF.new.$$"
+        if grep -q '^UI_LANG=' "$CONF"; then
+            sed "s/^UI_LANG=.*/UI_LANG=\"$_al\"/" "$CONF" > "$_ct"
+        else
+            { cat "$CONF"; echo "UI_LANG=\"$_al\""; } > "$_ct"
+        fi
+        if [ "$(grep -c '^UI_LANG=' "$_ct" 2>/dev/null)" = 1 ] && \
+            [ "$(grep -vc '^UI_LANG=' "$_ct" 2>/dev/null)" = "$(grep -vc '^UI_LANG=' "$CONF" 2>/dev/null)" ]; then
+            mv -f "$_ct" "$CONF"
+        fi
+        rm -f "$_ct"
     fi
+    conf_unlock
     return 0
 }
 
@@ -2706,6 +2740,8 @@ hook_target() {
 # script (or app) is picked up without reinstalling the hook.
 write_hook() {
     mkdir -p "$INIT_DIR" "${CONF%/*}" || error_exit "Could not create $INIT_DIR."
+    conf_lock
+    _ct="$CONF.new.$$"
     {
         echo "# $MARKER v$VERSION. Change it with: sh LG-USB-2-ETH0.sh install [options]"
         echo "PIN_MAC=\"$PIN_MAC\""
@@ -2721,8 +2757,9 @@ write_hook() {
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
         echo "UI_LANG=\"$UI_LANG\""
         echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
-    } > "$CONF.new" || error_exit "Could not write $CONF."
-    mv -f "$CONF.new" "$CONF" || error_exit "Could not write $CONF."
+    } > "$_ct" || { rm -f "$_ct"; conf_unlock; error_exit "Could not write $CONF."; }
+    mv -f "$_ct" "$CONF" || { rm -f "$_ct"; conf_unlock; error_exit "Could not write $CONF."; }
+    conf_unlock
     _target=$(hook_target) || error_exit "Could not put a copy of the script in $SCRIPT_HOME."
     { ln -sfn "$_target" "$HOOK.new" && mv -f "$HOOK.new" "$HOOK"; } || error_exit "Could not install $HOOK."
     rm -f "$DISABLED_HOOK" "$OLD_DISABLED_HOOK"
@@ -2869,12 +2906,14 @@ install_fix() {
 uninstall_fix() {
     preflight
     if [ "$(hook_state)" = none ]; then
-        rm -f "$CONF"
+        conf_lock; rm -f "$CONF"; conf_unlock
         info "No boot hook installed."
     else
         confirm "Remove the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
         stop_watcher
-        rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF" || error_exit "Could not remove the hook."
+        conf_lock
+        rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF" || { conf_unlock; error_exit "Could not remove the hook."; }
+        conf_unlock
         success "Boot hook removed."
     fi
     rm -f "$SPEED_HIST"

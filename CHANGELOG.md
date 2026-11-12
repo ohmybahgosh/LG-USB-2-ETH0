@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.16] - 2026-11-12
+
+### Fixed
+
+- **Saved settings can't be wiped by two runs at once anymore.**  The app runs the script for its status every 30 seconds and for each action, and any run from the app can save the app's language.  Two runs saving at the same time went through the same temporary file, and on an LG G6 the settings ended up as only the language line, so the watch and Wi-Fi wake stopped (issue #26, thanks romansat for tracking it down and the reproducer).  Settings are now saved one run at a time, each through its own temporary file, and a language save only replaces the file when every other setting made it into the new copy.  A test runs eight language saves at once.
+
 ## [2.11.15] - 2026-11-12
 
 ### Fixed

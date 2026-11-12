@@ -1571,6 +1571,41 @@ test_driver_kept_after_reenumeration() {
 }
 
 # The TV app's language reaches the boot hook's messages on the TV screen
+# The app runs the script for its status every 30 seconds and for actions,
+# and each run from the app can save its language: runs at once lost every
+# other setting through a shared $CONF.new (a G6, issue #26)
+lang_save() {
+    # shellcheck disable=SC2086 # SH is a command plus its options
+    env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" FAKE_STATE="$STATE" \
+        LGU2E_HOSTS="$SB/hosts" LGU2E_APP_LANG="$1" $SH "$SCRIPT" status > /dev/null 2>&1
+}
+test_concurrent_lang_saves() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y --watch --wifi-wake
+    check "saved" grep -q '^WIFI_WAKE="1"' "$CONF"
+    local round l i
+    for round in 1 2 3; do
+        i=0
+        for l in ru es ru es ru es ru es; do
+            lang_save "$l" &
+            i=$((i + 1))
+        done
+        wait
+        check "round $round: watch kept" grep -q '^WATCH="1"' "$CONF"
+        check "round $round: wake kept" grep -q '^WIFI_WAKE="1"' "$CONF"
+        check "round $round: one language line" test "$(grep -c '^UI_LANG=' "$CONF")" = 1
+        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 14
+    done
+    check "no temp files left" sh -c "! ls '$CONF'.new* 2>/dev/null | grep -q ."
+    check "no lock left" test ! -e "$CONF.lock"
+    # A lock left by a run that was killed doesn't stop the next save
+    mkdir "$CONF.lock" && echo 999999 > "$CONF.lock/pid"
+    lang_save es
+    lang_save ru
+    check "stale lock taken over" grep -q '^UI_LANG="ru"' "$CONF"
+}
+
 test_toast_in_app_language() {
     add_builtin
     add_usb eth1 1-1 cdc_ncm 1 "6c:1f:f7:00:00:01" 0bda 8156 480
@@ -2689,6 +2724,7 @@ t driver_kept_after_reenumeration test_driver_kept_after_reenumeration
 t json_skips_p2p test_json_skips_p2p
 t boot_skips_module_for_other_kernel test_boot_skips_module_for_other_kernel
 t toast_in_app_language test_toast_in_app_language
+t concurrent_lang_saves test_concurrent_lang_saves
 t toast_in_spanish test_toast_in_spanish
 t boot_skips_changed_module test_boot_skips_changed_module
 t driver_offer_webos5_asix test_driver_offer_webos5_asix
