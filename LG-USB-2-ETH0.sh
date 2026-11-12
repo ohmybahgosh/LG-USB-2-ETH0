@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.8"
+VERSION="2.11.9"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1245,8 +1245,11 @@ wake_watch() {
                 _plast="$_ps|$_pp"
             fi
             case "$_pp" in *Standby*|*Suspend*|*"Power Off"*|*"Power off"*) wake_handoff; continue ;; esac
+            # "Active Standby" with something in progress, like "Screen On",
+            # is the TV turning on (a C2 sends that as it wakes), not going
+            # to standby: hand over only once nothing else is going on
             case "$_ps" in
-                "Active Standby"|Suspend) wake_handoff ;;
+                "Active Standby"|Suspend) [ -z "$_pp" ] && wake_handoff ;;
                 Active|"Screen Saver"|"Screen Off") wake_restore ;;
             esac
         done < "$_wf"

@@ -646,6 +646,9 @@ test_wifi_wake() {
     check "following standby" wait_log "Following standby for Wi-Fi wake"
     check "subscribed" grep -q 'luna-send -i luna://com.webos.service.tvpower/power/getPowerState' "$STATE/luna.log"
     power Active
+    # A C2 sends Active Standby with "Screen On" while it turns on: not standby
+    power "Active Standby|Screen On"
+    power Active
     sleep 2
     check "nothing while on" cm_lacks "disconnect"
     power "Active Standby"

@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.9] - 2026-11-12
+
+### Fixed
+
+- **Wi-Fi wake in standby no longer disconnects the adapter while the TV turns on.**  A 2022 C2 reports "Active Standby" with "Screen On" in progress as it wakes, and Wi-Fi wake took that for standby: it disconnected the adapter and connected it again two seconds later.  It now hands over only when the TV is going to standby.
+
 ## [2.11.8] - 2026-11-12
 
 ### Fixed
