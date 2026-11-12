@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.15] - 2026-11-12
+
+### Fixed
+
+- **Test a new driver no longer says "no internet" just because Wi-Fi is on.**  The adapter stays `eth1` during the test, so with Wi-Fi connected the TV's internet goes out Wi-Fi, and a ping out the adapter had no way to the internet.  A 2022 UQ76 with a TP-Link UE300 got a 1000 Mbit/s link and an address on the new driver, and still read "no internet" (issue #25).  When the internet ping can't go out the adapter, the test now pings the router the adapter got its address from, and counts that as working.
+- **The test says when the router didn't answer.**  An adapter with only a 169.254 address (one the TV gives itself) is reported as `address 169.254-only` instead of `address yes`.
+
 ## [2.11.14] - 2026-11-12
 
 ### Fixed

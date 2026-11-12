@@ -2108,6 +2108,31 @@ test_test_driver_works() {
     check "status has the result" has '"state":"done","result":"works"'
 }
 
+# The adapter stays eth1 during the test, and with Wi-Fi on the TV's internet
+# goes out Wi-Fi, so a ping to 1.1.1.1 out the adapter has no route (a 2022
+# UQ76, issue #25).  Its router answering shows it works.
+test_test_driver_router() {
+    drvtest_setup
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    printf '*AR Wired                ethernet_6c1ff7000001_cable\n' > "$STATE/cm_services"
+    echo 192.168.1.1 > "$STATE/cm_gateway"
+    touch "$STATE/ping_noroute"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "result works" dt_is "result=works"
+    check "through its router" dt_is "ping=router"
+    check "pinged the router out the adapter" grep -q -- "-I eth1 192.168.1.1" "$STATE/ping.log"
+}
+
+# Only a 169.254 address: the router never answered
+test_test_driver_self_address() {
+    drvtest_setup
+    echo "2: eth1 inet 169.254.3.4/16" > "$STATE/addr"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "no internet" dt_is "result=no-internet"
+    check "says why" dt_is "address=169.254-only"
+    check "no ping" test ! -s "$STATE/ping.log"
+}
+
 # Realtek mode had already moved the adapter to the kernel's own r8152 (a
 # 2024 G4 on 5.4.268-320, issue #5): the test moves it from there
 test_test_driver_from_r8152() {
@@ -2676,6 +2701,8 @@ t get_driver_file_checked test_get_driver_file_checked
 t driver_offer test_driver_offer
 t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
+t test_driver_router test_test_driver_router
+t test_driver_self_address test_test_driver_self_address
 t no_tr_escape_ranges test_no_tr_escape_ranges
 t module_path_hint test_module_path_hint
 t test_driver_reconnects test_test_driver_reconnects

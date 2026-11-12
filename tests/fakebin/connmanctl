@@ -7,7 +7,13 @@
 # $FAKE_STATE/cm_noconnect makes connect do nothing.
 echo "connmanctl $*" >> "$FAKE_STATE/cm.log"
 case "$1" in
-    services) cat "$FAKE_STATE/cm_services" 2>/dev/null ;;
+    services)
+        # `services ID`: one service's details, with $FAKE_STATE/cm_gateway as its router
+        if [ -n "${2:-}" ]; then
+            [ -s "$FAKE_STATE/cm_gateway" ] && echo "  IPv4 = [ Method=dhcp, Address=192.168.1.42, Netmask=255.255.255.0, Gateway=$(cat "$FAKE_STATE/cm_gateway") ]"
+        else
+            cat "$FAKE_STATE/cm_services" 2>/dev/null
+        fi ;;
     disconnect)
         [ -e "$FAKE_STATE/cm_fail" ] && { echo "Error $2: Operation failed" >&2; exit 1; }
         case "$2" in

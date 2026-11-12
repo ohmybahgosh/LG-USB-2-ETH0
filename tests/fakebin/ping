@@ -3,4 +3,7 @@
 # $FAKE_STATE/ping_fail exists.
 echo "ping $*" >> "$FAKE_STATE/ping.log"
 [ -e "$FAKE_STATE/ping_fail" ] && exit 1
+# $FAKE_STATE/ping_noroute: the internet isn't reachable out this interface
+# (another connection has the default route), but its router is
+case "$*" in *1.1.1.1*) [ -e "$FAKE_STATE/ping_noroute" ] && exit 1 ;; esac
 exit 0

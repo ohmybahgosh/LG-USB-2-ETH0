@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.14"
+VERSION="2.11.15"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -818,6 +818,11 @@ takeover_pending() {
 }
 
 iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
+# drv_gateway IF: the router webOS's connection manager got IF's address from
+drv_gateway() {
+    _gs=$(cm_service ethernet "$(sysval "$NET/$1/address")") || return 0
+    connmanctl services "$_gs" 2>/dev/null | sed -n 's/^ *IPv4 = \[.*Gateway=\([0-9.]*\).*/\1/p' | head -n 1
+}
 # real_ipv4 IF: an address from the network, not a 169.254 one the TV gives
 # itself when DHCP doesn't answer (a C2's adapter did after a restart), which
 # goes nowhere
@@ -913,17 +918,30 @@ drv_try() {
         _dtv=$(nic_driver "$_dtn")
         _dtc=$(sysval "$NET/$_dtn/carrier" 2>/dev/null)
         _dts=$(sysval "$NET/$_dtn/speed" 2>/dev/null)
-        if [ -n "$(iface_ipv4 "$_dtn")" ]; then
-            _dta=yes
-            if ! command -v ping >/dev/null 2>&1; then _dtp=skipped
-            elif ping -c 3 -W 3 -I "$_dtn" 1.1.1.1 > /dev/null 2>&1; then _dtp=ok
-            else _dtp=failed
-            fi
-        fi
+        case "$(iface_ipv4 "$_dtn")" in
+            '') ;;
+            # One the TV gave itself: the router didn't answer, so the adapter
+            # isn't getting anything through
+            169.254.*) _dta=169.254-only ;;
+            *)
+                _dta=yes
+                if ! command -v ping >/dev/null 2>&1; then _dtp=skipped
+                elif ping -c 3 -W 3 -I "$_dtn" 1.1.1.1 > /dev/null 2>&1; then _dtp=ok
+                else
+                    # With the adapter still eth1 and Wi-Fi on, the TV's
+                    # internet goes out Wi-Fi, and a ping out the adapter has
+                    # no route to 1.1.1.1 (a 2022 UQ76, issue #25).  The router
+                    # it got its address from answering shows it works.
+                    _dgw=$(drv_gateway "$_dtn")
+                    if [ -n "$_dgw" ] && ping -c 3 -W 3 -I "$_dtn" "$_dgw" > /dev/null 2>&1; then _dtp=router
+                    else _dtp=failed
+                    fi
+                fi ;;
+        esac
     fi
     if [ "$_dtd" = no ]; then _dtr=no-load
     elif [ "$_dtv" != "$DRIVER" ]; then _dtr=not-used
-    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ]; then _dtr=works
+    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ] || [ "$_dtp" = router ]; then _dtr=works
     elif [ "$_dtc" = 1 ]; then _dtr=no-internet
     else _dtr=no-link
     fi
