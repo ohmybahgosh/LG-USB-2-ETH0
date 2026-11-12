@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.17] - 2026-11-12
+
+### Security
+
+From a security review of the script and the TV app:
+
+- **Downloads and running state live in a folder only root can write.**  They were in `/tmp` itself, and an update's IPK on webOS 26 in `/media/developer/temp`, which every app on the TV can write to (that one without the sticky bit, so any app could swap a file in it).  A driver module, `usbnet.ko`, an update or the update's IPK was checked and then used a moment later, and another app could have swapped it in between to run its own code as root.  They now go in `/tmp/lg-usb-2-eth0` and `/media/developer/temp/lg-usb-2-eth0`, folders only root can write.  Anything already at those paths (a link, or a folder another app made or can write to) is moved aside first.
+- **The update's manifest is checked more strictly.**  Its version had to start with digits, and went into the install job's shell, so a tampered manifest could have run commands.  It now has to be only digits and dots, and the IPK link has to be this release's own file on GitHub.
+- **Updating needs curl.**  busybox wget may not check certificates, and the update's checksum comes from the same place as the update, so an update over wget could be swapped on the way.  Driver downloads still work with wget: their checksums are built into the script.
+- **Speed test numbers are checked before they go into the app's status.**
+
 ## [2.11.16] - 2026-11-12
 
 ### Fixed

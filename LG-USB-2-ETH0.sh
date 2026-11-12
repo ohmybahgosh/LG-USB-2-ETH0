@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.16"
+VERSION="2.11.17"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -38,8 +38,13 @@ OLD_DISABLED_HOOK="$INIT_DIR/S01fix-eth.disabled"
 CONF="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.conf"
 # Small log kept with the Homebrew Channel's files, as its guidelines ask
 LOG_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.log"
-# Per-boot state (RAM): background job PID, takeover tries, live-switch output
-RUN_DIR="${LGU2E_ROOT}/tmp"
+# Per-boot state (RAM): background job PID, takeover tries, live-switch output,
+# and downloads between their checksum check and their use.  Its own folder
+# that only root can write (private_dir), not /tmp itself, where any app on
+# the TV could put a file in the way or swap one after the check.
+RUN_DIR="${LGU2E_ROOT}/tmp/lg-usb-2-eth0"
+# Where 2.11.16 and older kept them, for stopping a job one of those started
+OLD_RUN_DIR="${LGU2E_ROOT}/tmp"
 PID_FILE="$RUN_DIR/lg-usb-2-eth0.pid"
 # --wifi-wake's standby follower, and the luna-send it reads
 WAKE_PID_FILE="$RUN_DIR/lg-usb-2-eth0.wake.pid"
@@ -1745,6 +1750,27 @@ supported_adapter() {
     return 1
 }
 
+# private_dir DIR: DIR as a folder only this user can write.  Anything else
+# there (a file, a link, or a folder someone else made or can write to) is
+# moved aside first, so nothing in it can be swapped between a check and its
+# use.  Readable by all, since webOS 26's installer reads the update from it.
+private_dir() {
+    if [ -L "$1" ] || { [ -e "$1" ] && [ ! -d "$1" ]; }; then
+        mv -f "$1" "$1.bad.$$" 2>/dev/null || rm -f "$1" 2>/dev/null || return 1
+    fi
+    if [ -d "$1" ]; then
+        # (an ls that can't tell leaves it be, rather than moving it every run;
+        # busybox has no stat or find everywhere, and the name is fixed)
+        # shellcheck disable=SC2012
+        case "$(ls -ldn "$1" 2>/dev/null | awk '{print $1, $3}')" in
+            ''|d????-??-?*" $(id -u)") ;;
+            *) mv -f "$1" "$1.bad.$$" 2>/dev/null || return 1 ;;
+        esac
+    fi
+    [ -d "$1" ] || mkdir -p "$1" 2>/dev/null || return 1
+    chmod 755 "$1" 2>/dev/null
+}
+
 # Download over HTTPS only. TLS protects the download, but the pinned SHA-256
 # is what decides whether the file is kept, so a proxy, an old certificate
 # store or busybox wget (which may not check certificates) can't slip a
@@ -2569,13 +2595,16 @@ hook_state() {
 stop_watcher() {
     # The Wi-Fi wake follower too, which can run without the hook's job
     stop_wake
-    [ -r "$PID_FILE" ] || return 0
-    _pid=$(cat "$PID_FILE" 2>/dev/null)
-    case "$_pid" in ''|*[!0-9]*) rm -f "$PID_FILE"; return 0 ;; esac
-    if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth'; then
-        kill "$_pid" 2>/dev/null && info "Stopped the hook's background job (PID $_pid)."
-    fi
-    rm -f "$PID_FILE"
+    # Also one 2.11.16 or older started, which kept its PID in /tmp itself
+    for _spf in "$PID_FILE" "$OLD_RUN_DIR/lg-usb-2-eth0.pid"; do
+        [ -r "$_spf" ] || continue
+        _pid=$(cat "$_spf" 2>/dev/null)
+        case "$_pid" in ''|*[!0-9]*) rm -f "$_spf"; continue ;; esac
+        if kill -0 "$_pid" 2>/dev/null && tr '\0' ' ' < "/proc/$_pid/cmdline" 2>/dev/null | grep -q 'S01fix-eth'; then
+            kill "$_pid" 2>/dev/null && info "Stopped the hook's background job (PID $_pid)."
+        fi
+        rm -f "$_spf"
+    done
 }
 
 # --wifi-wake's standby follower, started now rather than at the next boot,
@@ -2597,7 +2626,8 @@ wake_watch"
 
 # Stop --wifi-wake's standby follower and its luna-send, checking each PID
 stop_wake() {
-    for _wpf in "$WAKE_PID_FILE" "$WAKE_PID_FILE.keep" "$WAKE_PID_FILE.luna"; do
+    _owp="$OLD_RUN_DIR/lg-usb-2-eth0.wake.pid"
+    for _wpf in "$WAKE_PID_FILE" "$WAKE_PID_FILE.keep" "$WAKE_PID_FILE.luna" "$_owp" "$_owp.keep" "$_owp.luna"; do
         _pid=$(cat "$_wpf" 2>/dev/null)
         rm -f "$_wpf"
         case "$_pid" in ''|*[!0-9]*) continue ;; esac
@@ -3302,6 +3332,8 @@ JSON_CTRL=$(printf '\001\002\003\004\005\006\007\010\011\013\014\015\016\017\020
 json_esc() { printf '%s' "$1" | tr -d "$JSON_CTRL" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'NR > 1 {printf "\\n"} {printf "%s", $0}'; }
 js() { printf '"%s"' "$(json_esc "$1")"; }
 jb() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
+# A JSON number, or null for anything that isn't one
+jn() { case "$1" in ''|*[!0-9.]*|.*|*.) printf null ;; *) printf '%s' "$1" ;; esac; }
 # A JSON array from lines, skipping empty ones and the "  - " note prefix
 jarr() {
     printf '['
@@ -3398,8 +3430,8 @@ show_json() {
         "$(jb "$_xa")" "$(jb "$_xok")" "$(js "$_xfo")" "$(js "$(drvtest_get state)")" "$(js "$(drvtest_get result)")"
     if [ -n "$(speed_get down)$(speed_get up)" ]; then
         printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"at":%s},' \
-            "$(js "$(speed_get iface)")" "$(js "$(speed_get server)")" "$(speed_get ping | grep . || echo null)" \
-            "$(speed_get down | grep . || echo null)" "$(speed_get up | grep . || echo null)" "$(speed_get at | grep . || echo null)"
+            "$(js "$(speed_get iface)")" "$(js "$(speed_get server)")" "$(jn "$(speed_get ping)")" \
+            "$(jn "$(speed_get down)")" "$(jn "$(speed_get up)")" "$(jn "$(speed_get at)")"
     else
         printf '"speed":null,'
     fi
@@ -3594,7 +3626,8 @@ latest_release() {
     LATEST_SHA=$(json_get sha256 "$_mf")
     LATEST_SIZE=$(sed -n 's/.*"ipkSize"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$_mf" | head -n 1)
     rm -f "$_mf"
-    case "$LATEST_VERSION" in [0-9]*.[0-9]*) ;; *) return 1 ;; esac
+    # Only digits and dots: the version goes into the update's install job
+    case "$LATEST_VERSION" in ''|*[!0-9.]*|.*|*.|*..*) return 1 ;; *.*) ;; *) return 1 ;; esac
     return 0
 }
 
@@ -3637,6 +3670,10 @@ update_now() {
     update_check || return 1
     ver_gt "$LATEST_VERSION" "$(current_version)" || return 0
     command -v sha256sum >/dev/null 2>&1 || error_exit "sha256sum is missing, so the download can't be checked.  Nothing changed."
+    # The checksum comes from the same place as the download, so the
+    # connection itself has to be checked: busybox wget may not check
+    # certificates, and curl does
+    command -v curl >/dev/null 2>&1 || error_exit "Updating needs curl, which checks GitHub's certificate, and this TV doesn't have it.  Update from the Homebrew Channel instead.  Nothing changed."
     confirm "Update to $LATEST_VERSION?" || { echo "Cancelled.  Nothing changed."; return 1; }
     if [ "$(install_kind)" = app ]; then
         update_app
@@ -3650,11 +3687,15 @@ update_now() {
 # waits for the new version and then opens the app again.
 update_app() {
     case "$LATEST_SHA" in *[!0-9a-f]*|'') error_exit "The release has no checksum for the app.  Nothing changed." ;; esac
-    case "$LATEST_IPK" in https://*.ipk) ;; *) error_exit "Unexpected download link in the release: $LATEST_IPK" ;; esac
+    # Only this release's own IPK on GitHub, with nothing a shell would read
+    case "$LATEST_IPK" in "$RELEASES/download/v$LATEST_VERSION/"*.ipk) ;; *) error_exit "Unexpected download link in the release: $LATEST_IPK" ;; esac
+    case "$LATEST_IPK" in *[!A-Za-z0-9._/:-]*) error_exit "Unexpected download link in the release: $LATEST_IPK" ;; esac
     # webOS 26's installer can't read the IPK from /tmp, so it goes where
-    # the developer tools put theirs, when the TV has that folder
+    # the developer tools put theirs, when the TV has that folder.  That
+    # folder is writable by every app, so in a folder of its own inside it.
     _ipkd=$RUN_DIR
-    [ -d "${LGU2E_ROOT}/media/developer/temp" ] && _ipkd="${LGU2E_ROOT}/media/developer/temp"
+    [ -d "${LGU2E_ROOT}/media/developer/temp" ] && _ipkd="${LGU2E_ROOT}/media/developer/temp/lg-usb-2-eth0"
+    private_dir "$_ipkd" || error_exit "Could not make a private folder for the download ($_ipkd).  Nothing changed."
     _ipk="$_ipkd/lg-usb-2-eth0-update.ipk"
     info "Downloading $LATEST_IPK"
     fetch "$_ipk.part" "$LATEST_IPK" || { rm -f "$_ipk.part"; error_exit "Download failed.  Nothing changed."; }
@@ -3871,6 +3912,7 @@ main_menu() {
 
 # === Arguments ===
 # Started by the Homebrew Channel at boot, through the hook symlink
+private_dir "$RUN_DIR" || true
 case "${0##*/}" in S01fix-eth) boot_main ;; esac
 
 CMD=""

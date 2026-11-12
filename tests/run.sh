@@ -198,10 +198,10 @@ wait_log() {
 
 stop_bg() {
     local p f
-    p=$(cat "$ROOT/tmp/lg-usb-2-eth0.pid" 2>/dev/null) && kill "$p" 2>/dev/null
+    p=$(cat "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.pid" 2>/dev/null) && kill "$p" 2>/dev/null
     # --wifi-wake's follower first, so it can't subscribe again, then its luna-send
     for f in lg-usb-2-eth0.wake.pid lg-usb-2-eth0.wake.pid.keep lg-usb-2-eth0.wake.pid.luna; do
-        p=$(cat "$ROOT/tmp/$f" 2>/dev/null) && kill "$p" 2>/dev/null
+        p=$(cat "$ROOT/tmp/lg-usb-2-eth0/$f" 2>/dev/null) && kill "$p" 2>/dev/null
     done
     return 0
 }
@@ -486,7 +486,7 @@ test_watch_hotplug() {
     run uninstall -y
     check "uninstall stops the job" has "Stopped the hook's background job"
     sleep 1
-    check "job gone" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.pid' 2>/dev/null || echo 999999) 2>/dev/null"
+    check "job gone" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.pid' 2>/dev/null || echo 999999) 2>/dev/null"
 }
 
 # A hung adapter (cable link up, sending, nothing back) is re-plugged in
@@ -705,8 +705,8 @@ test_wifi_wake_right_away() {
     check "wake by wlan0" has "Wake it by wlan0's MAC"
     check "not p2p0" lacks "p2p0's MAC"
     run install -y --no-wifi-wake
-    check "follower stopped" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0.wake.pid' 2>/dev/null || echo 999999) 2>/dev/null"
-    check "pid file gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0.wake.pid"
+    check "follower stopped" sh -c "! kill -0 \$(cat '$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.wake.pid' 2>/dev/null || echo 999999) 2>/dev/null"
+    check "pid file gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.wake.pid"
     stop_bg
 }
 
@@ -755,7 +755,7 @@ test_wifi_wake_keeps_adapter_first() {
     sleep 3
     check "only once" test "$(grep -c 'Wi-Fi had taken over' "$LOG")" = 1
     run install -y --no-wifi-wake
-    check "checker stopped" test ! -e "$ROOT/tmp/lg-usb-2-eth0.wake.pid.keep"
+    check "checker stopped" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.wake.pid.keep"
     stop_bg
 }
 
@@ -1836,7 +1836,7 @@ test_update_app() {
     check "installed through the app installer" grep -q "appInstallService/dev/install" "$STATE/luna.log"
     check "opened the app again" grep -q "applicationManager/launch" "$STATE/luna.log"
     check "logged it" grep -q "Updated the app to 2.4.0" "$LOG"
-    check "cleaned up the download" sh -c "! ls '$ROOT'/tmp/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
+    check "cleaned up the download" sh -c "! ls '$ROOT'/tmp/lg-usb-2-eth0/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
 }
 
 # webOS 26's installer can't read /tmp: the IPK goes to the developer temp folder
@@ -1854,8 +1854,50 @@ test_update_app_devtemp() {
     check "exit 0" rc_is 0
     local i=0
     while ! grep -q "Updated the app to 2.4.0" "$LOG" 2>/dev/null && [ $i -lt 30 ]; do sleep 0.2; i=$((i + 1)); done
-    check "installer reads it from the developer temp folder" grep -q "media/developer/temp/lg-usb-2-eth0-update.ipk" "$STATE/luna.log"
-    check "cleaned up the download" sh -c "! ls '$ROOT'/media/developer/temp/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
+    check "installer reads it from the developer temp folder" grep -q "media/developer/temp/lg-usb-2-eth0/lg-usb-2-eth0-update.ipk" "$STATE/luna.log"
+    check "in a folder only root can write" sh -c "ls -ld '$ROOT/media/developer/temp/lg-usb-2-eth0' | grep -q '^drwxr-xr-x'"
+    check "cleaned up the download" sh -c "! ls '$ROOT'/media/developer/temp/lg-usb-2-eth0/lg-usb-2-eth0-update.ipk* 2>/dev/null | grep -q ."
+}
+
+# The release manifest only decides what's installed through checked values:
+# a version that isn't digits and dots, or a download from anywhere but this
+# release, is refused before anything is downloaded or run
+test_update_app_bad_manifest() {
+    local app="$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0"
+    mkdir -p "$app/assets" "$STATE/rel"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    printf '{\n  "version": "2.3.0"\n}\n' > "$app/appinfo.json"
+    echo "fake ipk" > "$STATE/rel/app.ipk"
+    local SCRIPT="$app/assets/lg-usb-2-eth0.sh" m="$STATE/rel/org.ohmybahgosh.lgusb2eth0.manifest.json"
+    release 2.4.0
+    # shellcheck disable=SC2016 # $HOME is for the job's shell to expand
+    sed -i 's|"version": "2.4.0"|"version": "2.4.0'"'"'; touch $HOME/pwned; '"'"'"|' "$m"
+    run update -y
+    check "odd version refused" rc_is 1
+    check "nothing ran" test ! -e "$SB/pwned"
+    release 2.4.0
+    sed -i 's#https://releases.test/download/v2.4.0/app.ipk#https://evil.test/app.ipk#' "$m"
+    run update -y
+    check "other host refused" has "Unexpected download link"
+    check "never called the installer" sh -c "! grep -q dev/install '$STATE/luna.log' 2>/dev/null"
+}
+
+# Files between a check and their use live in a folder only root can write.
+# Something already at that path (a link, or a folder anyone can write to,
+# put there by another app) is moved aside first.
+test_private_run_dir() {
+    add_builtin
+    mkdir -p "$SB/elsewhere"
+    ln -s "$SB/elsewhere" "$ROOT/tmp/lg-usb-2-eth0"
+    run status
+    check "a real folder now" sh -c "[ -d '$ROOT/tmp/lg-usb-2-eth0' ] && [ ! -L '$ROOT/tmp/lg-usb-2-eth0' ]"
+    check "the link moved aside" sh -c "ls -d '$ROOT'/tmp/lg-usb-2-eth0.bad.* > /dev/null 2>&1"
+    check "only root writes it" sh -c "ls -ld '$ROOT/tmp/lg-usb-2-eth0' | grep -q '^drwxr-xr-x'"
+    rm -rf "$ROOT/tmp/lg-usb-2-eth0" "$ROOT"/tmp/lg-usb-2-eth0.bad.*
+    mkdir "$ROOT/tmp/lg-usb-2-eth0" && chmod 777 "$ROOT/tmp/lg-usb-2-eth0" && touch "$ROOT/tmp/lg-usb-2-eth0/planted"
+    run status
+    check "a writable folder moved aside" test ! -e "$ROOT/tmp/lg-usb-2-eth0/planted"
+    check "and made again" sh -c "ls -ld '$ROOT/tmp/lg-usb-2-eth0' | grep -q '^drwxr-xr-x'"
 }
 
 test_update_app_bad_checksum() {
@@ -2127,7 +2169,7 @@ test_test_driver_works() {
     LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
     check "exit 0" rc_is 0
     check "verified" has "Downloaded and verified"
-    check "loaded from RAM, not kept" grep -q "insmod $ROOT/tmp/lg-usb-2-eth0-test-r8152_oot.ko" "$STATE/insmod.log"
+    check "loaded from RAM, not kept" grep -q "insmod $ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0-test-r8152_oot.ko" "$STATE/insmod.log"
     check "moved the adapter" has "cdc_ncm -> r8152_oot"
     check "adapter on the new driver" drv eth1 r8152_oot
     check "result works" dt_is "result=works"
@@ -2713,6 +2755,8 @@ t update_script_bad_checksum test_update_script_bad_checksum
 t update_app test_update_app
 t update_app_devtemp test_update_app_devtemp
 t update_app_bad_checksum test_update_app_bad_checksum
+t update_app_bad_manifest test_update_app_bad_manifest
+t private_run_dir test_private_run_dir
 t hook_is_link_to_copy test_hook_is_link_to_copy
 t install_keeps_settings test_install_keeps_settings
 t upgrade_from_copied_hook test_upgrade_from_copied_hook
