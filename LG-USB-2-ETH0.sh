@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.12"
+VERSION="2.11.13"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -238,6 +238,9 @@ WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
 WAKE_ADDR_SECS=${LGU2E_WAKE_ADDR_SECS:-10}
 # and seconds between checks that the adapter is still first, ahead of Wi-Fi
 WAKE_KEEP_SECS=${LGU2E_WAKE_KEEP_SECS:-10}
+# and seconds an adapter goes without an address from the router before it
+# asks again (then at most every 5 times as long)
+WAKE_DHCP_SECS=${LGU2E_WAKE_DHCP_SECS:-60}
 # After standby: seconds to let webOS bring the network back up before the
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
@@ -815,6 +818,13 @@ takeover_pending() {
 }
 
 iface_ipv4() { ip -o -4 addr show dev "$1" 2>/dev/null | awk '{print $4; exit}'; }
+# real_ipv4 IF: an address from the network, not a 169.254 one the TV gives
+# itself when DHCP doesn't answer (a C2's adapter did after a restart), which
+# goes nowhere
+real_ipv4() { _ri=$(iface_ipv4 "$1"); case "$_ri" in ''|169.254.*) return 1 ;; esac; echo "$_ri"; }
+# The interface the default route goes out.  Not always field 5: with only a
+# 169.254 address, the route is "default dev eth0 scope link"
+def_iface() { ip route 2>/dev/null | awk '/^default/ { for (i = 2; i < NF; i++) if ($i == "dev") { print $(i + 1); exit } }'; }
 
 # nic_usb_id IFACE: the interface's name and the USB device it sits on (its
 # bus and device number), which change when the adapter disconnects and
@@ -1125,11 +1135,11 @@ wake_restore() {
             _wy="the adapter has no cable link yet"
         else
             _wc=""
-            [ -n "$(iface_ipv4 eth0)" ] || _wc=$(connmanctl connect "$_us" 2>&1) || _wc="connect failed: $(echo "$_wc" | head -n 1 | sed 's/[^ -~]//g' | cut -c1-120)"
+            real_ipv4 eth0 > /dev/null || _wc=$(connmanctl connect "$_us" 2>&1) || _wc="connect failed: $(echo "$_wc" | head -n 1 | sed 's/[^ -~]//g' | cut -c1-120)"
             case "$_wc" in "connect failed: "*) ;; *) _wc="" ;; esac
             _wi=0
-            while [ "$_wi" -lt "$WAKE_ADDR_SECS" ] && [ -z "$(iface_ipv4 eth0)" ]; do sleep 1; _wi=$((_wi + 1)); done
-            if [ -n "$(iface_ipv4 eth0)" ]; then
+            while [ "$_wi" -lt "$WAKE_ADDR_SECS" ] && ! real_ipv4 eth0 > /dev/null; do sleep 1; _wi=$((_wi + 1)); done
+            if real_ipv4 eth0 > /dev/null; then
                 _wm=""
                 connmanctl move-before "$_us" "$_ws" > /dev/null 2>&1 || _wm=", but couldn't put it ahead of Wi-Fi"
                 rm -f "$WAKE_MARK"
@@ -1195,7 +1205,7 @@ wake_wifi_ready() {
     while [ "$_wt" -lt 15 ] && [ -z "$(iface_ipv4 "$_wl")" ]; do sleep 1; _wt=$((_wt + 1)); done
     if [ -z "$(iface_ipv4 "$_wl")" ]; then echo "$_wr couldn't join the saved network ==="; return 1; fi
     wake_ip_clash "$_wl" && return 1
-    _wus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") && connmanctl move-before "$_wus" "$_wsv" > /dev/null 2>&1
+    real_ipv4 eth0 > /dev/null && _wus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") && connmanctl move-before "$_wus" "$_wsv" > /dev/null 2>&1
     echo "$_wr joined the saved network, with the adapter still first ==="
 }
 
@@ -1206,15 +1216,45 @@ wake_wifi_ready() {
 # adapter back first.  One "ip route" every WAKE_KEEP_SECS, nothing else
 # unless Wi-Fi has taken over.
 wake_keep_first() {
+    wake_dhcp_retry
     [ -f "$WAKE_MARK" ] && return 0
-    _kd=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    _kd=$(def_iface)
     [ -n "$_kd" ] && [ "$_kd" != eth0 ] && is_wifi "$_kd" || return 0
-    is_usb_nic eth0 && [ -n "$(iface_ipv4 eth0)" ] || return 0
+    # Only an adapter that works: one with just a 169.254 address would take
+    # the TV's internet down with it
+    is_usb_nic eth0 && real_ipv4 eth0 > /dev/null || return 0
     _kus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || return 0
     _kws=$(cm_service wifi "$(sysval "$NET/$_kd/address")" active) || return 0
     if connmanctl move-before "$_kus" "$_kws" > /dev/null 2>&1; then
         echo "=== $(date) Wi-Fi had taken over the connection, so the adapter is first again ==="
     fi
+}
+
+# The adapter has a cable but only a 169.254 address: DHCP didn't answer when
+# it connected.  After WAKE_DHCP_SECS, reconnect its session so it asks the
+# router again, then at most every 5 times as long.  When to try next is
+# kept in $WAKE_PID_FILE.dhcp.
+wake_dhcp_retry() {
+    [ -f "$WAKE_MARK" ] && return 0
+    is_usb_nic eth0 && [ "$(sysval "$NET/eth0/carrier")" = 1 ] || return 0
+    case "$(iface_ipv4 eth0)" in
+        169.254.*) ;;
+        *) rm -f "$WAKE_PID_FILE.dhcp"; return 0 ;;
+    esac
+    _dn=$(date +%s)
+    _dt=$(cat "$WAKE_PID_FILE.dhcp" 2>/dev/null)
+    case "$_dt" in ''|*[!0-9]*) echo $((_dn + WAKE_DHCP_SECS)) > "$WAKE_PID_FILE.dhcp"; return 0 ;; esac
+    [ "$_dn" -ge "$_dt" ] || return 0
+    echo $((_dn + WAKE_DHCP_SECS * 5)) > "$WAKE_PID_FILE.dhcp"
+    _dus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || return 0
+    _dold=$(iface_ipv4 eth0)
+    connmanctl disconnect "$_dus" > /dev/null 2>&1
+    sleep 1
+    connmanctl connect "$_dus" > /dev/null 2>&1
+    _dw=0
+    while [ "$_dw" -lt 10 ] && ! real_ipv4 eth0 > /dev/null; do sleep 1; _dw=$((_dw + 1)); done
+    _dnew=$(iface_ipv4 eth0)
+    echo "=== $(date) the adapter had no address from the router (${_dold%/*}), so it asked again: ${_dnew%/*} ==="
 }
 
 # Follows the TV's power state through webOS's own power service, and hands
@@ -2983,6 +3023,7 @@ show_status() {
             _bus=$(sysval "$_sp/device/../speed")
             _line="$_line, on $(speed_label "$_bus")"
             [ "$_bus" = 12 ] && status_issue "$_sn runs at USB 1.1 speed. Try another port or cable."
+            case "$_ip" in 169.254.*) status_issue "$_sn has no address from your router: ${_ip%/*} is one the TV gives itself when the router doesn't answer. Unplug and replug the network cable, or restart the router." ;; esac
             if [ "$_bus" = 480 ]; then
                 status_note "$_sn is on USB 2.0, which tops out around 300 Mbit/s on these TVs."
                 has_usb3 && status_note "If this TV has a blue USB 3.0 port, the adapter can go faster plugged straight into it, or through a USB 3.0 cable or converter.  Many LG TVs only have USB 2.0 ports."
@@ -2998,7 +3039,7 @@ show_status() {
         fi
         echo "            $_line"
     done
-    _def=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    _def=$(def_iface)
     echo "  Default route: ${_def:-none}"
 
     # USB adapters the kernel sees but no network driver claimed
@@ -3280,7 +3321,7 @@ show_json() {
     printf '"adapter":%s,"adapterIsEth0":%s,"builtin":%s,"wifi":%s,' \
         "$(nic_json "$_ju")" "$(jb "$([ "$_ju" = eth0 ] && echo 1)")" "$(nic_json "$_jbi")" "$(nic_json "$_jw")"
     printf '"defaultRoute":%s,"knownDriver":%s,"driverOffer":%s,"driverFile":%s,"driverPage":%s,"driverDownloaded":%s,"autobindHook":%s,' \
-        "$(js "$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" "$(js "$_kp")" \
+        "$(js "$(def_iface)")" "$(jb "$_kd")" "$(js "$(driver_offer)")" "$(js "$_kf")" "$(js "$_kp")" \
         "$(jb "$([ -n "$_kf" ] && [ -f "$_kf" ] && echo 1)")" "$(jb "$_ab")"
     # A driver to test: only when no tested one fits (or is set up already)
     drvtest_settle
@@ -3397,7 +3438,7 @@ speed_history_json() {
 speed_test() {
     command -v curl >/dev/null 2>&1 || error_exit "The speed test needs curl, and this TV doesn't have it."
     case "$PHASE" in ''|ping|down|up) ;; *) error_exit "--phase is ping, down or up" ;; esac
-    _iface=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    _iface=$(def_iface)
     [ -n "$_iface" ] || error_exit "The TV has no internet connection (no default route)."
     _ping=""; _down=""; _up=""; _colo=""
     if [ -z "$PHASE" ] || [ "$PHASE" = ping ]; then
@@ -3699,7 +3740,7 @@ show_report() {
     done
     echo "Drivers loaded:${_list:- none}"
     [ -f "$REALTEK_STATE" ] && echo "Realtek mode: $(cat "$REALTEK_STATE" 2>/dev/null)"
-    echo "Default route: $(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')"
+    echo "Default route: $(def_iface)"
     _sp=$(speed_summary)
     [ -n "$_sp" ] && echo "Speed:   $_sp"
     echo '```'

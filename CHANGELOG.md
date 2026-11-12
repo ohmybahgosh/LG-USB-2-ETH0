@@ -2,6 +2,14 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.13] - 2026-11-12
+
+### Fixed
+
+- **Wi-Fi wake no longer puts an adapter with no working address ahead of Wi-Fi.**  After a restart, a 2022 C2's adapter got no answer from the router and gave itself a 169.254 address, which goes nowhere.  webOS sent traffic over Wi-Fi instead, but the check that keeps the adapter first moved it back ahead, and the TV lost its internet.  It now only moves an adapter with a real address, and waits for one on wake too.
+- **The adapter asks the router again.**  With Wi-Fi wake on, an adapter left with only a 169.254 address reconnects after a minute to ask the router for an address again, then every five minutes until it gets one.
+- **Status reads the default route right.**  With only a 169.254 address the route reads "default dev eth0 scope link", and status and the app said traffic was "going out link".  Status also warns now when the adapter has no address from the router.
+
 ## [2.11.12] - 2026-11-12
 
 ### Changed
