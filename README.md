@@ -20,7 +20,22 @@
 
 LG TVs ship with a 100 Mbit/s wired port.  A gigabit USB adapter is two to three times faster on the same TV, even on the USB 2.0 ports many models have (a 2022 C2 included).  But webOS names it `eth1`, and parts of webOS only look at `eth0`.  So the settings screen says "Not Connected" while the internet works, and some streaming apps refuse to play.
 
-LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under another name, so webOS and its apps treat the adapter as the TV's wired connection.  A small boot hook does it again at every start.  Use the TV app from the Homebrew Channel, with no SSH needed, or the same script over SSH.  It can also find, check and install a better driver for your adapter, test new ones built for your TV, and block firmware updates harder.
+LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under another name, so webOS and its apps treat the adapter as the TV's wired connection.  A small boot hook does it again at every start.  Use the TV app from the Homebrew Channel, with no SSH needed, or the same script over SSH.  It can also find, check and install a better driver for your adapter, test new ones built for your TV, keep the TV wakeable over the network, and block firmware updates harder.
+
+## Standout features
+
+- **A TV app, no SSH needed.**  Everything is a switch on the remote, through the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel), in English, Russian or Spanish.  The same script runs underneath, so SSH works too.  [The TV app](#the-tv-app)
+- **The adapter becomes the TV's real `eth0`.**  The settings screen shows the wired connection, and streaming apps that refuse `eth1` play again.  A small boot hook does it at every start, and one press undoes it.  [What it fixes](#what-it-fixes)
+- **Two to three times the built-in port.**  272 Mbit/s down and 287 up on a 2022 C2's USB 2.0 port, against about 95 on LG's 100 Mbit/s port.  [Real speeds](#real-speeds)
+- **A faster driver, found for your exact kernel.**  **Faster driver** only shows up when a Realtek or ASIX driver is known for your TV's kernel and a supported adapter is plugged in, then downloads it, checks its SHA-256 and sets it up in one go.  [Drivers](#a-faster-driver)
+- **Test new drivers from the couch.**  Drivers for many more TVs are built here from LG's own kernel source.  **Test a new driver** loads one until the next restart, checks the adapter gets online, and shows a QR code that opens a filled-in test report.  [Waiting for testers](#more-drivers-on-the-way)
+- **Realtek mode.**  An RTL8152 or RTL8153 left on the slow generic driver is switched to its Realtek configuration, so the TV's own `r8152` takes it on kernels that have it built in, with no download at all.  [Drivers](#drivers)
+- **Turn the TV on over the network.**  **Wi-Fi wake in standby** keeps Wake on LAN, Turn on via Wi-Fi, the ThinQ app and Home Assistant working with an adapter in, and keeps your traffic on the cable.  [Waking the TV over Wi-Fi](#waking-the-tv-over-wi-fi)
+- **Block updates harder.**  Closes the gaps people found in the Homebrew Channel's update block, so a firmware update that could take root away has a much harder time getting through.  [Blocking updates](#blocking-updates)
+- **Survives standby and unplugging.**  **Follow plug and unplug** keeps the adapter `eth0` when it's moved, puts it back on the faster driver after standby, and restarts a hung adapter.  **Wi-Fi as a backup** turns Wi-Fi on if the cable stops working.  [How it works](#how-it-works)
+- **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
+- **Speed test and reports.**  A speed test against Cloudflare, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 123 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!WARNING]
 > **Keep firmware updates off on a rooted TV.**  LG's current firmware patches the known ways to root a TV, including webOS 26 firmware released after October 10, 2026.  An update may remove root for good, and this tool stops working with it.  Turn off **Automatic software updates** in the TV's settings, turn on **Block system updates** in the Homebrew Channel, and turn on **Block updates harder** in this app ([how it works](#blocking-updates)).
@@ -51,7 +66,7 @@ I, [OhMyBahGosh](https://github.com/ohmybahgosh), wrote v1 by hand.  From v2.0 o
 
 The fixes that mattered most came from that real-TV testing, not from the AI: standby putting the adapter back on the slow driver, webOS quietly sending traffic over Wi-Fi instead of the adapter, and the GitHub report form opening blank on a phone.  The [changelog](CHANGELOG.md) has the full story.
 
-- **Tests on every push:** 90 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
+- **Tests on every push:** 123 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
 - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches.  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
 
@@ -61,6 +76,7 @@ The tested driver modules `get-driver` offers were built by [DonZoomik](https://
 
 ## Contents
 
+- [Standout features](#standout-features)
 - [What it fixes](#what-it-fixes)
 - [Get started](#get-started): [the TV app](#with-the-tv-app), [over SSH](#over-ssh), [is it safe?](#is-it-safe-and-how-do-i-undo-it)
 - [The TV app](#the-tv-app)
@@ -200,7 +216,7 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
 </p>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found, like a cable that only connects at 100 Mbit/s.
-- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Block updates harder** and **Switch now**, as on/off switches.
+- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Wi-Fi wake in standby**, **Block updates harder** and **Switch now**, as on/off switches.
 - **Faster driver:** only shows up when a driver is known for your TV's exact kernel and an adapter it supports is plugged in.  It downloads, checks and sets up the driver in one go.
 - **Test a new driver:** only on TVs whose kernel has a driver waiting for testers.  One press downloads and checks it, loads it until the next restart, moves the adapter to it, checks it gets online, and shows a QR code that opens a filled-in test report.
 - **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
