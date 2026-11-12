@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.12] - 2026-11-12
+
+### Changed
+
+- **A new app icon that fills its tile.**  The old one had a frame inside the tile, so it looked smaller and boxed in next to other apps in the launcher.  The new one drops the frame and makes `#eth0` bigger, like SSH Doctor's icon.
+
 ## [2.11.11] - 2026-11-12
 
 ### Fixed
