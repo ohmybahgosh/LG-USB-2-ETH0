@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.8] - 2026-11-12
+
+### Fixed
+
+- **Wi-Fi wake in standby keeps the adapter first.**  With Wi-Fi kept connected for wake, webOS's connection manager put Wi-Fi ahead of the adapter once Wi-Fi passed its internet check, so traffic went over Wi-Fi.  On a 2022 C2 it happened after Wi-Fi got its own address.  Wi-Fi wake now checks every 10 seconds and puts the adapter back first if Wi-Fi has taken over, and logs it when it does.
+
 ## [2.11.7] - 2026-11-11
 
 ### Fixed

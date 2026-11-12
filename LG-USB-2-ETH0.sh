@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.7"
+VERSION="2.11.8"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -187,7 +187,8 @@ Options:
                      session (it stays plugged in), so the TV keeps Wi-Fi
                      ready for wake, and connect it again on wake.  Turns
                      Wi-Fi on and joins the saved network if webOS left it
-                     off.  Only when Turn on via Wi-Fi is on
+                     off, and keeps the adapter ahead of Wi-Fi.  Only when
+                     Turn on via Wi-Fi is on
   --block-updates    Block firmware updates more thoroughly, on top of the
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
@@ -235,6 +236,8 @@ WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
 WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
 # and seconds each try waits for an address once it's connected
 WAKE_ADDR_SECS=${LGU2E_WAKE_ADDR_SECS:-10}
+# and seconds between checks that the adapter is still first, ahead of Wi-Fi
+WAKE_KEEP_SECS=${LGU2E_WAKE_KEEP_SECS:-10}
 # After standby: seconds to let webOS bring the network back up before the
 # adapter moves to the faster driver, and to wait for it to reconnect after
 NET_SETTLE=${LGU2E_NET_SETTLE:-30}
@@ -1196,6 +1199,24 @@ wake_wifi_ready() {
     echo "$_wr joined the saved network, with the adapter still first ==="
 }
 
+# With Wi-Fi kept connected for wake, ConnMan can put Wi-Fi ahead of the
+# adapter: it ranks a connection it has checked as online ahead of one that's
+# only ready, so when Wi-Fi reconnects and passes its check, the default route
+# moves to Wi-Fi (a C2 did, after Wi-Fi got its own address).  Put the
+# adapter back first.  One "ip route" every WAKE_KEEP_SECS, nothing else
+# unless Wi-Fi has taken over.
+wake_keep_first() {
+    [ -f "$WAKE_MARK" ] && return 0
+    _kd=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    [ -n "$_kd" ] && [ "$_kd" != eth0 ] && is_wifi "$_kd" || return 0
+    is_usb_nic eth0 && [ -n "$(iface_ipv4 eth0)" ] || return 0
+    _kus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || return 0
+    _kws=$(cm_service wifi "$(sysval "$NET/$_kd/address")" active) || return 0
+    if connmanctl move-before "$_kus" "$_kws" > /dev/null 2>&1; then
+        echo "=== $(date) Wi-Fi had taken over the connection, so the adapter is first again ==="
+    fi
+}
+
 # Follows the TV's power state through webOS's own power service, and hands
 # over before standby and back on wake.  Subscribes again if luna-send ends.
 # It hands over as soon as webOS says it's going to standby ("processing",
@@ -1206,6 +1227,8 @@ wake_watch() {
     command -v luna-send >/dev/null 2>&1 || { echo "No luna-send, so --wifi-wake can't follow standby."; return 0; }
     echo "Following standby for Wi-Fi wake."
     wake_wifi_ready
+    ( while :; do sleep "$WAKE_KEEP_SECS"; wake_keep_first; done ) &
+    echo $! > "$WAKE_PID_FILE.keep"
     _wf="${RUN_DIR:-/tmp}/lg-usb-2-eth0.power"
     while :; do
         rm -f "$_wf"
@@ -2513,7 +2536,7 @@ wake_watch"
 
 # Stop --wifi-wake's standby follower and its luna-send, checking each PID
 stop_wake() {
-    for _wpf in "$WAKE_PID_FILE" "$WAKE_PID_FILE.luna"; do
+    for _wpf in "$WAKE_PID_FILE" "$WAKE_PID_FILE.keep" "$WAKE_PID_FILE.luna"; do
         _pid=$(cat "$_wpf" 2>/dev/null)
         rm -f "$_wpf"
         case "$_pid" in ''|*[!0-9]*) continue ;; esac

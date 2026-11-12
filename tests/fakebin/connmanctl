@@ -26,6 +26,10 @@ case "$1" in
             wifi_*) grep -q '^[0-9]*: wlan0 ' "$FAKE_STATE/addr" 2>/dev/null || echo "3: wlan0 inet 192.168.1.50/24" >> "$FAKE_STATE/addr" ;;
         esac
         echo "Connected $2" ;;
-    move-before) echo "Moved $2 before $3" ;;
+    move-before)
+        case "$2" in
+            ethernet_*) [ -f "$FAKE_STATE/route" ] && sed -i 's/^default via \([^ ]*\) dev [^ ]*/default via \1 dev eth0/' "$FAKE_STATE/route" ;;
+        esac
+        echo "Moved $2 before $3" ;;
     *) exit 1 ;;
 esac

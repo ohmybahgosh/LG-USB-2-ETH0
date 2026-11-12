@@ -166,7 +166,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
@@ -180,7 +180,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -200,7 +200,7 @@ stop_bg() {
     local p f
     p=$(cat "$ROOT/tmp/lg-usb-2-eth0.pid" 2>/dev/null) && kill "$p" 2>/dev/null
     # --wifi-wake's follower first, so it can't subscribe again, then its luna-send
-    for f in lg-usb-2-eth0.wake.pid lg-usb-2-eth0.wake.pid.luna; do
+    for f in lg-usb-2-eth0.wake.pid lg-usb-2-eth0.wake.pid.keep lg-usb-2-eth0.wake.pid.luna; do
         p=$(cat "$ROOT/tmp/$f" 2>/dev/null) && kill "$p" 2>/dev/null
     done
     return 0
@@ -735,6 +735,27 @@ test_wifi_wake_wifi_ready() {
     stop_bg
 }
 
+# ConnMan put Wi-Fi ahead of the adapter once Wi-Fi passed its online check
+# (Bob's C2, after Wi-Fi got its own address): the adapter goes first again
+test_wifi_wake_keeps_adapter_first() {
+    wake_setup
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run install -y --wifi-wake --wait 4
+    check "following standby" wait_log "Following standby for Wi-Fi wake"
+    sleep 2
+    check "nothing while the adapter is first" lacks_log "Wi-Fi had taken over"
+    echo "default via 192.168.1.1 dev wlan0" > "$STATE/route"
+    check "put back" wait_log "Wi-Fi had taken over the connection, so the adapter is first again"
+    check "moved the adapter first" cm_has "connmanctl move-before $WAKE_US $WAKE_WS"
+    check "route on eth0 again" grep -q "dev eth0" "$STATE/route"
+    sleep 3
+    check "only once" test "$(grep -c 'Wi-Fi had taken over' "$LOG")" = 1
+    run install -y --no-wifi-wake
+    check "checker stopped" test ! -e "$ROOT/tmp/lg-usb-2-eth0.wake.pid.keep"
+    stop_bg
+}
+
 test_wifi_wake_skips() {
     wake_setup
     run install -y --wifi-wake --wait 4
@@ -1255,6 +1276,7 @@ t wifi_fallback_settings test_wifi_fallback_settings
 t wifi_wake test_wifi_wake
 t wifi_wake_right_away test_wifi_wake_right_away
 t wifi_wake_wifi_ready test_wifi_wake_wifi_ready
+t wifi_wake_keeps_adapter_first test_wifi_wake_keeps_adapter_first
 t wifi_wake_skips test_wifi_wake_skips
 t wifi_wake_retry_reasons test_wifi_wake_retry_reasons
 t wifi_wake_power_cut test_wifi_wake_power_cut
