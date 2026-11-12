@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Status points you to a USB 3.0 port.**  When the adapter runs at USB 2.0 speed (about 300 Mbit/s at most) on a TV that has a USB 3.0 port, usually the blue one, status says so: plugged straight into it, or through a USB 3.0 cable or converter, the adapter can go faster.  In English, Russian and Spanish.
+
 ## [2.11.9] - 2026-11-12
 
 ### Fixed

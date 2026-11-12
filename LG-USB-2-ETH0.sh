@@ -2983,7 +2983,10 @@ show_status() {
             _bus=$(sysval "$_sp/device/../speed")
             _line="$_line, on $(speed_label "$_bus")"
             [ "$_bus" = 12 ] && status_issue "$_sn runs at USB 1.1 speed. Try another port or cable."
-            [ "$_bus" = 480 ] && status_note "$_sn is on USB 2.0, which tops out around 300 Mbit/s on these TVs."
+            if [ "$_bus" = 480 ]; then
+                status_note "$_sn is on USB 2.0, which tops out around 300 Mbit/s on these TVs."
+                has_usb3 && status_note "This TV has a USB 3.0 port (usually the blue one).  Plugged straight into it, or through a USB 3.0 cable or converter, the adapter can go faster."
+            fi
             [ "$_car" = 1 ] && [ -z "$_ip" ] && status_note "$_sn has a cable but no IPv4 address yet. webOS may still be setting it up."
             _dup=$(sysval "$_sp/duplex" 2>/dev/null)
             [ "$_dup" = half ] && _line="$_line, half duplex"
@@ -3158,6 +3161,14 @@ show_status() {
 # Standby resets the TV's USB ports, so the adapter can't be counted on to
 # wake it: LG's "Turn on via Wi-Fi" listens on Wi-Fi, and on the built-in
 # port when it has a cable.  Prints wifi, builtin, or none.
+# The TV has a USB 3.0 (or faster) port: a root hub at 5000 Mbit/s or more.
+# Many LG TVs only have USB 2.0, which caps an adapter around 300 Mbit/s.
+has_usb3() {
+    for _u3 in "$USB_DEVS"/usb*; do
+        case "$(sysval "$_u3/speed" 2>/dev/null)" in 5000|10000|20000) return 0 ;; esac
+    done
+    return 1
+}
 wake_path() {
     _bp=$(find_builtin_nic)
     if [ -n "$_bp" ] && [ "$(sysval "$NET/$_bp/carrier" 2>/dev/null)" = 1 ]; then echo builtin; return 0; fi
