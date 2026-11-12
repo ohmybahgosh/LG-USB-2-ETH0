@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.11] - 2026-11-12
+
+### Fixed
+
+- **The USB 3.0 hint no longer says the TV has a USB 3.0 port.**  A TV's USB controller can do USB 3.0 while its ports are wired for USB 2.0 only, like a 2022 C2's, so it can't tell.  The hint now says the adapter can go faster *if* the TV has a blue USB 3.0 port.
+
 ## [2.11.10] - 2026-11-12
 
 ### Added

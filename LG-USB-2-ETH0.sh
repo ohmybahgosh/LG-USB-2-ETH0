@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.10"
+VERSION="2.11.11"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2985,7 +2985,7 @@ show_status() {
             [ "$_bus" = 12 ] && status_issue "$_sn runs at USB 1.1 speed. Try another port or cable."
             if [ "$_bus" = 480 ]; then
                 status_note "$_sn is on USB 2.0, which tops out around 300 Mbit/s on these TVs."
-                has_usb3 && status_note "This TV has a USB 3.0 port (usually the blue one).  Plugged straight into it, or through a USB 3.0 cable or converter, the adapter can go faster."
+                has_usb3 && status_note "If this TV has a blue USB 3.0 port, the adapter can go faster plugged straight into it, or through a USB 3.0 cable or converter.  Many LG TVs only have USB 2.0 ports."
             fi
             [ "$_car" = 1 ] && [ -z "$_ip" ] && status_note "$_sn has a cable but no IPv4 address yet. webOS may still be setting it up."
             _dup=$(sysval "$_sp/duplex" 2>/dev/null)
@@ -3161,8 +3161,9 @@ show_status() {
 # Standby resets the TV's USB ports, so the adapter can't be counted on to
 # wake it: LG's "Turn on via Wi-Fi" listens on Wi-Fi, and on the built-in
 # port when it has a cable.  Prints wifi, builtin, or none.
-# The TV has a USB 3.0 (or faster) port: a root hub at 5000 Mbit/s or more.
-# Many LG TVs only have USB 2.0, which caps an adapter around 300 Mbit/s.
+# The TV's USB controller can do USB 3.0: a root hub at 5000 Mbit/s or more.
+# That doesn't mean a port is wired for it: a 2022 C2 has USB 3.0 root hubs
+# but only USB 2.0 ports, so the hint built on this says "if".
 has_usb3() {
     for _u3 in "$USB_DEVS"/usb*; do
         case "$(sysval "$_u3/speed" 2>/dev/null)" in 5000|10000|20000) return 0 ;; esac

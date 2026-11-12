@@ -1121,11 +1121,11 @@ test_usb2_note() {
     add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01" 0bda 8153 480
     run status
     check "notes USB 2.0" has "on USB 2.0"
-    check "no USB 3.0 hint on a USB 2.0-only TV" lacks "has a USB 3.0 port"
+    check "no USB 3.0 hint without a USB 3.0 controller" lacks "blue USB 3.0 port"
     mkdir -p "$SYS/bus/usb/devices/usb2"
     echo 5000 > "$SYS/bus/usb/devices/usb2/speed"
     run status
-    check "points to the TV's USB 3.0 port" has "This TV has a USB 3.0 port"
+    check "mentions a USB 3.0 port" has "If this TV has a blue USB 3.0 port"
 }
 
 test_report() {
