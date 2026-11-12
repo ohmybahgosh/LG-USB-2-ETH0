@@ -37,6 +37,15 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Speed test and reports.**  A speed test against Cloudflare, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
 - **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 123 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
+> [!TIP]
+> **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
+>
+> - 🧪 **Test a driver** built for your TV: if it has one waiting, the app shows **Test a new driver**, and one press tests it and fills in the report.  [Drivers waiting for testers](#more-drivers-on-the-way)
+> - 📺 **Send a compatibility report**, whether it worked or not: the app's **Report for GitHub** QR code fills it in from your phone.  [Report form](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml)
+> - 🌍 **Translate the app** into your language.  [How](#translating-the-app)
+> - 🤖 **Build a feature with AI:** attach the [knowledge base](https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest/download/lg-usb-2-eth0-for-ai.md) to Claude, ChatGPT or Gemini first.  [Contributing](#contributing)
+> - 💬 **Ask, share your setup or suggest an idea** in [Discussions](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions).
+
 > [!WARNING]
 > **Keep firmware updates off on a rooted TV.**  LG's current firmware patches the known ways to root a TV, including webOS 26 firmware released after October 10, 2026.  An update may remove root for good, and this tool stops working with it.  Turn off **Automatic software updates** in the TV's settings, turn on **Block system updates** in the Homebrew Channel, and turn on **Block updates harder** in this app ([how it works](#blocking-updates)).
 
@@ -89,7 +98,7 @@ The tested driver modules `get-driver` offers were built by [DonZoomik](https://
 - [Troubleshooting](#troubleshooting) and [FAQ](#faq)
 - [Commands and options](#commands-and-options) and [how it works](#how-it-works)
 - [Upgrading from v1](#upgrading-from-v1)
-- [Development and tests](#development-and-tests), [Contributing](#contributing), [Thanks](#thanks)
+- [Development and tests](#development-and-tests), [Contributing](#contributing), [Special thanks](#special-thanks), [Thanks](#thanks)
 
 ## What it fixes
 
@@ -851,6 +860,34 @@ They're welcome too, held to the same standard as the rest of this project: say 
 ### Translating the app
 
 The app's text is in [`webos-app/src/i18n.js`](webos-app/src/i18n.js): copy the `es` block and the `esScript` patterns (the script's status messages), translate them (keep the `{placeholders}` and `$1`s), and add the language to `NAMES`, `DICTS` and `SCRIPTS`.  The four messages the boot hook shows on the TV are in the script's `toast_text()`, and the script accepts the language code in `app_lang`, `settings_ok` and `load_settings`.  `node tests/check-i18n.js` checks that nothing is missing and that no English is left in the status messages.  A partly done language works too: anything untranslated shows in English.
+
+## Special thanks
+
+Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibility reports, ideas or bug reports.  This list updates itself when a pull request is merged or an issue or discussion is opened.  [Join them](#contributing).
+
+<!-- thanks:start -->
+<p>
+  <a href="https://github.com/xbmcjase" title="xbmcjase: 2 driver tests, 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/261321952?v=4&amp;s=96" width="48" height="48" alt="xbmcjase"></a>
+  <a href="https://github.com/Yevrashka" title="Yevrashka: 2 driver tests, 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/24300377?v=4&amp;s=96" width="48" height="48" alt="Yevrashka"></a>
+  <a href="https://github.com/tirth0jain" title="tirth0jain: 2 driver tests, 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/163157087?v=4&amp;s=96" width="48" height="48" alt="tirth0jain"></a>
+  <a href="https://github.com/izoT3P" title="izoT3P: 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/354215212?v=4&amp;s=96" width="48" height="48" alt="izoT3P"></a>
+  <a href="https://github.com/romansat" title="romansat: 1 compatibility report, 1 discussion"><img src="https://avatars.githubusercontent.com/u/94401139?v=4&amp;s=96" width="48" height="48" alt="romansat"></a>
+  <a href="https://github.com/artemisxrpg" title="artemisxrpg: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/74358884?v=4&amp;s=96" width="48" height="48" alt="artemisxrpg"></a>
+  <a href="https://github.com/Mazda77" title="Mazda77: 1 discussion"><img src="https://avatars.githubusercontent.com/u/44847930?v=4&amp;s=96" width="48" height="48" alt="Mazda77"></a>
+  <a href="https://github.com/OCT0PUSCRIME" title="OCT0PUSCRIME: 1 discussion"><img src="https://avatars.githubusercontent.com/u/65912221?v=4&amp;s=96" width="48" height="48" alt="OCT0PUSCRIME"></a>
+  <a href="https://github.com/PargsZ" title="PargsZ: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/60362178?v=4&amp;s=96" width="48" height="48" alt="PargsZ"></a>
+</p>
+
+- **[xbmcjase](https://github.com/xbmcjase)**: 2 driver tests, 2 compatibility reports
+- **[Yevrashka](https://github.com/Yevrashka)**: 2 driver tests, 2 compatibility reports
+- **[tirth0jain](https://github.com/tirth0jain)**: 2 driver tests, 1 compatibility report
+- **[izoT3P](https://github.com/izoT3P)**: 2 compatibility reports
+- **[romansat](https://github.com/romansat)**: 1 compatibility report, 1 discussion
+- **[artemisxrpg](https://github.com/artemisxrpg)**: 1 compatibility report
+- **[Mazda77](https://github.com/Mazda77)**: 1 discussion
+- **[OCT0PUSCRIME](https://github.com/OCT0PUSCRIME)**: 1 discussion
+- **[PargsZ](https://github.com/PargsZ)**: 1 compatibility report
+<!-- thanks:end -->
 
 ## Thanks
 

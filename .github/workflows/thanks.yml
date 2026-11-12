@@ -1,0 +1,49 @@
+# Special thanks in README.md, and assets/thanks.json for ohmybahgosh.dev: everyone whose pull
+# request was merged, or who sent a driver test, a compatibility report, an issue or a
+# discussion (scripts/gen-thanks.py).  Runs when that happens, and once a day.
+name: Thanks
+on:
+  pull_request_target:          # runs from main, never the pull request's code: only the list changes
+    types: [closed]
+  issues:
+    types: [opened]
+  discussion:
+    types: [created]
+  schedule:
+    - cron: '23 8 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  discussions: read
+  issues: read
+  pull-requests: read
+concurrency:
+  group: thanks
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Update the list
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/gen-thanks.py
+      - name: Commit, and refresh the site
+        env:
+          SITE_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if git diff --quiet; then echo "No change"; exit 0; fi
+          git config user.name "OhMyBahGosh"
+          git config user.email "77786782+ohmybahgosh@users.noreply.github.com"
+          GIT_COMMITTER_NAME="github-actions[bot]" GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
+            git commit -am "Special thanks: update the list"
+          git push
+          # ohmybahgosh.dev shows the list too; it also picks it up on its next scheduled deploy
+          if [ -n "$SITE_TOKEN" ]; then
+            curl -fsS -X POST https://api.github.com/repos/ohmybahgosh/ohmybahgosh.dev/dispatches \
+              -H "Authorization: Bearer $SITE_TOKEN" -H "Accept: application/vnd.github+json" \
+              -d '{"event_type":"refresh"}' || true
+          fi
