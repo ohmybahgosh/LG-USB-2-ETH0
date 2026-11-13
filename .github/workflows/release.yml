@@ -38,8 +38,12 @@ jobs:
           cp webos-app/out/*.ipk webos-app/out/*.manifest.json .
       - name: Build the AI knowledge base
         run: sh scripts/ai-context.sh lg-usb-2-eth0-for-ai.md
+      # The maintainer signs SHA256SUMS on their own computer once the release
+      # is up (SHA256SUMS.sig, checked by the script against
+      # release-signing-key.pub before it installs an update), so the key
+      # never touches GitHub
       - name: Build checksums
-        run: sha256sum LG-USB-2-ETH0.sh > SHA256SUMS
+        run: sha256sum LG-USB-2-ETH0.sh *.ipk *.manifest.json > SHA256SUMS
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

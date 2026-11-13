@@ -18,10 +18,10 @@ So you can judge it yourself:
 
 - Adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth` (or moves it to `/var/lib/webosbrew/S01fix-eth.disabled`), and keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf` and its log in `/var/lib/webosbrew/lg-usb-2-eth0.log`.  Without the TV app, it keeps a copy of itself in `/home/root/lg-usb-2-eth0/`.
 - Renames network interfaces with `ip link`, and brings them up and down.
-- Writes its process ID and per-boot state to `/tmp` (RAM).
+- Writes its process ID, per-boot state and downloads waiting to be checked to `/tmp/lg-usb-2-eth0` (RAM), a folder only root can write.
 - Loads a kernel module with `insmod`, only if you install with `--module`, and only one built for your running kernel.  It then moves the USB adapter to that module's driver through `/sys/bus/usb/drivers` (unbind and bind), and turns off its scatter-gather setting.  After standby, if webOS doesn't reconnect the adapter on that driver, it takes the link down and up, or re-plugs the adapter in software (`/sys/bus/usb/devices/*/authorized`) so it goes back to the generic driver.
 - `get-driver` downloads one file, only for a kernel listed in the script, from a fixed commit URL, and keeps it only if its SHA-256 matches.  If the author's copy can't be downloaded, it tries a byte-for-byte mirror in [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers), also at a fixed commit, and the same SHA-256 check decides.  Nothing else is downloaded.
-- `update` downloads the newest release from GitHub, and installs it only if its SHA-256 matches (and its size, for the app).
+- `update` downloads the newest release from GitHub, and installs it only if the release's `SHA256SUMS` carries a valid signature from the release key built into the script (see below), and the download's SHA-256 matches it (and its size, for the app).
 - `speedtest` talks to Cloudflare's public speed test, only when you run it.
 - With `--wifi-fallback`, it turns Wi-Fi on through webOS's connection manager when the cable has had no link for a minute, and off again when it works, remembering that in `/var/lib/webosbrew/lg-usb-2-eth0.wifi`.
 - With `--wifi-wake`, it follows the TV's power state with `luna-send`.  Just before standby, if Wi-Fi is connected and network wake is on, it disconnects the adapter's service with `connmanctl` and sets Wi-Fi's `WOWL` property with `busctl`, remembering the two service names in `/var/lib/webosbrew/lg-usb-2-eth0.wake`.  On wake (or at the next boot) it connects the adapter again with `connmanctl` and moves it ahead of Wi-Fi.
@@ -33,8 +33,13 @@ Apart from `get-driver`, `test-driver` and `update`, it doesn't download anythin
 
 ## Verifying a download
 
-Every release has a `SHA256SUMS` file.  Download it next to the script and run:
+Every release has a `SHA256SUMS` file covering the script, the TV app's IPK and its manifest, and from 2.11.18 on a `SHA256SUMS.sig`: a signature over it, made with the release key on the maintainer's own computer after the release is published.  The key never touches GitHub, so a release on GitHub that someone else changed, or one they published, doesn't carry a valid signature.
+
+The public key is [`release-signing-key.pub`](release-signing-key.pub) (RSA 3072, SHA-256 of the key: `0a06c2822105ed4c7938a98b75feee45888a750711bd7a536dc31da0b8b5ef3f`), and it's also built into the script, which checks the signature itself before `update` installs anything.  To check a release by hand, download the files next to the key and run:
 
 ```sh
+openssl dgst -sha256 -verify release-signing-key.pub -signature SHA256SUMS.sig SHA256SUMS
 sha256sum -c SHA256SUMS
 ```
+
+The first should print `Verified OK`.  Updates through the Homebrew Channel are checked by the Homebrew Channel against the SHA-256 in the repository's listing, not against this signature.

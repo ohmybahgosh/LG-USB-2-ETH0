@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.18] - 2026-11-12
+
+### Security
+
+- **Releases are signed.**  Each release's `SHA256SUMS`, which now covers the TV app's IPK and its manifest as well as the script, is signed with a release key that stays on the maintainer's own computer and never touches GitHub (`SHA256SUMS.sig`).  The public key is built into the script and published as `release-signing-key.pub`.  The in-app update and `update` now check that signature, and that the download matches the signed checksums, before installing anything, so a release on GitHub changed or published by someone else isn't installed.  This applies to updates from 2.11.18 on.  Updating needs `openssl`, which webOS has.  Updates through the Homebrew Channel are checked by the Homebrew Channel itself.  How to check a release by hand is in SECURITY.md.
+
 ## [2.11.17] - 2026-11-12
 
 ### Security

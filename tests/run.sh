@@ -28,12 +28,20 @@ case "$MODE" in
         }
         # Our fakes must win over busybox's own ip and insmod
         rm -f "$BBDIR/ip" "$BBDIR/insmod"
+        # webOS has openssl, which checks a release's signature
+        command -v openssl >/dev/null && ln -sf "$(command -v openssl)" "$BBDIR/openssl"
         BASE_PATH=$BBDIR
         SH="$(command -v busybox) sh" ;;
     dash) BASE_PATH=$PATH; SH="$(command -v dash)" ;;
     bash) BASE_PATH=$PATH; SH="$(command -v bash) --posix" ;;
     *) echo "Unknown mode: $MODE"; exit 1 ;;
 esac
+
+# A key that signs the fake releases, like the real one signs each SHA256SUMS
+KEYDIR=$(mktemp -d)
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEYDIR/key.pem" 2>/dev/null
+openssl pkey -in "$KEYDIR/key.pem" -pubout -out "$KEYDIR/key.pub" 2>/dev/null
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEYDIR/other.pem" 2>/dev/null
 
 PASS=0
 FAIL=0
@@ -168,7 +176,7 @@ run() {
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
-        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" \
+        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
     OUT=$(cat "$SB/out")
@@ -1753,8 +1761,38 @@ release() {
         > "$STATE/rel/org.ohmybahgosh.lgusb2eth0.manifest.json"
     if [ -n "${2:-}" ]; then
         cp "$2" "$STATE/rel/LG-USB-2-ETH0.sh"
-        (cd "$STATE/rel" && sha256sum LG-USB-2-ETH0.sh > SHA256SUMS)
     fi
+    # Signed checksums of what's there, as the maintainer signs each release
+    (cd "$STATE/rel" && for f in LG-USB-2-ETH0.sh app.ipk; do [ -f "$f" ] && sha256sum "$f"; done > SHA256SUMS)
+    openssl dgst -sha256 -sign "$KEYDIR/${SIGN_KEY:-key}.pem" -out "$STATE/rel/SHA256SUMS.sig" "$STATE/rel/SHA256SUMS"
+}
+
+# An update is only installed when its checksums carry the maintainer's
+# signature: none, or one from another key, stops it
+test_update_signature() {
+    cp "$SCRIPT" "$SB/copy.sh"
+    sed 's/^VERSION=.*/VERSION="9.9"/' "$SCRIPT" > "$SB/new.sh"
+    release 9.9.0 "$SB/new.sh"
+    rm -f "$STATE/rel/SHA256SUMS.sig"
+    local SCRIPT="$SB/copy.sh"
+    run update -y
+    check "unsigned: exit 1" rc_is 1
+    check "unsigned: says so" has "checksums and their signature"
+    check "unsigned: left alone" cmp -s "$SB/copy.sh" "$HERE/../LG-USB-2-ETH0.sh"
+    SIGN_KEY=other release 9.9.0 "$SB/new.sh"
+    run update -y
+    check "other key: exit 1" rc_is 1
+    check "other key: says so" has "signature doesn't match"
+    check "other key: left alone" cmp -s "$SB/copy.sh" "$HERE/../LG-USB-2-ETH0.sh"
+    # A tampered SHA256SUMS with the old signature
+    release 9.9.0 "$SB/new.sh"
+    echo "tampered" >> "$STATE/rel/LG-USB-2-ETH0.sh"
+    (cd "$STATE/rel" && sha256sum LG-USB-2-ETH0.sh > SHA256SUMS)
+    run update -y
+    check "re-hashed: refused" has "signature doesn't match"
+    check "re-hashed: left alone" cmp -s "$SB/copy.sh" "$HERE/../LG-USB-2-ETH0.sh"
+    check "the real key is built in" grep -q "^RELEASE_PUBKEY='-----BEGIN PUBLIC KEY-----" "$HERE/../LG-USB-2-ETH0.sh"
+    check "and matches the published one" sh -c "sed -n \"/^RELEASE_PUBKEY='/,/END PUBLIC KEY/p\" '$HERE/../LG-USB-2-ETH0.sh' | sed \"s/^RELEASE_PUBKEY='//; s/'\\\$//\" | cmp -s - '$HERE/../release-signing-key.pub'"
 }
 
 test_update_check() {
@@ -2755,6 +2793,7 @@ t update_script_bad_checksum test_update_script_bad_checksum
 t update_app test_update_app
 t update_app_devtemp test_update_app_devtemp
 t update_app_bad_checksum test_update_app_bad_checksum
+t update_signature test_update_signature
 t update_app_bad_manifest test_update_app_bad_manifest
 t private_run_dir test_private_run_dir
 t hook_is_link_to_copy test_hook_is_link_to_copy
@@ -2797,6 +2836,7 @@ t test_driver_k6lp test_test_driver_k6lp
 t test_driver_unclaimed test_test_driver_unclaimed
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
+rm -rf "$KEYDIR"
 echo
 echo "$MODE: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ] || { echo "Failed:$FAILED_NAMES"; exit 1; }

@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.17"
+VERSION="2.11.18"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -70,6 +70,22 @@ AUTOBIND_HOOK="$INIT_DIR/90-r8152-oot"
 # repos you added) in its web storage.
 APP_ID="org.ohmybahgosh.lgusb2eth0"
 RELEASES="${LGU2E_RELEASES:-https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases}"
+# Every release's SHA256SUMS is signed with this key (RSA 3072), whose
+# private half never leaves the maintainer's computer, so an update is only
+# installed when its checksums were signed there, not just published on
+# GitHub.  Also in release-signing-key.pub.  LGU2E_RELEASE_PUBKEY (a file)
+# is for testing only.
+RELEASE_PUBKEY='-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAyK541GW+mCR+BVxNIDGR
+m+lwsRpEsWdhJnoqMOa7RmylmSkxGPtB6uN0DAiZnYfbG5CWLJyp3Pk21PPply9i
+javzAlz9+D08z14Js9jcBIb8r/WzGec+t5Ccl0C8oDgnfxss4m7G9fz/skWPwAh7
+pckmITHnCxnhXknjvObgCDwLZi2YeBliuwOIyuMx/KhQZI5GUqn4hvu0OLm17ZQt
+iREyXE6Wvwo+fc9z+my7+lxvDrDssgU7jKvqTmIV1j+idRVlR2rhRIA/f9QFTM9/
+yxLcF2HQtFtN3mIm673wpNfJCdirqcxTFsFqC5BtWjlmc7vq27tADDdZsOEvceXc
+9TuD9B5jR62e3vmbFuJ6OClcONDzxsDXYCj8/GYIxzeRAKjHsjlOCTQLmWg6GVND
+Yw4aNkw3F4+jJTCVTlDzbirJHRLsVoM4qU2S716hMyhfIfzLhyFgJYJPwjoE0Xdn
+/XtE863h8EgvWX0kenozo0N+0KNGU8TviWcX9hV4HjQnAgMBAAE=
+-----END PUBLIC KEY-----'
 REPO_URL="https://ohmybahgosh.dev/repo"
 HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
 # Kept while --wifi-fallback has turned Wi-Fi on, so it's turned off again
@@ -3633,6 +3649,27 @@ latest_release() {
 
 file_sha() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
 
+# release_sums: download this release's SHA256SUMS and check its signature
+# against RELEASE_PUBKEY, into $RELEASE_SUMS.  Stops the update if anything
+# doesn't check out.  sums_get NAME then gives that file's checksum.
+RELEASE_SUMS="$RUN_DIR/lg-usb-2-eth0-update.sums"
+release_sums() {
+    command -v openssl >/dev/null 2>&1 || error_exit "Updating needs openssl to check the release's signature, and this TV doesn't have it.  Update from the Homebrew Channel instead.  Nothing changed."
+    _rk="$RUN_DIR/lg-usb-2-eth0-release.pub"
+    _ru="$RELEASES/download/v$LATEST_VERSION"
+    if ! fetch "$RELEASE_SUMS" "$_ru/SHA256SUMS" || ! fetch "$RELEASE_SUMS.sig" "$_ru/SHA256SUMS.sig"; then
+        rm -f "$RELEASE_SUMS" "$RELEASE_SUMS.sig"
+        error_exit "Couldn't download $LATEST_VERSION's checksums and their signature.  A release is signed a few minutes after it comes out, so try again shortly.  Nothing changed."
+    fi
+    if [ -n "${LGU2E_RELEASE_PUBKEY:-}" ]; then cp "$LGU2E_RELEASE_PUBKEY" "$_rk"; else printf '%s\n' "$RELEASE_PUBKEY" > "$_rk"; fi
+    if ! openssl dgst -sha256 -verify "$_rk" -signature "$RELEASE_SUMS.sig" "$RELEASE_SUMS" > /dev/null 2>&1; then
+        rm -f "$RELEASE_SUMS" "$RELEASE_SUMS.sig" "$_rk"
+        error_exit "$LATEST_VERSION's signature doesn't match the key built into LG-USB-2-ETH0, so it wasn't installed.  Nothing changed."
+    fi
+    rm -f "$RELEASE_SUMS.sig" "$_rk"
+}
+sums_get() { awk -v n="$1" '$2 == n || $2 == "*" n { print $1; exit }' "$RELEASE_SUMS" 2>/dev/null; }
+
 update_check() {
     _kind=$(install_kind)
     _cur=$(current_version)
@@ -3696,6 +3733,11 @@ update_app() {
     _ipkd=$RUN_DIR
     [ -d "${LGU2E_ROOT}/media/developer/temp" ] && _ipkd="${LGU2E_ROOT}/media/developer/temp/lg-usb-2-eth0"
     private_dir "$_ipkd" || error_exit "Could not make a private folder for the download ($_ipkd).  Nothing changed."
+    # The manifest's checksum has to match the signed one
+    release_sums
+    _signed=$(sums_get "${LATEST_IPK##*/}")
+    rm -f "$RELEASE_SUMS"
+    [ -n "$_signed" ] && [ "$_signed" = "$LATEST_SHA" ] || error_exit "The app's checksum isn't in $LATEST_VERSION's signed checksums.  Nothing changed."
     _ipk="$_ipkd/lg-usb-2-eth0-update.ipk"
     info "Downloading $LATEST_IPK"
     fetch "$_ipk.part" "$LATEST_IPK" || { rm -f "$_ipk.part"; error_exit "Download failed.  Nothing changed."; }
@@ -3738,16 +3780,16 @@ fi"
 update_script() {
     _self=$(self_path)
     _new="$RUN_DIR/lg-usb-2-eth0-update.sh"
-    _sums="$RUN_DIR/lg-usb-2-eth0-update.sums"
     _url="$RELEASES/download/v$LATEST_VERSION"
     info "Downloading $_url/LG-USB-2-ETH0.sh"
-    if ! fetch "$_new" "$_url/LG-USB-2-ETH0.sh" || ! fetch "$_sums" "$_url/SHA256SUMS"; then
-        rm -f "$_new" "$_sums"
+    release_sums
+    if ! fetch "$_new" "$_url/LG-USB-2-ETH0.sh"; then
+        rm -f "$_new" "$RELEASE_SUMS"
         error_exit "Download failed.  Nothing changed."
     fi
-    _want=$(awk '$2 ~ /LG-USB-2-ETH0\.sh$/ {print $1; exit}' "$_sums")
+    _want=$(sums_get LG-USB-2-ETH0.sh)
     _got=$(file_sha "$_new")
-    rm -f "$_sums"
+    rm -f "$RELEASE_SUMS"
     if [ -z "$_want" ] || [ "$_got" != "$_want" ]; then
         rm -f "$_new"
         error_exit "Checksum mismatch (got $_got, expected ${_want:-nothing}).  The file was deleted and nothing changed."
