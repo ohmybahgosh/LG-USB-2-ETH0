@@ -15,6 +15,10 @@ the README and its badge in step with them.
       the result is "works", moves that driver's row from EXPERIMENTAL_DRIVERS
       to TESTED_DRIVERS and runs update.  Prints what it moved, or why not.
 
+  scripts/drivers.py demote FOLDER/FILE
+      Moves a tested driver back to the ones waiting for testers (when it
+      turns out not to work after all), and runs update.
+
 Nothing from the report is copied into the script: it only picks a row that
 is already there, by folder, file and the start of its SHA-256.
 """
@@ -246,6 +250,27 @@ def promote(report_file):
     return 0
 
 
+def demote(spec):
+    fo, _, f = spec.partition('/')
+    src = open(SCRIPT).read()
+    exp, em = table(src, 'EXPERIMENTAL_DRIVERS')
+    tested, tm = table(src, 'TESTED_DRIVERS')
+    hit = [r for r in tested if folder(r[0], r[1]) == fo and r[2] == f]
+    if len(hit) != 1:
+        print('%s matches no tested driver.' % spec)
+        return 2
+    row = hit[0]
+    tested.remove(row)
+    exp.append(row)
+    fmt = lambda rows: '\n'.join(' '.join(r) for r in rows)
+    for m2, rows in sorted(((em, exp), (tm, tested)), key=lambda x: -x[0].start(1)):
+        src = src[:m2.start(1)] + fmt(rows) + src[m2.end(1):]
+    open(SCRIPT, 'w').write(src)
+    update()
+    print('Moved %s back to EXPERIMENTAL_DRIVERS.' % spec)
+    return 0
+
+
 if __name__ == '__main__':
     a = sys.argv[1:]
     if a[:1] == ['check']:
@@ -254,6 +279,8 @@ if __name__ == '__main__':
     if a[:1] == ['update']:
         update()
         sys.exit(0)
+    if a[:1] == ['demote'] and len(a) == 2:
+        sys.exit(demote(a[1]))
     if a[:1] == ['promote'] and len(a) == 2:
         sys.exit(promote(a[1]))
     sys.exit(__doc__)

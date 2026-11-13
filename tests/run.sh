@@ -2286,8 +2286,9 @@ test_test_driver_router() {
     check "pinged the router out the adapter" grep -q -- "-I eth1 192.168.1.1" "$STATE/ping.log"
 }
 
-# Wi-Fi on the same network: the router's ping replies are dropped on the
-# adapter, but it answers ARP there (a 2022 UQ76, issue #27)
+# The router answers the adapter's ARP but not its ping: not enough to call
+# it working.  A 2022 UQ76's driver did that and carried no internet at all
+# (issue #27).  The report shows it, with the packet counters
 test_test_driver_router_arp() {
     drvtest_setup
     echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
@@ -2296,9 +2297,10 @@ test_test_driver_router_arp() {
     touch "$STATE/ping_noroute" "$STATE/ping_fail_192.168.1.1"
     echo "eth1 192.168.1.1 lladdr 00:11:22:33:44:55 REACHABLE" > "$STATE/neigh"
     LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
-    check "result works" dt_is "result=works"
-    check "through ARP" dt_is "ping=router-arp"
+    check "not counted as working" dt_is "result=no-internet"
+    check "says the router answered ARP" dt_is "ping=router-arp"
     check "report names the router" has "Router:   192.168.1.1"
+    check "report has the counters" has "Counters: rx"
 }
 
 # No ARP answer either: it really isn't getting through

@@ -2,6 +2,15 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.22] - 2026-11-13
+
+### Fixed
+
+- **The UQ76 driver is back to waiting for testers.**  2.11.20 offered the Realtek driver for kernel `5.4.96-115.22.meru.2` (K8Lp) as tested, but with it as the TV's only connection the adapter got an address and nothing else: no internet, no speed test, no video (issue #27).  **Get the faster driver** no longer offers it on that kernel.
+- **Test a new driver no longer passes a driver on an ARP answer alone.**  2.11.19 counted the router answering the adapter's ARP as working when the ping failed.  That's what let the driver above through, so it's reported again as "no internet", with the router's ARP answer in the report.
+- The driver test report now has the adapter's packet counters and the TV's checksum error counts from before and after the ping, to show whether packets arrive and are thrown away or never arrive.
+- `scripts/drivers.py demote` moves a tested driver back to the ones waiting for testers.
+
 ## [2.11.21] - 2026-11-13
 
 ### Security

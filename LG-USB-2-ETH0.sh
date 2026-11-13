@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.21"
+VERSION="2.11.22"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -862,6 +862,16 @@ drv_gateway() {
     _gs=$(cm_service ethernet "$(sysval "$NET/$1/address")") || return 0
     connmanctl services "$_gs" 2>/dev/null | sed -n 's/^ *IPv4 = \[.*Gateway=\([0-9.]*\).*/\1/p' | head -n 1
 }
+# drv_counters IF: the adapter's packet counts and the TV's checksum errors,
+# to see, when nothing gets through, whether packets come in and are thrown
+# away (bad checksums) or never arrive
+drv_counters() {
+    _cs="$NET/$1/statistics"
+    printf 'rx %s/err %s/drop %s, tx %s/err %s, csum errors %s' \
+        "$(sysval "$_cs/rx_packets")" "$(sysval "$_cs/rx_errors")" "$(sysval "$_cs/rx_dropped")" \
+        "$(sysval "$_cs/tx_packets")" "$(sysval "$_cs/tx_errors")" \
+        "$(awk '$1 ~ /^(Icmp|Tcp|Udp):$/ { if (!h[$1]) { for (i = 2; i <= NF; i++) c[$1, $i] = i; h[$1] = 1; next } n = c[$1, "InCsumErrors"]; s = s substr($1, 1, length($1) - 1) "=" (n ? $n : "?") " " } END { sub(/ $/, "", s); print s }' /proc/net/snmp 2>/dev/null)"
+}
 # drv_neigh_ok IF ADDR: ADDR answered IF's ARP (its MAC is known on IF)
 drv_neigh_ok() {
     ip neigh show dev "$1" 2>/dev/null | awk -v a="$2" '$1 == a && /lladdr/ && !/FAILED|INCOMPLETE/ { f = 1 } END { exit !f }'
@@ -956,7 +966,7 @@ drv_try() {
         fi
     fi
     _dtn=$(find_usb_nic)
-    _dtv="" _dtc="" _dts="" _dta=no _dtp="" _dtg="" _dtrp=""
+    _dtv="" _dtc="" _dts="" _dta=no _dtp="" _dtg="" _dtrp="" _dtx0="" _dtx1=""
     if [ -n "$_dtn" ]; then
         _dtv=$(nic_driver "$_dtn")
         _dtc=$(sysval "$NET/$_dtn/carrier" 2>/dev/null)
@@ -968,6 +978,7 @@ drv_try() {
             169.254.*) _dta=169.254-only ;;
             *)
                 _dta=yes
+                _dtx0=$(drv_counters "$_dtn")
                 if ! command -v ping >/dev/null 2>&1; then _dtp=skipped
                 elif ping -c 3 -W 3 -I "$_dtn" 1.1.1.1 > /dev/null 2>&1; then _dtp=ok
                 else
@@ -979,23 +990,22 @@ drv_try() {
                     # No gateway from webOS for it: try the one the TV uses
                     [ -n "$_dgw" ] || _dgw=$(ip route 2>/dev/null | awk '/^default/ { for (i = 2; i < NF; i++) if ($i == "via") { print $(i + 1); exit } }')
                     if [ -n "$_dgw" ] && ping -c 3 -W 3 -I "$_dtn" "$_dgw" > /dev/null 2>&1; then _dtp=router
-                    # With Wi-Fi on the same network, the TV can drop the
-                    # router's ping replies on the adapter (reverse path
-                    # filtering: it expects them on Wi-Fi), while the router
-                    # still answers it.  Its ARP answer, which isn't
-                    # filtered, shows the adapter sends and receives (a 2022
-                    # UQ76, issue #27).
+                    # The router answered the adapter's ARP but not its ping.
+                    # That isn't enough: a 2022 UQ76's driver got an address
+                    # and ARP answers, yet carried no internet traffic at all
+                    # (issue #27), so it's reported, not counted as working
                     elif [ -n "$_dgw" ] && drv_neigh_ok "$_dtn" "$_dgw"; then _dtp=router-arp
                     else _dtp=failed
                     fi
                     _dtg=$_dgw
+                    _dtx1=$(drv_counters "$_dtn")
                     _dtrp="$(cat /proc/sys/net/ipv4/conf/all/rp_filter 2>/dev/null)/$(cat "/proc/sys/net/ipv4/conf/$_dtn/rp_filter" 2>/dev/null)"
                 fi ;;
         esac
     fi
     if [ "$_dtd" = no ]; then _dtr=no-load
     elif [ "$_dtv" != "$DRIVER" ]; then _dtr=not-used
-    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ] || [ "$_dtp" = router ] || [ "$_dtp" = router-arp ]; then _dtr=works
+    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ] || [ "$_dtp" = router ]; then _dtr=works
     elif [ "$_dtc" = 1 ]; then _dtr=no-internet
     else _dtr=no-link
     fi
@@ -1016,6 +1026,7 @@ drv_try() {
         echo "ping=$_dtp"
         [ -n "$_dtg" ] && echo "gateway=$_dtg"
         [ -n "$_dtrp" ] && echo "rpfilter=$_dtrp"
+        [ -n "$_dtx1" ] && echo "counters=$_dtx0 -> $_dtx1"
         # What the kernel said about it, with MAC addresses hidden
         dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|ax88|asix|dm96|lan78|symbol|oops|bug|trace' | tail -n 20 \
             | sed 's/\(\([0-9a-fA-F]\{2\}:\)\{3\}\)\([0-9a-fA-F]\{2\}:\)\{2\}[0-9a-fA-F]\{2\}/\1xx:xx:xx/g; s/^/dmesg=/'
@@ -2028,8 +2039,7 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
 4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
 4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
-4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
-5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
+4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -2394,7 +2404,8 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
 4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
 4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
-4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b"
+4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b
+5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -2532,6 +2543,8 @@ drvtest_report() {
         echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $_dls, address $(drvtest_get address), ping $(drvtest_get ping)"
         _rg=$(drvtest_get gateway)
         [ -n "$_rg" ] && echo "Router:   $_rg (rp_filter $(drvtest_get rpfilter))"
+        _rc=$(drvtest_get counters)
+        [ -n "$_rc" ] && echo "Counters: $_rc"
         if grep -q '^dmesg=' "$DRVTEST_FILE" 2>/dev/null; then
             echo "Kernel log:"
             sed -n 's/^dmesg=/  /p' "$DRVTEST_FILE"
