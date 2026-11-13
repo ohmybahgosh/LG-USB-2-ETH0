@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.18"
+VERSION="2.11.19"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -844,6 +844,10 @@ drv_gateway() {
     _gs=$(cm_service ethernet "$(sysval "$NET/$1/address")") || return 0
     connmanctl services "$_gs" 2>/dev/null | sed -n 's/^ *IPv4 = \[.*Gateway=\([0-9.]*\).*/\1/p' | head -n 1
 }
+# drv_neigh_ok IF ADDR: ADDR answered IF's ARP (its MAC is known on IF)
+drv_neigh_ok() {
+    ip neigh show dev "$1" 2>/dev/null | awk -v a="$2" '$1 == a && /lladdr/ && !/FAILED|INCOMPLETE/ { f = 1 } END { exit !f }'
+}
 # real_ipv4 IF: an address from the network, not a 169.254 one the TV gives
 # itself when DHCP doesn't answer (a C2's adapter did after a restart), which
 # goes nowhere
@@ -934,7 +938,7 @@ drv_try() {
         fi
     fi
     _dtn=$(find_usb_nic)
-    _dtv="" _dtc="" _dts="" _dta=no _dtp=""
+    _dtv="" _dtc="" _dts="" _dta=no _dtp="" _dtg="" _dtrp=""
     if [ -n "$_dtn" ]; then
         _dtv=$(nic_driver "$_dtn")
         _dtc=$(sysval "$NET/$_dtn/carrier" 2>/dev/null)
@@ -954,15 +958,26 @@ drv_try() {
                     # no route to 1.1.1.1 (a 2022 UQ76, issue #25).  The router
                     # it got its address from answering shows it works.
                     _dgw=$(drv_gateway "$_dtn")
+                    # No gateway from webOS for it: try the one the TV uses
+                    [ -n "$_dgw" ] || _dgw=$(ip route 2>/dev/null | awk '/^default/ { for (i = 2; i < NF; i++) if ($i == "via") { print $(i + 1); exit } }')
                     if [ -n "$_dgw" ] && ping -c 3 -W 3 -I "$_dtn" "$_dgw" > /dev/null 2>&1; then _dtp=router
+                    # With Wi-Fi on the same network, the TV can drop the
+                    # router's ping replies on the adapter (reverse path
+                    # filtering: it expects them on Wi-Fi), while the router
+                    # still answers it.  Its ARP answer, which isn't
+                    # filtered, shows the adapter sends and receives (a 2022
+                    # UQ76, issue #27).
+                    elif [ -n "$_dgw" ] && drv_neigh_ok "$_dtn" "$_dgw"; then _dtp=router-arp
                     else _dtp=failed
                     fi
+                    _dtg=$_dgw
+                    _dtrp="$(cat /proc/sys/net/ipv4/conf/all/rp_filter 2>/dev/null)/$(cat "/proc/sys/net/ipv4/conf/$_dtn/rp_filter" 2>/dev/null)"
                 fi ;;
         esac
     fi
     if [ "$_dtd" = no ]; then _dtr=no-load
     elif [ "$_dtv" != "$DRIVER" ]; then _dtr=not-used
-    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ] || [ "$_dtp" = router ]; then _dtr=works
+    elif [ "$_dtp" = ok ] || [ "$_dtp" = skipped ] || [ "$_dtp" = router ] || [ "$_dtp" = router-arp ]; then _dtr=works
     elif [ "$_dtc" = 1 ]; then _dtr=no-internet
     else _dtr=no-link
     fi
@@ -981,6 +996,8 @@ drv_try() {
         echo "speed=$_dts"
         echo "address=$_dta"
         echo "ping=$_dtp"
+        [ -n "$_dtg" ] && echo "gateway=$_dtg"
+        [ -n "$_dtrp" ] && echo "rpfilter=$_dtrp"
         # What the kernel said about it, with MAC addresses hidden
         dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|ax88|asix|dm96|lan78|symbol|oops|bug|trace' | tail -n 20 \
             | sed 's/\(\([0-9a-fA-F]\{2\}:\)\{3\}\)\([0-9a-fA-F]\{2\}:\)\{2\}[0-9a-fA-F]\{2\}/\1xx:xx:xx/g; s/^/dmesg=/'
@@ -2464,6 +2481,8 @@ drvtest_report() {
         _dls=$(drvtest_get speed)
         case "$_dls" in ''|-1|*[!0-9]*) _dls=unknown ;; *) _dls="${_dls}M" ;; esac
         echo "After:    $(drvtest_get iface) on $(drvtest_get driver), carrier $(drvtest_get carrier), link $_dls, address $(drvtest_get address), ping $(drvtest_get ping)"
+        _rg=$(drvtest_get gateway)
+        [ -n "$_rg" ] && echo "Router:   $_rg (rp_filter $(drvtest_get rpfilter))"
         if grep -q '^dmesg=' "$DRVTEST_FILE" 2>/dev/null; then
             echo "Kernel log:"
             sed -n 's/^dmesg=/  /p' "$DRVTEST_FILE"

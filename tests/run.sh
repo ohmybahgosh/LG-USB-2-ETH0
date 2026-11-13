@@ -2238,6 +2238,34 @@ test_test_driver_router() {
     check "pinged the router out the adapter" grep -q -- "-I eth1 192.168.1.1" "$STATE/ping.log"
 }
 
+# Wi-Fi on the same network: the router's ping replies are dropped on the
+# adapter, but it answers ARP there (a 2022 UQ76, issue #27)
+test_test_driver_router_arp() {
+    drvtest_setup
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    printf '*AR Wired                ethernet_6c1ff7000001_cable\n' > "$STATE/cm_services"
+    echo 192.168.1.1 > "$STATE/cm_gateway"
+    touch "$STATE/ping_noroute" "$STATE/ping_fail_192.168.1.1"
+    echo "eth1 192.168.1.1 lladdr 00:11:22:33:44:55 REACHABLE" > "$STATE/neigh"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "result works" dt_is "result=works"
+    check "through ARP" dt_is "ping=router-arp"
+    check "report names the router" has "Router:   192.168.1.1"
+}
+
+# No ARP answer either: it really isn't getting through
+test_test_driver_router_silent() {
+    drvtest_setup
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    printf '*AR Wired                ethernet_6c1ff7000001_cable\n' > "$STATE/cm_services"
+    echo 192.168.1.1 > "$STATE/cm_gateway"
+    touch "$STATE/ping_noroute" "$STATE/ping_fail_192.168.1.1"
+    echo "eth1 192.168.1.1 FAILED" > "$STATE/neigh"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "no internet" dt_is "result=no-internet"
+    check "ping failed" dt_is "ping=failed"
+}
+
 # Only a 169.254 address: the router never answered
 test_test_driver_self_address() {
     drvtest_setup
@@ -2822,6 +2850,8 @@ t driver_offer_states test_driver_offer_states
 t test_driver_works test_test_driver_works
 t test_driver_router test_test_driver_router
 t test_driver_self_address test_test_driver_self_address
+t test_driver_router_arp test_test_driver_router_arp
+t test_driver_router_silent test_test_driver_router_silent
 t no_tr_escape_ranges test_no_tr_escape_ranges
 t module_path_hint test_module_path_hint
 t test_driver_reconnects test_test_driver_reconnects

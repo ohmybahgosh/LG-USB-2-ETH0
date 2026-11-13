@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.19] - 2026-11-13
+
+### Fixed
+
+- **Test a new driver could say "no internet" for a driver that works.**  When the adapter is still eth1 and the TV's Wi-Fi is on the same network, the TV can drop the router's ping replies on the adapter, because it expects traffic from the router on Wi-Fi (reverse path filtering).  If the router's ping doesn't come back but the router answered the adapter's ARP, the adapter is sending and receiving, so the test now counts that as working.  If webOS doesn't list a router for the adapter, the test uses the TV's own.  The report now also shows the router it checked and the TV's rp_filter setting (issue #27).
+
 ## [2.11.18] - 2026-11-12
 
 ### Security

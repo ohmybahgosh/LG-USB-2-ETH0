@@ -6,6 +6,7 @@
 #   ip link set dev IF name NEW
 #   ip -o -4 addr show [dev IF]
 #   ip route
+#   ip neigh show dev IF
 # A file $FAKE_STATE/fail_rename_IF holding a number makes that many renames
 # of IF fail with "Device or resource busy", like webOS's connection manager
 # bringing the interface back up between down and rename.
@@ -62,6 +63,10 @@ case "$1" in
         exit 0 ;;
     route)
         [ -f "$FAKE_STATE/route" ] && cat "$FAKE_STATE/route"
+        exit 0 ;;
+    neigh)
+        # ip neigh show dev IF: $FAKE_STATE/neigh holds "IF line" pairs
+        [ -f "$FAKE_STATE/neigh" ] && awk -v d="$4" '$1 == d { $1 = ""; sub(/^ /, ""); print }' "$FAKE_STATE/neigh"
         exit 0 ;;
 esac
 fail "fake ip does not support: $*"
