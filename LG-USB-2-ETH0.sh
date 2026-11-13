@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.19"
+VERSION="2.11.20"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -257,6 +257,9 @@ WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
 WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
 # and seconds each try waits for an address once it's connected
 WAKE_ADDR_SECS=${LGU2E_WAKE_ADDR_SECS:-10}
+# Seconds the adapter gets to have an address once it's eth0, before checking
+# it, not Wi-Fi, has the TV's connection
+ADDR_SECS=${LGU2E_ADDR_SECS:-20}
 # and seconds between checks that the adapter is still first, ahead of Wi-Fi
 WAKE_KEEP_SECS=${LGU2E_WAKE_KEEP_SECS:-10}
 # and seconds an adapter goes without an address from the router before it
@@ -1286,6 +1289,37 @@ wake_keep_first() {
     fi
 }
 
+# adapter_first: after "Switch now" puts the adapter in as eth0, make it the
+# TV's connection.  With
+# Wi-Fi already connected and checked online, ConnMan can keep the internet
+# on Wi-Fi even though the adapter is up with its own address (a 2022 UQ76
+# after "Switch now", issue #27: the speed test ran over wlan0).  If the
+# adapter has no address after a while, ask ConnMan to connect it.
+adapter_first() {
+    is_usb_nic eth0 && [ "$(sysval "$NET/eth0/carrier")" = 1 ] || return 0
+    _fus=$(cm_service ethernet "$(sysval "$NET/eth0/address")") || _fus=""
+    _ft=0
+    while [ "$_ft" -lt "$ADDR_SECS" ] && ! real_ipv4 eth0 > /dev/null; do
+        [ "$_ft" = $((ADDR_SECS / 2)) ] && [ -n "$_fus" ] && connmanctl connect "$_fus" > /dev/null 2>&1
+        sleep 1
+        _ft=$((_ft + 1))
+    done
+    if ! real_ipv4 eth0 > /dev/null; then
+        _fd=$(def_iface)
+        echo "The adapter has no address from the router yet${_fd:+, so the TV's internet stays on $_fd}."
+        return 0
+    fi
+    _fd=$(def_iface)
+    [ -n "$_fd" ] && [ "$_fd" != eth0 ] && is_wifi "$_fd" || return 0
+    _fws=$(cm_service wifi "$(sysval "$NET/$_fd/address")" active) || return 0
+    [ -n "$_fus" ] || return 0
+    if connmanctl move-before "$_fus" "$_fws" > /dev/null 2>&1; then
+        echo "Wi-Fi had the TV's internet, so the adapter is first now."
+    else
+        echo "Wi-Fi still has the TV's internet: couldn't put the adapter ahead of it."
+    fi
+}
+
 # The adapter has a cable but only a 169.254 address: DHCP didn't answer when
 # it connected.  After WAKE_DHCP_SECS, reconnect its session so it asks the
 # router again, then at most every 5 times as long.  When to try next is
@@ -1979,7 +2013,8 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
 4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
 4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
-4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2"
+4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
+5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -2029,7 +2064,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.96-115.16.mebbin.2 k8lp ax88179_178a.ko 365a58e4f3985ed47eb8323e68c1b6d137525a113834d8862a9d6185acecaaee
 5.4.96-115.22.meru.2 k8hpt r8152_oot.ko 85483420c645c546cef952101254911409a813aec1b7b3701b5b13a5da421ea9
 5.4.96-115.22.meru.2 k8hpt ax88179_178a.ko 60756f6439644a6eaca3566c8d11b10355b78a7c837239c2bd41b204444c2094
-5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99
 5.4.96-115.22.meru.2 k8lp ax88179_178a.ko 76d2ae8749b8c5ecaf0849d5f65414fe897996342f2960ce804d37c29615606b
 5.4.96-115.28.1.22.mirima.2 k8ap r8152_oot.ko 01e46f3241637977fe2c7539199b81b224a006631d572059b9b38b52714876ee
 5.4.96-115.28.1.22.mirima.2 k8ap ax88179_178a.ko 90ef60771f0e328675a3c36e8445d9eaa8e9ea9522744d45f63fbe79b73c3820
@@ -3031,12 +3065,12 @@ apply_now() {
     use_hook_driver
     if [ -n "$DRIVER" ]; then
         rm -f "$TAKEOVER_STATE"
-        run_detached "load_module; take_over; wait_for_nic; swap_in"
+        run_detached "load_module; take_over; wait_for_nic; swap_in && adapter_first"
     elif [ "$REALTEK_MODE" = 1 ]; then
         rm -f "$TAKEOVER_STATE"
-        run_detached "realtek_mode; wait_for_nic; swap_in"
+        run_detached "realtek_mode; wait_for_nic; swap_in && adapter_first"
     else
-        run_detached swap_in
+        run_detached "swap_in && adapter_first"
     fi
 }
 revert_now() { preflight; run_detached swap_out; }
@@ -3883,6 +3917,9 @@ show_report() {
         _rs=$(sysval "$_rp/speed" 2>/dev/null)
         case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
         [ "$(sysval "$_rp/duplex" 2>/dev/null)" = half ] && _rl="$_rl half-duplex"
+        # Its address, last number hidden: shows whether it has one from the router
+        _ra=$(iface_ipv4 "$_rn")
+        [ -n "$_ra" ] && _rl="$_rl ipv4=$(echo "${_ra%/*}" | sed 's/\.[0-9]*$/.x/')"
         if [ "$_rk" = usb ]; then
             _rl="$_rl id=$(sysval "$_rp/device/../idVendor"):$(sysval "$_rp/device/../idProduct") bus=$(speed_label "$(sysval "$_rp/device/../speed")")"
         fi

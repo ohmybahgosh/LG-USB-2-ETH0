@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.20] - 2026-11-13
+
+### Added
+
+- **A faster Realtek driver for the 2022 UQ76 (kernel `5.4.96-115.22.meru.2`, K8Lp chip).**  izoT3P's TP-Link UE300 tested it working (issue #27), so **Get the faster driver** now offers it on that kernel and chip.
+
+### Fixed
+
+- **After Switch now, the TV's internet could stay on Wi-Fi.**  With Wi-Fi already connected, webOS's connection manager kept the internet on Wi-Fi even with the adapter up as eth0 (issue #27: the speed test ran over wlan0).  Once the adapter is eth0, Switch now now waits for it to get an address, ask the connection manager to connect it if it doesn't, and put it ahead of Wi-Fi.
+- The report shows each interface's address, with the last number hidden, so it's clear whether the adapter has one from the router.
+
 ## [2.11.19] - 2026-11-13
 
 ### Fixed

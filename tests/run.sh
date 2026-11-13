@@ -174,7 +174,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
@@ -188,7 +188,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -767,6 +767,42 @@ test_wifi_wake_keeps_adapter_first() {
     stop_bg
 }
 
+# "Switch now" with Wi-Fi already connected: ConnMan kept the internet on
+# Wi-Fi though the adapter was eth0 with an address (a 2022 UQ76, issue #27)
+test_apply_puts_adapter_first() {
+    wake_setup
+    echo "default via 192.168.1.1 dev wlan0" > "$STATE/route"
+    run apply -y
+    check "says done" has "Done: the USB adapter is eth0"
+    check "adapter first" has "Wi-Fi had the TV's internet, so the adapter is first now"
+    check "moved it" cm_has "connmanctl move-before $WAKE_US $WAKE_WS"
+    check "route on eth0" grep -q "dev eth0" "$STATE/route"
+    run report
+    check "report shows its address" has "ipv4=192.168.1.x"
+}
+
+# Already first: nothing to move
+test_apply_adapter_already_first() {
+    wake_setup
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run apply -y
+    check "says done" has "Done: the USB adapter is eth0"
+    check "no move" cm_lacks "move-before"
+}
+
+# No address yet: ConnMan is asked to connect it, and Wi-Fi is left alone
+# until it has one
+test_apply_adapter_no_address() {
+    wake_setup
+    printf '3: wlan0 inet 192.168.1.50/24\n' > "$STATE/addr"
+    touch "$STATE/cm_noconnect"
+    echo "default via 192.168.1.1 dev wlan0" > "$STATE/route"
+    run apply -y
+    check "asked to connect" cm_has "connmanctl connect $WAKE_US"
+    check "says why" has "The adapter has no address from the router yet, so the TV's internet stays on wlan0"
+    check "no move" cm_lacks "move-before"
+}
+
 # After a restart a C2's adapter got only a 169.254 address (no DHCP answer)
 # and webOS used Wi-Fi.  The keep-first check must not put that dead link
 # first, and the adapter asks the router again.
@@ -1323,6 +1359,9 @@ t wifi_wake test_wifi_wake
 t wifi_wake_right_away test_wifi_wake_right_away
 t wifi_wake_wifi_ready test_wifi_wake_wifi_ready
 t wifi_wake_keeps_adapter_first test_wifi_wake_keeps_adapter_first
+t apply_puts_adapter_first test_apply_puts_adapter_first
+t apply_adapter_already_first test_apply_adapter_already_first
+t apply_adapter_no_address test_apply_adapter_no_address
 t wifi_wake_link_local test_wifi_wake_link_local
 t default_route_scope_link test_default_route_scope_link
 t wifi_wake_skips test_wifi_wake_skips
