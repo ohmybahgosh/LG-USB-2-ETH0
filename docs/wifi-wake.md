@@ -106,7 +106,7 @@ It tries up to 10 times, 3 seconds apart, and logs why each try didn't work.  If
 
 **In the TV app**, the status screen shows **Wi-Fi wake in standby** turned on, and any problem it finds.
 
-**Over SSH**:
+**Over SSH, on the TV**:
 
 ```sh
 # Is the follower running?  Three processes: the follower, its keep-first check, and luna-send
@@ -189,7 +189,7 @@ That stops the follower right away.  **Turn everything off** (`uninstall`) stops
 
 ## For developers
 
-- The follower is started detached (`setsid`), and its PIDs are kept in `/tmp/lg-usb-2-eth0/lg-usb-2-eth0.wake.pid`, `.wake.pid.keep` and `.wake.pid.luna`.
+- The follower is started detached (`setsid`), and its PIDs are kept on the TV in `/tmp/lg-usb-2-eth0/lg-usb-2-eth0.wake.pid`, `.wake.pid.keep` and `.wake.pid.luna`.
 - Power states come from `luna-send -i luna://com.webos.service.tvpower/power/getPowerState '{"subscribe":true}'`.  If that ends, it subscribes again 10 seconds later.
 - The Turn on via Wi-Fi setting is read from ConnMan's `WOLWOWLMode` over the system bus with `busctl`, or webOS's `wolwowlOnOff` setting when `busctl` can't tell.  On a C2 the bus socket is at `/var/run/dbus/system_bus_socket`, which `busctl` doesn't look at on its own.
 - Handing over is `connmanctl disconnect` on the adapter's service.  Coming back is `connmanctl connect` and `connmanctl move-before` with the Wi-Fi service.
