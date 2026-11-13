@@ -152,7 +152,7 @@ cd /tmp
 # Download the latest release and its checksum
 curl -fsSLO https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest/download/LG-USB-2-ETH0.sh
 curl -fsSLO https://github.com/ohmybahgosh/LG-USB-2-ETH0/releases/latest/download/SHA256SUMS
-sha256sum -c SHA256SUMS
+grep ' LG-USB-2-ETH0.sh$' SHA256SUMS | sha256sum -c -
 
 # See what the TV has before changing anything (read-only)
 sh LG-USB-2-ETH0.sh status
@@ -732,7 +732,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | `get-driver` | Downloads a driver module known to work on your exact kernel, if there is one, and checks its checksum.  With `--file PATH`, checks and uses a copy you downloaded yourself.  See [A faster driver](#a-faster-driver). |
 | `test-driver` | Tries a new driver built for your exact kernel that hasn't run on a TV yet, if there is one: downloads and checks it, loads it until the next restart only, moves the adapter to it, checks it gets online, and shows a report to send.  `--last` shows the last test's report again, including after a test that froze the TV.  See [More drivers on the way](#more-drivers-on-the-way). |
 | `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
-| `update` | Checks for a newer release and installs it, after checking its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
+| `update` | Checks for a newer release and installs it, once the release's signature checks out and the download matches its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
 
 <details>
 <summary><b>Options</b></summary>

@@ -102,7 +102,7 @@ To preview the TV app in a desktop browser, open `webos-app/src/index.html` with
 
 ## Things that look like bugs but are on purpose
 
-- `SHA256SUMS` covers the script only, so `sha256sum -c SHA256SUMS` works on the TV with just the script downloaded.
+- `SHA256SUMS` covers the script, the IPK and its manifest, and `SHA256SUMS.sig` is its signature (release-signing-key.pub, see SECURITY.md).  With just the script downloaded, check it with `grep ' LG-USB-2-ETH0.sh$' SHA256SUMS | sha256sum -c -`.
 - The report QR code opens `github.com/login?return_to=...`: the GitHub phone apps take over plain repository links and drop the form fields.
 - "Options used" in the compatibility form is a text box: GitHub won't fill a multiple-choice dropdown from a link.  A dropdown option can't be called "None" either (GitHub reserves it and silently opens a blank issue instead); `tests/check-issue-forms.py` catches that.
 - `status --json` picks `wlan*` for Wi-Fi, never `p2p*` (Wi-Fi Direct).
