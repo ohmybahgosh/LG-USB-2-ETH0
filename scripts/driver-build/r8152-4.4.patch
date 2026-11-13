@@ -1,3 +1,6 @@
+r8152-4.4.patch: lets Realtek's r8152 v2.22.1 build on LG's 4.4 kernels.
+A change to GPL-2.0 code, so this patch is GPL-2.0 too (SPDX-License-Identifier: GPL-2.0-only).
+
 --- a/compatibility.h
 +++ b/compatibility.h
 @@ -695,3 +695,26 @@

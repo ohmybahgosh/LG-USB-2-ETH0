@@ -903,4 +903,4 @@ Thanks also to the [webOS Homebrew](https://www.webosbrew.org/) project for the 
 
 ## License
 
-MIT.  See [LICENSE](LICENSE).  Made by **OhMyBahGosh** ([@ohmybahgosh](https://github.com/ohmybahgosh)).  Not affiliated with LG Electronics.
+MIT.  See [LICENSE](LICENSE).  The one exception is [`scripts/driver-build/r8152-4.4.patch`](scripts/driver-build/r8152-4.4.patch), a change to Realtek's GPL-2.0 driver, which is GPL-2.0 like it.  The driver modules `get-driver` downloads are GPL-2.0 too, and [lg-webos-usb-drivers](https://github.com/ohmybahgosh/lg-webos-usb-drivers) says where each one's source is.  Made by **OhMyBahGosh** ([@ohmybahgosh](https://github.com/ohmybahgosh)).  Not affiliated with LG Electronics.
