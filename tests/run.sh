@@ -2301,6 +2301,7 @@ test_test_driver_router_arp() {
     check "says the router answered ARP" dt_is "ping=router-arp"
     check "report names the router" has "Router:   192.168.1.1"
     check "report has the counters" has "Counters: rx"
+    check "suggests the router's ARP table" has "delete that address from its ARP table"
 }
 
 # Only answers with the adapter promiscuous: it drops packets addressed to

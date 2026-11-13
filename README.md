@@ -318,6 +318,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 |---------|------|-----------|--------|
 | [UGREEN USB-C to 2.5G Ethernet (Amazon)](https://www.amazon.com/dp/B0CD1FDKT1) | Realtek RTL8156BG (`0bda:8156`) | 2022 C2, webOS 25, USB 2.0 port | Works.  272 Mbit/s down, 287 up with `r8152_oot` (it's on `cdc_ncm` without it) |
 | RTL8153 adapter ([#23](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/23)) | Realtek RTL8153 (`0bda:8153`) | 2024 C4 (OLED65C4PTA), webOS 25, USB 2.0 port | Works with `r8152_oot` from `get-driver`.  277 Mbit/s down, 286 up, 3 ms, and webOS shows the wired connection |
+| TP-Link UE300 ([#27](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/27)) | Realtek RTL8153 (`2357:0601`) | 2022 UQ76 (43UQ76009LC), webOS 22, USB 2.0 port | Works with `r8152_oot` from `get-driver`, built here for that TV's kernel, since it has no Realtek driver.  283 Mbit/s down, 311 up, 2 ms |
 | TP-Link UE306 V1.6 ([discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [Amazon](https://www.amazon.com/dp/B09GRL3VCN)) | ASIX AX88179 (`0b95:1790`) | 2020 UN7300 (55UN7300PUF), webOS 5, USB 2.0 port | Works with OCT0PUSCRIME's `ax88179_178a` build from `get-driver`, since that kernel has no ASIX driver.  228 Mbit/s down, 325 up |
 | TP-Link UE306 ([Reddit](https://www.reddit.com/r/webos/s/mNSsjbQGqN)) | ASIX AX88179 | 2024 C4 (OLED65C46LA), USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver.  About 300 Mbit/s, and webOS now shows "wired network connected" |
 | RTL8153 adapter ([#7](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/7)) | Realtek RTL8153 (`0bda:8153`) | 2024 G4 (OLED65G46LA), webOS 24, USB 2.0 port | Works on the TV's own `r8152` once Realtek mode moves it off `cdc_ncm`.  293 Mbit/s down, 285 up, 3 ms, and webOS shows the wired connection |
@@ -415,7 +416,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**352 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**351 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -435,7 +436,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 352 drivers: 51 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
+<summary><b>All 351 drivers: 51 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
 
 <br>
 
@@ -448,6 +449,12 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 | Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
 |---|---|:-:|:-:|---|
 | `5.4.268-320` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-320) | yes |  |  |
+
+**Reported working, now offered by get-driver: webOS 22**
+
+| Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
+|---|---|:-:|:-:|---|
+| `5.4.96-115.22.meru.2` | [K8Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8lp) | yes |  |  |
 
 **Reported working, now offered by get-driver: webOS 5**
 
@@ -597,6 +604,7 @@ Don't expect gigabit.  The TV's USB port is the limit.  On a C2 at full speed, t
 | AX88179 on a 2024 G4 (webOS 25, USB 2.0), the TV's own driver | 292 Mbit/s down, 51 up | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
 | RTL8153 on a 2024 G4 (webOS 24, USB 2.0), the TV's own `r8152` | 293 Mbit/s down, 285 up, 3 ms (284 and 292 with `r8152_oot`) | [#7](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/7), [#8](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/8) |
 | Cable Matters RTL8153 on a 2020 UN7300 (webOS 5, USB 2.0) with the K6Lp `r8152` build | 184 Mbit/s down, 229 up, 10 ms | [#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6) |
+| TP-Link UE300 (RTL8153) on a 2022 UQ76 (webOS 22, USB 2.0) with `r8152_oot` built here | 283 Mbit/s down, 311 up, 2 ms | [#27](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/27) |
 | TP-Link UE306 (AX88179) on a 2020 UN7300 (webOS 5, USB 2.0) with OCT0PUSCRIME's driver | 228 Mbit/s down, 325 up, 14 ms | [Discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3) |
 
 </details>
@@ -685,6 +693,8 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 **Link only 100 Mbit/s?**  `status` and the app flag it.  The adapter connected to your router or switch at 100 Mbit/s, so it's no faster than the built-in port.  It's usually the cable: flat and older cables often have only two of the four wire pairs.  Try a Cat5e or better cable, another port, or check the router's port speed.
 
 **Both cables plugged in?**  Unplug the built-in one.  With two wired links up, traffic can take the slower port.
+
+**The adapter has an address, but no internet, while the built-in port works?**  Your router may still match that address to another device's MAC.  It happens when the router's DHCP hands the adapter an address something else had before, like your other adapter or the built-in port, and its ARP table keeps the old MAC (issue #27, a MikroTik).  The TV can then talk to devices that reach it first, but nothing it starts gets an answer.  Restart the router, or delete that address's entry from its ARP table, or give the adapter its own reserved address.
 
 **Settings still say "Not Connected", or no IP?**  Run `status`.  If the adapter is `eth0` but has no IPv4 address, give webOS a moment, then try unplugging and replugging the network cable.
 

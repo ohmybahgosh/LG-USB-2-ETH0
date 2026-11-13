@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.25] - 2026-11-13
+
+### Added
+
+- **The faster driver for the 2022 UQ76 is back, and confirmed this time.**  The Realtek driver for kernel `5.4.96-115.22.meru.2` on the K8Lp chip works: izoT3P's TP-Link UE300 runs at 283 Mbit/s down and 311 up as the TV's eth0 (issue #27).  It never was the driver.  His router was still matching the adapter's address to an older adapter's MAC, so it sent its answers there.  **Get the faster driver** offers it on that kernel and chip again, and the UE300 is in the tested adapters and real speeds tables.
+
+### Changed
+
+- **When the router answers the adapter but not its pings, the driver test says what to try:** restart the router, or delete that address from its ARP table.  The README's Troubleshooting has the same.
+
 ## [2.11.24] - 2026-11-13
 
 ### Changed

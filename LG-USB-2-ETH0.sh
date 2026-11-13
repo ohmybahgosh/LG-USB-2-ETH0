@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.24"
+VERSION="2.11.25"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2055,7 +2055,8 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
 4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
 4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
-4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2"
+4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
+5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -2420,8 +2421,7 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
 4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
 4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
-4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b
-5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
+4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -2573,6 +2573,14 @@ drvtest_report() {
 
 drvtest_show() {
     info "Driver test: $(drvtest_says "$(drvtest_get result)")."
+    # The router answered the adapter's ARP but nothing else: most often the
+    # router still matches this address to another device's MAC (issue #27)
+    if [ "$(drvtest_get result)" = no-internet ] && [ "$(drvtest_get ping)" = router-arp ]; then
+        echo "The router answered the adapter, but not its pings.  Your router may still match"
+        echo "this address to another device's MAC (an old adapter, or the built-in port)."
+        echo "Restart the router, or delete that address from its ARP table, and test again."
+        echo
+    fi
     echo "Please send the report below, whatever the result: it's how a driver gets"
     echo "added for this kernel.  Paste it into a driver test report:"
     echo "  $DRVTEST_FORM"
