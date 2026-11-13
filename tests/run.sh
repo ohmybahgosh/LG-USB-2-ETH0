@@ -2303,6 +2303,22 @@ test_test_driver_router_arp() {
     check "report has the counters" has "Counters: rx"
 }
 
+# Only answers with the adapter promiscuous: it drops packets addressed to
+# it (issue #27).  Reported, still not working, and promiscuous turned off
+test_test_driver_promisc() {
+    drvtest_setup
+    echo "2: eth1 inet 192.168.1.42/24" > "$STATE/addr"
+    printf '*AR Wired                ethernet_6c1ff7000001_cable\n' > "$STATE/cm_services"
+    echo 192.168.1.1 > "$STATE/cm_gateway"
+    touch "$STATE/ping_promisc"
+    echo "eth1 192.168.1.1 lladdr 00:11:22:33:44:55 REACHABLE" > "$STATE/neigh"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "not counted as working" dt_is "result=no-internet"
+    check "promiscuous ping answered" dt_is "promisc=ok"
+    check "report says so" has "Promiscuous: router ping ok"
+    check "turned off again" grep -qx off "$STATE/promisc_eth1"
+}
+
 # No ARP answer either: it really isn't getting through
 test_test_driver_router_silent() {
     drvtest_setup
@@ -2902,6 +2918,7 @@ t test_driver_router test_test_driver_router
 t test_driver_self_address test_test_driver_self_address
 t test_driver_router_arp test_test_driver_router_arp
 t test_driver_router_silent test_test_driver_router_silent
+t test_driver_promisc test_test_driver_promisc
 t no_tr_escape_ranges test_no_tr_escape_ranges
 t module_path_hint test_module_path_hint
 t test_driver_reconnects test_test_driver_reconnects

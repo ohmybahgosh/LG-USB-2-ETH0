@@ -6,6 +6,8 @@ echo "ping $*" >> "$FAKE_STATE/ping.log"
 # $FAKE_STATE/ping_noroute: the internet isn't reachable out this interface
 # (another connection has the default route), but its router is
 case "$*" in *1.1.1.1*) [ -e "$FAKE_STATE/ping_noroute" ] && exit 1 ;; esac
+# $FAKE_STATE/ping_promisc: no answer unless an interface is promiscuous
+if [ -e "$FAKE_STATE/ping_promisc" ]; then grep -qx on "$FAKE_STATE"/promisc_* 2>/dev/null || exit 1; exit 0; fi
 # $FAKE_STATE/ping_fail_IP: no answer from that address
 for _a in "$@"; do [ -e "$FAKE_STATE/ping_fail_$_a" ] && exit 1; done
 exit 0

@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.23"
+VERSION="2.11.24"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -973,7 +973,7 @@ drv_try() {
         fi
     fi
     _dtn=$(find_usb_nic)
-    _dtv="" _dtc="" _dts="" _dta=no _dtp="" _dtg="" _dtrp="" _dtx0="" _dtx1=""
+    _dtv="" _dtc="" _dts="" _dta=no _dtp="" _dtg="" _dtrp="" _dtx0="" _dtx1="" _dtpm=""
     if [ -n "$_dtn" ]; then
         _dtv=$(nic_driver "$_dtn")
         _dtc=$(sysval "$NET/$_dtn/carrier" 2>/dev/null)
@@ -1006,6 +1006,14 @@ drv_try() {
                     fi
                     _dtg=$_dgw
                     _dtx1=$(drv_counters "$_dtn")
+                    # Still no answer: try once more with the adapter taking
+                    # every packet (promiscuous), which shows whether it
+                    # drops the ones addressed to it, while broadcasts like
+                    # ARP and DHCP get through (issue #27)
+                    if [ "$_dtp" != router ] && [ -n "$_dgw" ] && ip link set dev "$_dtn" promisc on 2>/dev/null; then
+                        if ping -c 3 -W 3 -I "$_dtn" "$_dgw" > /dev/null 2>&1; then _dtpm=ok; else _dtpm=failed; fi
+                        ip link set dev "$_dtn" promisc off 2>/dev/null
+                    fi
                     _dtrp="$(cat /proc/sys/net/ipv4/conf/all/rp_filter 2>/dev/null)/$(cat "/proc/sys/net/ipv4/conf/$_dtn/rp_filter" 2>/dev/null)"
                 fi ;;
         esac
@@ -1034,6 +1042,7 @@ drv_try() {
         [ -n "$_dtg" ] && echo "gateway=$_dtg"
         [ -n "$_dtrp" ] && echo "rpfilter=$_dtrp"
         [ -n "$_dtx1" ] && echo "counters=$_dtx0 -> $_dtx1"
+        [ -n "$_dtpm" ] && echo "promisc=$_dtpm"
         # What the kernel said about it, with MAC addresses hidden
         dmesg 2>/dev/null | tail -n +$((_dtl + 1)) | grep -iE 'r8152|usb|eth|cdc|ax88|asix|dm96|lan78|symbol|oops|bug|trace' | tail -n 20 \
             | sed 's/\(\([0-9a-fA-F]\{2\}:\)\{3\}\)\([0-9a-fA-F]\{2\}:\)\{2\}[0-9a-fA-F]\{2\}/\1xx:xx:xx/g; s/^/dmesg=/'
@@ -2552,6 +2561,8 @@ drvtest_report() {
         [ -n "$_rg" ] && echo "Router:   $_rg (rp_filter $(drvtest_get rpfilter))"
         _rc=$(drvtest_get counters)
         [ -n "$_rc" ] && echo "Counters: $_rc"
+        _rpm=$(drvtest_get promisc)
+        [ -n "$_rpm" ] && echo "Promiscuous: router ping $_rpm"
         if grep -q '^dmesg=' "$DRVTEST_FILE" 2>/dev/null; then
             echo "Kernel log:"
             sed -n 's/^dmesg=/  /p' "$DRVTEST_FILE"

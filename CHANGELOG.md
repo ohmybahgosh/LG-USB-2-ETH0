@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.24] - 2026-11-13
+
+### Changed
+
+- **The driver test tries promiscuous mode when the router doesn't answer.**  izoT3P's 2.11.23 report (issue #27) shows the adapter sending and receiving, with nothing thrown away by the TV, but no answer to a single ping.  That fits an adapter that drops packets addressed to it while broadcasts like ARP and DHCP get through.  When the router's ping fails, the test now pings it once more with the adapter taking every packet, puts it back, and the report says whether that got an answer.
+
 ## [2.11.23] - 2026-11-13
 
 ### Changed

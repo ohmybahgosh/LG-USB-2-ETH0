@@ -28,6 +28,9 @@ case "$1" in
                 [ -e "$NET/$_if" ] || { echo "Cannot find device \"$_if\"" >&2; exit 1; }
                 _dir=$(readlink -f "$NET/$_if")
                 case "$5" in
+                    promisc)
+                        echo "$6" > "$FAKE_STATE/promisc_$_if"
+                        exit 0 ;;
                     up|down)
                         echo "$5" > "$_dir/operstate"
                         # $FAKE_STATE/dhcp_on_up: webOS reconnects once the link goes up again
