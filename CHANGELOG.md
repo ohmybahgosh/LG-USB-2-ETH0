@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.21] - 2026-11-13
+
+### Security
+
+- **A backup release key.**  The script now accepts a release signed with either the main release key or a backup key whose private half is kept offline (`release-signing-key-backup.pub`).  Releases are still signed with the main key.  If that key is ever lost, a release signed with the backup can bring in a new one, so TVs on 2.11.21 or newer keep updating instead of refusing every update.  SECURITY.md has both keys' fingerprints.
+
+### Changed
+
+- A driver test report posted as a comment on a driver test issue now opens the pull request that offers the driver, like one in the issue itself, when it's from the person who opened the issue or the maintainer (issue #27's working report was a comment, so it was promoted by hand).
+
 ## [2.11.20] - 2026-11-13
 
 ### Added

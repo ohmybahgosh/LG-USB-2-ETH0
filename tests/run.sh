@@ -42,6 +42,8 @@ KEYDIR=$(mktemp -d)
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEYDIR/key.pem" 2>/dev/null
 openssl pkey -in "$KEYDIR/key.pem" -pubout -out "$KEYDIR/key.pub" 2>/dev/null
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEYDIR/other.pem" 2>/dev/null
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$KEYDIR/backup.pem" 2>/dev/null
+openssl pkey -in "$KEYDIR/backup.pem" -pubout -out "$KEYDIR/backup.pub" 2>/dev/null
 
 PASS=0
 FAIL=0
@@ -176,7 +178,7 @@ run() {
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
-        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub" \
+        LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub $KEYDIR/backup.pub" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
     OUT=$(cat "$SB/out")
@@ -1832,6 +1834,13 @@ test_update_signature() {
     check "re-hashed: left alone" cmp -s "$SB/copy.sh" "$HERE/../LG-USB-2-ETH0.sh"
     check "the real key is built in" grep -q "^RELEASE_PUBKEY='-----BEGIN PUBLIC KEY-----" "$HERE/../LG-USB-2-ETH0.sh"
     check "and matches the published one" sh -c "sed -n \"/^RELEASE_PUBKEY='/,/END PUBLIC KEY/p\" '$HERE/../LG-USB-2-ETH0.sh' | sed \"s/^RELEASE_PUBKEY='//; s/'\\\$//\" | cmp -s - '$HERE/../release-signing-key.pub'"
+    check "the backup key is built in" sh -c "sed -n \"/^RELEASE_PUBKEY_BACKUP='/,/END PUBLIC KEY/p\" '$HERE/../LG-USB-2-ETH0.sh' | sed \"s/^RELEASE_PUBKEY_BACKUP='//; s/'\\\$//\" | cmp -s - '$HERE/../release-signing-key-backup.pub'"
+    check "the two keys differ" sh -c "! cmp -s '$HERE/../release-signing-key.pub' '$HERE/../release-signing-key-backup.pub'"
+    # Signed with the backup key: installed
+    SIGN_KEY=backup release 9.9.0 "$SB/new.sh"
+    run update -y
+    check "backup key: exit 0" rc_is 0
+    check "backup key: installed" grep -q '^VERSION="9.9"' "$SB/copy.sh"
 }
 
 test_update_check() {

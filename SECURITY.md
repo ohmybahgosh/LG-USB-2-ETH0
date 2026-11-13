@@ -35,11 +35,13 @@ Apart from `get-driver`, `test-driver` and `update`, it doesn't download anythin
 
 Every release has a `SHA256SUMS` file covering the script, the TV app's IPK and its manifest, and from 2.11.18 on a `SHA256SUMS.sig`: a signature over it, made with the release key on the maintainer's own computer after the release is published.  The key never touches GitHub, so a release on GitHub that someone else changed, or one they published, doesn't carry a valid signature.
 
-The public key is [`release-signing-key.pub`](release-signing-key.pub) (RSA 3072, SHA-256 of the key: `0a06c2822105ed4c7938a98b75feee45888a750711bd7a536dc31da0b8b5ef3f`), and it's also built into the script, which checks the signature itself before `update` installs anything.  To check a release by hand, download the files next to the key and run:
+The public key is [`release-signing-key.pub`](release-signing-key.pub) (RSA 3072, SHA-256 of the key: `0a06c2822105ed4c7938a98b75feee45888a750711bd7a536dc31da0b8b5ef3f`), and it's also built into the script, which checks the signature itself before `update` installs anything.
+
+There's also a backup key, [`release-signing-key-backup.pub`](release-signing-key-backup.pub) (RSA 3072, SHA-256 of the key: `bdb13143ce3284e7f32a4925a619e84130a77139ef5243cbf18929d04aed464a`), whose private half is kept offline.  From 2.11.21 on, the script accepts a signature from either key.  Releases are signed with the main key.  The backup is only for the case where the main key is lost: a release signed with it can bring in a new main key, so TVs keep updating.  To check a release by hand, download the files next to the key and run:
 
 ```sh
 openssl dgst -sha256 -verify release-signing-key.pub -signature SHA256SUMS.sig SHA256SUMS
 sha256sum -c SHA256SUMS
 ```
 
-The first should print `Verified OK`.  Updates through the Homebrew Channel are checked by the Homebrew Channel against the SHA-256 in the repository's listing, not against this signature.
+The first should print `Verified OK`.  If a release was ever signed with the backup key, check it with `release-signing-key-backup.pub` instead.  Updates through the Homebrew Channel are checked by the Homebrew Channel against the SHA-256 in the repository's listing, not against this signature.

@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.20"
+VERSION="2.11.21"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -73,8 +73,8 @@ RELEASES="${LGU2E_RELEASES:-https://github.com/ohmybahgosh/LG-USB-2-ETH0/release
 # Every release's SHA256SUMS is signed with this key (RSA 3072), whose
 # private half never leaves the maintainer's computer, so an update is only
 # installed when its checksums were signed there, not just published on
-# GitHub.  Also in release-signing-key.pub.  LGU2E_RELEASE_PUBKEY (a file)
-# is for testing only.
+# GitHub.  Also in release-signing-key.pub.  LGU2E_RELEASE_PUBKEY (files,
+# space-separated) is for testing only.
 RELEASE_PUBKEY='-----BEGIN PUBLIC KEY-----
 MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAyK541GW+mCR+BVxNIDGR
 m+lwsRpEsWdhJnoqMOa7RmylmSkxGPtB6uN0DAiZnYfbG5CWLJyp3Pk21PPply9i
@@ -85,6 +85,21 @@ yxLcF2HQtFtN3mIm673wpNfJCdirqcxTFsFqC5BtWjlmc7vq27tADDdZsOEvceXc
 9TuD9B5jR62e3vmbFuJ6OClcONDzxsDXYCj8/GYIxzeRAKjHsjlOCTQLmWg6GVND
 Yw4aNkw3F4+jJTCVTlDzbirJHRLsVoM4qU2S716hMyhfIfzLhyFgJYJPwjoE0Xdn
 /XtE863h8EgvWX0kenozo0N+0KNGU8TviWcX9hV4HjQnAgMBAAE=
+-----END PUBLIC KEY-----'
+# The backup key (release-signing-key-backup.pub), whose private half is kept
+# offline.  A signature from it is accepted too, so if the main key is ever
+# lost, a release signed with the backup can bring in a new main key and
+# TVs keep updating
+RELEASE_PUBKEY_BACKUP='-----BEGIN PUBLIC KEY-----
+MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAtSKJE2q7Og/90gDjFD5X
+hwPI+Uj1RT6tCtnWPdu8X99/4G3HDTmgs/1B3+dhDCgGRTcgeNfhNaZpQSiwI5j4
+W0yIzbLE52QUdhcdAHuuw9W6BlpLwfFS4jvP8zgqts3N5ySdppvNXHeJquOGgJxv
+czcj+Q674qipMAbMlPL2J9S01+bPeAvG4tL++w33bF2ANTr35rKlI7MkkwVjQj0T
+Kjlwp99fUhGBk/YZf2haGYRKffZ6OG6aSiAIoPDDmNOHGM7+IM3lfVRXcDkcxnrl
+2AXo2kW5EOgbuLhEi17Jfzwh6h35ufDgt27GeR4cOHnntQGXUIc64xhwWv4Op1Tp
+tkSWfYcTm/y8sU171SFtKRKjufKu9Yp/P3iCLOa3hVR0D4klaJ0qLmPR4Z1T233j
+diOEiDcuV6t1QW85O2KgYWYfB9NXcbk8TAswAOYIafR1b1d41OsMHed2svo0+Hve
+zZ0zQ5JVx4qGhCDRIbNoPPWDRZptmUz+Ve1+2uWwOtjlAgMBAAE=
 -----END PUBLIC KEY-----'
 REPO_URL="https://ohmybahgosh.dev/repo"
 HBC_STORAGE="${LGU2E_ROOT}/var/lib/wam/Default/Local Storage/leveldb"
@@ -3714,10 +3729,22 @@ release_sums() {
         rm -f "$RELEASE_SUMS" "$RELEASE_SUMS.sig"
         error_exit "Couldn't download $LATEST_VERSION's checksums and their signature.  A release is signed a few minutes after it comes out, so try again shortly.  Nothing changed."
     fi
-    if [ -n "${LGU2E_RELEASE_PUBKEY:-}" ]; then cp "$LGU2E_RELEASE_PUBKEY" "$_rk"; else printf '%s\n' "$RELEASE_PUBKEY" > "$_rk"; fi
-    if ! openssl dgst -sha256 -verify "$_rk" -signature "$RELEASE_SUMS.sig" "$RELEASE_SUMS" > /dev/null 2>&1; then
+    # Either key's signature will do: the main one, or the backup
+    _rok=""
+    for _rn in 1 2; do
+        if [ -n "${LGU2E_RELEASE_PUBKEY:-}" ]; then
+            # shellcheck disable=SC2086 # a list of files
+            set -- $LGU2E_RELEASE_PUBKEY
+            [ "$_rn" = 2 ] && { [ $# -ge 2 ] || continue; shift; }
+            cp "$1" "$_rk" || continue
+        elif [ "$_rn" = 1 ]; then printf '%s\n' "$RELEASE_PUBKEY" > "$_rk"
+        else printf '%s\n' "$RELEASE_PUBKEY_BACKUP" > "$_rk"
+        fi
+        openssl dgst -sha256 -verify "$_rk" -signature "$RELEASE_SUMS.sig" "$RELEASE_SUMS" > /dev/null 2>&1 && { _rok=1; break; }
+    done
+    if [ -z "$_rok" ]; then
         rm -f "$RELEASE_SUMS" "$RELEASE_SUMS.sig" "$_rk"
-        error_exit "$LATEST_VERSION's signature doesn't match the key built into LG-USB-2-ETH0, so it wasn't installed.  Nothing changed."
+        error_exit "$LATEST_VERSION's signature doesn't match the keys built into LG-USB-2-ETH0, so it wasn't installed.  Nothing changed."
     fi
     rm -f "$RELEASE_SUMS.sig" "$_rk"
 }
