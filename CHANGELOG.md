@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.23] - 2026-11-13
+
+### Changed
+
+- **More detail in the driver test's Counters line.**  izoT3P's 2.11.22 report (issue #27) showed packets arriving at the adapter with no checksum errors, so they're lost somewhere after that.  The line now also has the adapter's packets with no handler for their type, and the TV's IP counts (received, header and address errors, discarded) and ICMP counts (received, echo replies), to show where.
+
 ## [2.11.22] - 2026-11-13
 
 ### Fixed

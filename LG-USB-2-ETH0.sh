@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.22"
+VERSION="2.11.23"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -862,15 +862,22 @@ drv_gateway() {
     _gs=$(cm_service ethernet "$(sysval "$NET/$1/address")") || return 0
     connmanctl services "$_gs" 2>/dev/null | sed -n 's/^ *IPv4 = \[.*Gateway=\([0-9.]*\).*/\1/p' | head -n 1
 }
-# drv_counters IF: the adapter's packet counts and the TV's checksum errors,
-# to see, when nothing gets through, whether packets come in and are thrown
-# away (bad checksums) or never arrive
+# drv_counters IF: the adapter's packet counts and the TV's own IP and ICMP
+# counts, to see, when nothing gets through, where packets go: never
+# arriving (rx doesn't grow), arriving but with no handler for their type
+# (nohandler), thrown away by IP (hdrerr, addrerr, discard) or for a bad
+# checksum (csum), or delivered (icmp echoreps grows)
 drv_counters() {
     _cs="$NET/$1/statistics"
-    printf 'rx %s/err %s/drop %s, tx %s/err %s, csum errors %s' \
-        "$(sysval "$_cs/rx_packets")" "$(sysval "$_cs/rx_errors")" "$(sysval "$_cs/rx_dropped")" \
+    printf 'rx %s/err %s/drop %s/nohandler %s, tx %s/err %s, %s' \
+        "$(sysval "$_cs/rx_packets")" "$(sysval "$_cs/rx_errors")" "$(sysval "$_cs/rx_dropped")" "$(sysval "$_cs/rx_nohandler")" \
         "$(sysval "$_cs/tx_packets")" "$(sysval "$_cs/tx_errors")" \
-        "$(awk '$1 ~ /^(Icmp|Tcp|Udp):$/ { if (!h[$1]) { for (i = 2; i <= NF; i++) c[$1, $i] = i; h[$1] = 1; next } n = c[$1, "InCsumErrors"]; s = s substr($1, 1, length($1) - 1) "=" (n ? $n : "?") " " } END { sub(/ $/, "", s); print s }' /proc/net/snmp 2>/dev/null)"
+        "$(awk 'function g(k, f) { return (k SUBSEP f) in c ? v[k, c[k, f]] : "?" }
+            $1 ~ /^(Ip|Icmp|Tcp|Udp):$/ { k = $1; if (!h[k]) { for (i = 2; i <= NF; i++) c[k, $i] = i; h[k] = 1; next } for (i = 2; i <= NF; i++) v[k, i] = $i }
+            END { printf "ip in %s hdrerr %s addrerr %s discard %s, icmp in %s echoreps %s, csum errors Icmp=%s Tcp=%s Udp=%s",
+                g("Ip:", "InReceives"), g("Ip:", "InHdrErrors"), g("Ip:", "InAddrErrors"), g("Ip:", "InDiscards"),
+                g("Icmp:", "InMsgs"), g("Icmp:", "InEchoReps"),
+                g("Icmp:", "InCsumErrors"), g("Tcp:", "InCsumErrors"), g("Udp:", "InCsumErrors") }' /proc/net/snmp 2>/dev/null)"
 }
 # drv_neigh_ok IF ADDR: ADDR answered IF's ARP (its MAC is known on IF)
 drv_neigh_ok() {
