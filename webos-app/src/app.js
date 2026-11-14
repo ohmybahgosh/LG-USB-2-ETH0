@@ -182,8 +182,9 @@
 
     // webOS 26 no longer lets homebrew apps reach the Homebrew Channel's
     // root service, until the Homebrew Channel ships its own fix.  The
-    // script, run once as root, backports that fix, and the boot hook keeps
-    // it.  The app can't do that first step itself (it has no way to root
+    // script's app-access command, run once by the user over SSH, puts
+    // this app (only this one) in the Homebrew Channel's group.  Nothing
+    // does that on its own: it's the user's choice.  The app can't do that first step itself (it has no way to root
     // yet), so it shows the steps with a QR code for a phone, and checks
     // again every few seconds, carrying on by itself once it can.
     var SETUP_DOC = REPO + '/blob/main/docs/webos-26-setup.md';
@@ -207,7 +208,7 @@
         return '<div class="qr qr-setup">' + qr + '<ol class="steps">' +
             '<li>' + esc(T('In the Homebrew Channel, open Settings and turn on SSH Server.')) + '</li>' +
             '<li>' + withCode(T('From a phone or computer on the same network, connect with {cmd}  The password is alpine unless you changed it.', { cmd: CMD }), 'ssh root@' + (tvIp || T('<TV IP address>'))) + '</li>' +
-            '<li>' + withCode(T('Run {cmd}', { cmd: CMD }), 'sh ' + SCRIPT + ' status') + '</li>' +
+            '<li>' + withCode(T('Run {cmd}', { cmd: CMD }), 'sh ' + SCRIPT + ' app-access') + '</li>' +
             '<li>' + esc(T('That\'s it.  This screen notices and carries on by itself.')) + '</li>' +
             '</ol></div>' +
             '<p class="setup-scan">' + esc(T('Scan the code for these steps on your phone, ready to copy.')) + '</p>';
@@ -217,7 +218,7 @@
         if (overlayMode === 'setup') { return; }
         if (overlayMode) { return; }
         overlay('setup', T('One quick setup step for webOS 26'),
-            '<p>' + esc(T('webOS 26 keeps homebrew apps away from root until the Homebrew Channel gets an update.  One command over SSH fixes it for this app and your other homebrew apps, and it stays fixed.')) + '</p>' + setupBody(),
+            '<p>' + esc(T('webOS 26 keeps homebrew apps away from root until the Homebrew Channel gets an update.  One command over SSH lets this app back in.')) + '</p>' + setupBody(),
             T('Checking every few seconds.  OK checks now, BACK exits.'));
         // The TV's address, for the ssh line, if webOS will tell the app
         luna('luna://com.webos.service.connectionmanager/getStatus', {}, function (r) {

@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.28"
+VERSION="2.11.29"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -204,6 +204,9 @@ Commands (no command opens the menu):
               kernel, if there is one: download and check it, load it
               until the next restart, move the adapter to it, and show a
               report to send.  With --last, show the last test's report
+  app-access  webOS 26 only, if the TV app says it can't reach the TV as
+              root: let the app use the Homebrew Channel again.  Changes
+              only the app's own permissions, and only when you run it
   version     Print the version
 
 Options:
@@ -2873,40 +2876,41 @@ app_lang_sync() {
 }
 
 # webOS 26 (webOS 11) no longer puts homebrew apps in the "public" group, so
-# they can't reach the Homebrew Channel's root service and say they can't
-# reach the TV as root, even on a rooted TV (issue #32).  The Homebrew
-# Channel fixed this upstream (webosbrew PR #233, merged August 2026) but
-# hasn't released it yet.  Until it does, every run as root:
-#  1. Backports that fix: the Homebrew Channel's service also goes in
-#     lunabus.query, a group every app still has, so every homebrew app can
-#     reach it again, not just this one.
-#  2. Puts this app in org.webosbrew.hbchannel.service.group, which the
-#     Homebrew Channel's own app has.
-# then has the Luna bus reread its permissions.  The boot hook runs it at every
-# boot, so it comes back if an update drops it.  Only files in the one-line
-# layout webOS writes are changed, and a newer Homebrew Channel that already
-# has the fix is left alone.
+# this app can't reach the Homebrew Channel's root service and says it can't
+# reach the TV as root, even on a rooted TV (issue #32).  `app-access`, run
+# by the user over SSH, puts this app (and only this app) in
+# org.webosbrew.hbchannel.service.group, which the Homebrew Channel's own app
+# has, and has the Luna bus reread its permissions.  It never runs on its own,
+# not even from the boot hook: it's the user's choice.  Nothing belonging to
+# the Homebrew Channel or other apps is changed, so the Homebrew Channel's own
+# updates are unaffected.  Only a file in the one-line layout webOS writes is
+# changed.
 HBC_GROUP="org.webosbrew.hbchannel.service.group"
 HBC_SVC="org.webosbrew.hbchannel.service"
-hbc_backport() {
+# 2.11.28 also added a permissions file to the Homebrew Channel itself.  That
+# was the wrong call: this script leaves other people's apps alone.
+# `app-access` takes it back out where it's provably ours: the exact file
+# 2.11.28 wrote, listed first in the manifest the way 2.11.28 put it, on a
+# Homebrew Channel 0.7.3 or older (a newer one may make the same file itself).
+# With "check", only says whether it's there.
+hbc_undo_backport() {
     _ld="${LGU2E_ROOT}/var/luna-service2-dev"
     _mf="$_ld/manifests.d/org.webosbrew.hbchannel.json"
     _af="$_ld/api-permissions.d/$HBC_SVC.api.lunabus.query.json"
-    [ -f "$_mf" ] && [ ! -L "$_mf" ] && [ -w "$_mf" ] && [ -d "$_ld/api-permissions.d" ] || return 1
+    [ -f "$_af" ] && [ ! -L "$_af" ] || return 1
+    [ "$(cat "$_af" 2>/dev/null)" = "{\"lunabus.query\":[\"$HBC_SVC/*\"]}" ] || return 1
+    [ -f "$_mf" ] && [ ! -L "$_mf" ] && [ -w "$_mf" ] || return 1
     _mc=$(cat "$_mf" 2>/dev/null)
-    case "$_mc" in *"$_af"*) [ -f "$_af" ] && return 1 ;; esac
-    [ "$(printf '%s' "$_mc" | grep -o '"apiPermissionFiles":\[' | wc -l)" -eq 1 ] || return 1
-    case "$_mc" in *'
-'*) return 1 ;; esac
-    if [ ! -f "$_af" ]; then
-        printf '{"lunabus.query":["%s/*"]}\n' "$HBC_SVC" > "$_af" 2>/dev/null || { rm -f "$_af"; return 1; }
-    fi
-    case "$_mc" in *"$_af"*) return 0 ;; esac
+    case "$_mc" in *'"version":"0.'[0-6].*|*'"version":"0.7.'[0-3]'"'*) ;; *) return 1 ;; esac
+    case "$_mc" in *"\"apiPermissionFiles\":[\"$_af\","*) ;; *) return 1 ;; esac
+    [ "$1" = check ] && return 0
     _mt="$_mf.new.$$"
-    if ! { printf '%s\n' "$_mc" | sed "s|\"apiPermissionFiles\":\[|&\"$_af\",|" > "$_mt" && grep -q "$_af" "$_mt" && mv -f "$_mt" "$_mf"; }; then
+    # Without a newline at the end, as the Homebrew Channel writes it
+    if ! { printf '%s' "$_mc" | sed "s|\"apiPermissionFiles\":\[\"$_af\",|\"apiPermissionFiles\":[|" > "$_mt" && ! grep -q "$_af" "$_mt" && mv -f "$_mt" "$_mf"; }; then
         rm -f "$_mt"
         return 1
     fi
+    rm -f "$_af"
     return 0
 }
 app_group() {
@@ -2924,13 +2928,27 @@ app_group() {
     fi
     return 0
 }
-app_hbc_access() {
+app_access() {
+    [ -n "$LGU2E_ROOT" ] || [ "$(id -u)" = 0 ] || error_exit "Run this as root on the TV (it needs a rooted TV)."
     _hc=0
-    hbc_backport && _hc=1
-    app_group && _hc=1
-    [ "$_hc" = 1 ] || return 0
-    command -v ls-control > /dev/null 2>&1 && ls-control scan-services > /dev/null 2>&1
-    [ -t 1 ] && log "$GREEN" "Gave homebrew apps access to the Homebrew Channel again, which webOS 26 needs.  Reopen the app."
+    if hbc_undo_backport; then
+        _hc=1
+        log "$GREEN" "Took back out the permissions file 2.11.28 added to the Homebrew Channel."
+    fi
+    _pf="${LGU2E_ROOT}/var/luna-service2-dev/client-permissions.d/$APP_ID.app.json"
+    if app_group; then
+        _hc=1
+        log "$GREEN" "The TV app can reach the Homebrew Channel now.  Reopen the app."
+    elif [ ! -f "$_pf" ]; then
+        log "$YELLOW" "The TV app isn't installed, so there's nothing to change."
+    elif grep -q "$HBC_GROUP" "$_pf" 2>/dev/null; then
+        log "$GREEN" "The TV app already has access to the Homebrew Channel."
+    else
+        log "$YELLOW" "The TV app's permissions file isn't in the layout this script knows, so it was left alone."
+    fi
+    if [ "$_hc" = 1 ] && command -v ls-control > /dev/null 2>&1; then
+        ls-control scan-services > /dev/null 2>&1
+    fi
     return 0
 }
 
@@ -3458,6 +3476,7 @@ show_status() {
             status_note "Firmware updates aren't blocked.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel."
         fi
     fi
+    hbc_undo_backport check && status_note "Version 2.11.28 added a file to the Homebrew Channel's permissions.  Run app-access to take it back out."
     [ -f "$WIFI_MARK" ] && status_note "The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link.  It turns Wi-Fi off again once the cable works for ${WIFI_BACK_SECS}s."
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."
     if [ "$_usb" = eth0 ]; then
@@ -4196,14 +4215,13 @@ while [ $# -gt 0 ]; do
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|update) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|update|app-access) CMD=$1 ;;
         *) usage; error_exit "Unknown option: $1" ;;
     esac
     shift
 done
 
 app_lang_sync
-app_hbc_access
 case "$CMD" in
     install) install_fix ;;
     uninstall) uninstall_fix ;;
@@ -4217,5 +4235,6 @@ case "$CMD" in
     test-driver) test_driver ;;
     speedtest) speed_test ;;
     update) if [ "$CHECK_ONLY" = 1 ]; then update_check; else update_now; fi ;;
+    app-access) app_access ;;
     "") main_menu ;;
 esac

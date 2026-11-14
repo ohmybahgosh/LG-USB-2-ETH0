@@ -566,58 +566,82 @@ test_cdc_ncm_duplex() {
     check "json duplex is empty" json_ok "$OUT" "d['adapter']['duplex'] in ('', None)"
 }
 
-# webOS 26 needs the app in the Homebrew Channel's group to reach it (#32)
+# webOS 26 needs the app in the Homebrew Channel's group to reach it (#32).
+# Only app-access does that, and only to this app's own file.
 test_hbc_access() {
     add_builtin eth2
     _pd="$ROOT/var/luna-service2-dev/client-permissions.d"
     mkdir -p "$_pd"
     _pf="$_pd/org.ohmybahgosh.lgusb2eth0.app.json"
-    echo '{"org.ohmybahgosh.lgusb2eth0-*":["public"]}' > "$_pf"
+    _orig='{"org.ohmybahgosh.lgusb2eth0-*":["public"]}'
+    echo "$_orig" > "$_pf"
     run status
+    check "status changes nothing" [ "$(cat "$_pf")" = "$_orig" ]
+    check "status doesn't rescan" [ ! -e "$STATE/ls-control" ]
+    run_hook
+    check "boot hook changes nothing" [ "$(cat "$_pf")" = "$_orig" ]
+    run app-access
     check "group added" grep -qx '{"org.ohmybahgosh.lgusb2eth0-\*":\["public","org.webosbrew.hbchannel.service.group"\]}' "$_pf"
+    check "says so" has "can reach the Homebrew Channel now"
     check "luna bus told" grep -qx 'scan-services' "$STATE/ls-control"
     rm -f "$STATE/ls-control"
-    run status
+    run app-access
     check "added only once" [ "$(grep -o hbchannel.service.group "$_pf" | wc -l)" -eq 1 ]
+    check "says it already has it" has "already has access"
     check "no second rescan" [ ! -e "$STATE/ls-control" ]
     echo '{"org.ohmybahgosh.lgusb2eth0-*":["public"],"other":["x"]}' > "$_pf"
-    run status
+    run app-access
     check "other layouts left alone" grep -q '"other":\["x"\]}$' "$_pf"
+    check "says it left it" has "left alone"
     check "and not rescanned" [ ! -e "$STATE/ls-control" ]
-    run status --json
-    check "json still parses" json_ok "$OUT" "'adapter' in d"
+    rm -f "$_pf"
+    run app-access
+    check "no app, nothing to do" has "isn't installed"
 }
 
-# The Homebrew Channel's own webOS 11 fix (webosbrew PR #233), backported
-test_hbc_backport() {
+# 2.11.28 added a file to the Homebrew Channel's permissions.  status points
+# it out, and app-access takes it back out, but only where it's provably the
+# one 2.11.28 wrote.  Nothing of the Homebrew Channel's is changed otherwise.
+test_hbc_undo_backport() {
     add_builtin eth2
     _ld="$ROOT/var/luna-service2-dev"
     mkdir -p "$_ld/manifests.d" "$_ld/api-permissions.d"
     _mf="$_ld/manifests.d/org.webosbrew.hbchannel.json"
     _af="$_ld/api-permissions.d/org.webosbrew.hbchannel.service.api.lunabus.query.json"
     _pub="$_ld/api-permissions.d/org.webosbrew.hbchannel.service.api.public.json"
-    printf '%s\n' "{\"version\":\"0.7.3\",\"apiPermissionFiles\":[\"$_pub\"],\"id\":\"org.webosbrew.hbchannel\"}" > "$_mf"
+    _orig="{\"version\":\"0.7.3\",\"apiPermissionFiles\":[\"$_pub\"],\"id\":\"org.webosbrew.hbchannel\"}"
+    _left="{\"version\":\"0.7.3\",\"apiPermissionFiles\":[\"$_af\",\"$_pub\"],\"id\":\"org.webosbrew.hbchannel\"}"
+    # A Homebrew Channel nobody touched stays exactly as it is
+    printf '%s\n' "$_orig" > "$_mf"
+    run app-access
+    check "manifest untouched" [ "$(cat "$_mf")" = "$_orig" ]
+    check "no file added" [ ! -e "$_af" ]
+    # What 2.11.28 left behind: status says so, and changes nothing
+    printf '%s\n' "$_left" > "$_mf"
+    echo '{"lunabus.query":["org.webosbrew.hbchannel.service/*"]}' > "$_af"
     run status
-    check "api file made" grep -qx '{"lunabus.query":\["org.webosbrew.hbchannel.service/\*"\]}' "$_af"
-    check "manifest lists it first" grep -q "\"apiPermissionFiles\":\[\"$_af\",\"$_pub\"\]" "$_mf"
-    check "manifest keeps the rest" grep -q '"id":"org.webosbrew.hbchannel"}$' "$_mf"
+    check "status points it out" has "2.11.28 added a file"
+    check "status leaves it" [ "$(cat "$_mf")" = "$_left" ]
+    run_hook
+    check "still there after the hook" [ -e "$_af" ]
+    # app-access takes it back out
+    run app-access
+    check "manifest restored" [ "$(cat "$_mf")" = "$_orig" ]
+    check "file removed" [ ! -e "$_af" ]
+    check "says so" has "Took back out"
     check "luna bus told" grep -qx 'scan-services' "$STATE/ls-control"
+    run status
+    lacks "2.11.28 added a file"
+    # A newer Homebrew Channel with its own fix is left alone
     rm -f "$STATE/ls-control"
-    run status
-    check "listed once" [ "$(grep -o 'lunabus.query.json' "$_mf" | wc -l)" -eq 1 ]
-    check "no second rescan" [ ! -e "$STATE/ls-control" ]
-    # A Homebrew Channel that already has the fix is left alone
-    rm -f "$_af"
-    printf '%s\n' "{\"apiPermissionFiles\":[\"$_af\"],\"id\":\"x\"}" > "$_mf"
-    echo '{"lunabus.query":["custom"]}' > "$_af"
-    run status
-    check "upstream file kept" grep -q custom "$_af"
+    printf '%s\n' "{\"version\":\"0.7.4\",\"apiPermissionFiles\":[\"$_af\",\"$_pub\"]}" > "$_mf"
+    echo '{"lunabus.query":["org.webosbrew.hbchannel.service/*"]}' > "$_af"
+    run app-access
+    check "0.7.4 file kept" [ -e "$_af" ]
+    check "0.7.4 manifest kept" grep -q lunabus "$_mf"
     check "not rescanned" [ ! -e "$STATE/ls-control" ]
-    # A manifest in another layout is left alone
-    rm -f "$_af"
-    printf '{\n"apiPermissionFiles":[]\n}\n' > "$_mf"
     run status
-    check "multi-line manifest untouched" [ ! -e "$_af" ]
+    lacks "2.11.28 added a file"
 }
 
 lacks_log() { ! grep -q "$1" "$LOG"; }
@@ -1423,7 +1447,7 @@ t watch_hung_adapter test_watch_hung_adapter
 t link_speed test_link_speed
 t cdc_ncm_duplex test_cdc_ncm_duplex
 t hbc_access test_hbc_access
-t hbc_backport test_hbc_backport
+t hbc_undo_backport test_hbc_undo_backport
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings

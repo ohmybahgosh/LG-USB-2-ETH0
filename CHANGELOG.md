@@ -2,6 +2,20 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.29] - 2026-11-14
+
+### Changed
+
+- **We decided to reduce the scope of the webOS 26 fix to just this app.**  2.11.28 also changed the Homebrew Channel's own permissions so every homebrew app would work again.  This project shouldn't change the Homebrew Channel or other people's apps, so that's gone.  The fix now only touches this app's own permissions file, and the Homebrew Channel's files and its own future updates are left alone.
+- **Running it is your choice, over SSH, until the Homebrew Channel pushes its own fix.**  2.11.27 and 2.11.28 made the change on every run as root, boot hook included.  Nothing runs it on its own anymore.  On webOS 26, the app's setup screen shows the one command, with a QR code for the steps on your phone:
+
+  ```sh
+  sh /media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0/assets/lg-usb-2-eth0.sh app-access
+  ```
+
+  Once a Homebrew Channel release includes its fix ([webosbrew PR #233](https://github.com/webosbrew/webos-homebrew-channel/pull/233)), this step isn't needed at all.
+- **If you ran 2.11.28,** `status` says so, and `app-access` takes the file it added to the Homebrew Channel back out, only where it's exactly that file, on a Homebrew Channel 0.7.3 or older.  2.11.28 is marked as a pre-release.
+
 ## [2.11.28] - 2026-11-14
 
 ### Added

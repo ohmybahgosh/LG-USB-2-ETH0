@@ -696,7 +696,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 
 ## Troubleshooting
 
-**The app says it can't reach the TV as root, on webOS 26?**  webOS 26 stopped letting homebrew apps use the Homebrew Channel's root service.  The Homebrew Channel has a fix that isn't released yet, so the app walks you through one SSH command that puts it in place, for this app and your other homebrew apps.  The steps, ready to copy on a phone: [webOS 26 setup](docs/webos-26-setup.md).  Thanks to yurix67rem for tracking it down ([#32](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/32)).
+**The app says it can't reach the TV as root, on webOS 26?**  webOS 26 stopped letting homebrew apps use the Homebrew Channel's root service.  The Homebrew Channel has a fix that isn't released yet.  Until then, the app walks you through one SSH command, `app-access`, that puts this app (only this app) in the Homebrew Channel's permission group.  It only runs when you run it.  The steps, ready to copy on a phone: [webOS 26 setup](docs/webos-26-setup.md).  Thanks to yurix67rem for tracking it down ([#32](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/32)).
 
 **Lost SSH while switching?**  The switch still finishes on the TV.  Reconnect over Wi-Fi.  The adapter has its own MAC address, so your router may give the TV a new IP.  A DHCP reservation for the adapter's MAC keeps it steady.
 
