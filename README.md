@@ -893,8 +893,8 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
   <a href="https://github.com/xbmcjase" title="xbmcjase: 2 driver tests, 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/261321952?v=4&amp;s=96" width="48" height="48" alt="xbmcjase"></a>
   <a href="https://github.com/Yevrashka" title="Yevrashka: 2 driver tests, 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/24300377?v=4&amp;s=96" width="48" height="48" alt="Yevrashka"></a>
   <a href="https://github.com/tirth0jain" title="tirth0jain: 2 driver tests, 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/163157087?v=4&amp;s=96" width="48" height="48" alt="tirth0jain"></a>
+  <a href="https://github.com/yurix67rem" title="yurix67rem: 4 compatibility reports"><img src="https://avatars.githubusercontent.com/u/285026565?v=4&amp;s=96" width="48" height="48" alt="yurix67rem"></a>
   <a href="https://github.com/romansat" title="romansat: 1 compatibility report, 1 bug report or idea, 1 discussion"><img src="https://avatars.githubusercontent.com/u/94401139?v=4&amp;s=96" width="48" height="48" alt="romansat"></a>
-  <a href="https://github.com/yurix67rem" title="yurix67rem: 3 compatibility reports"><img src="https://avatars.githubusercontent.com/u/285026565?v=4&amp;s=96" width="48" height="48" alt="yurix67rem"></a>
   <a href="https://github.com/artemisxrpg" title="artemisxrpg: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/74358884?v=4&amp;s=96" width="48" height="48" alt="artemisxrpg"></a>
   <a href="https://github.com/jasonchangandsrarhchen" title="jasonchangandsrarhchen: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/66562022?v=4&amp;s=96" width="48" height="48" alt="jasonchangandsrarhchen"></a>
   <a href="https://github.com/Mazda77" title="Mazda77: 1 discussion"><img src="https://avatars.githubusercontent.com/u/44847930?v=4&amp;s=96" width="48" height="48" alt="Mazda77"></a>
@@ -906,8 +906,8 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
 - **[xbmcjase](https://github.com/xbmcjase)**: 2 driver tests, 2 compatibility reports
 - **[Yevrashka](https://github.com/Yevrashka)**: 2 driver tests, 2 compatibility reports
 - **[tirth0jain](https://github.com/tirth0jain)**: 2 driver tests, 1 compatibility report
+- **[yurix67rem](https://github.com/yurix67rem)**: 4 compatibility reports
 - **[romansat](https://github.com/romansat)**: 1 compatibility report, 1 bug report or idea, 1 discussion
-- **[yurix67rem](https://github.com/yurix67rem)**: 3 compatibility reports
 - **[artemisxrpg](https://github.com/artemisxrpg)**: 1 compatibility report
 - **[jasonchangandsrarhchen](https://github.com/jasonchangandsrarhchen)**: 1 compatibility report
 - **[Mazda77](https://github.com/Mazda77)**: 1 discussion
