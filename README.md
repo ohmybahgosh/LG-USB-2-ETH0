@@ -757,6 +757,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | `test-driver` | Tries a new driver built for your exact kernel that hasn't run on a TV yet, if there is one: downloads and checks it, loads it until the next restart only, moves the adapter to it, checks it gets online, and shows a report to send.  `--last` shows the last test's report again, including after a test that froze the TV.  See [More drivers on the way](#more-drivers-on-the-way). |
 | `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
 | `update` | Checks for a newer release and installs it, once the release's signature checks out and the download matches its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
+| `app-access` | webOS 26 only, when the app says it can't reach the TV as root: lets the app use the Homebrew Channel again by adding it to the Homebrew Channel's permission group.  Changes only this app's own permissions file, and only when you run it.  Not needed once the Homebrew Channel ships its own fix.  See [webOS 26 setup](docs/webos-26-setup.md). |
 
 <details>
 <summary><b>Options</b></summary>
