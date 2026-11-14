@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.25"
+VERSION="2.11.26"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -310,6 +310,15 @@ nic_driver() {
         done
     fi
     echo "$_l"
+}
+
+# The cable link's duplex, or nothing when the driver can't tell.  usbnet's
+# CDC drivers (cdc_ncm, cdc_ether) fill in the speed but never the duplex,
+# so the kernel reads its unset value as "half" for every adapter on them.
+nic_duplex() {
+    _du=$(sysval "$NET/$1/duplex" 2>/dev/null) || return 0
+    case "$(nic_driver "$1")" in cdc_ncm|cdc_ether) [ "$_du" = half ] && return 0 ;; esac
+    printf '%s\n' "$_du"
 }
 
 nic_mac() { sysval "$NET/$1/address" | tr 'A-F' 'a-f'; }
@@ -3239,7 +3248,7 @@ show_status() {
                 has_usb3 && status_note "If this TV has a blue USB 3.0 port, the adapter can go faster plugged straight into it, or through a USB 3.0 cable or converter.  Many LG TVs only have USB 2.0 ports."
             fi
             [ "$_car" = 1 ] && [ -z "$_ip" ] && status_note "$_sn has a cable but no IPv4 address yet. webOS may still be setting it up."
-            _dup=$(sysval "$_sp/duplex" 2>/dev/null)
+            _dup=$(nic_duplex "$_sn")
             [ "$_dup" = half ] && _line="$_line, half duplex"
             if [ "$_car" = 1 ] && [ -n "$_spd" ] && [ "$_spd" -lt 1000 ]; then
                 status_issue "$_sn's cable link is only $_spd Mbit/s, so it's no faster than the built-in port. Usually that's a cable with only two wire pairs (many flat or old cables), a 100 Mbit/s port on the router or switch, or a loose plug. Try a Cat5e or better cable, or another port."
@@ -3480,7 +3489,7 @@ nic_json() {
     case "$_js" in ''|-1|*[!0-9]*) _js=0 ;; esac
     printf '{"name":%s,"driver":%s,"mac":%s,"carrier":%s,"speed":%s,"duplex":%s,"ip":%s' \
         "$(js "$1")" "$(js "$(nic_driver "$1")")" "$(js "$(nic_mac "$1")")" \
-        "$(jb "$([ "$_jc" = 1 ] && echo 1)")" "$_js" "$(js "$(sysval "$_jp/duplex" 2>/dev/null)")" "$(js "$(iface_ipv4 "$1")")"
+        "$(jb "$([ "$_jc" = 1 ] && echo 1)")" "$_js" "$(js "$(nic_duplex "$1")")" "$(js "$(iface_ipv4 "$1")")"
     if is_usb_nic "$1"; then
         _jid="$(sysval "$_jp/device/../idVendor"):$(sysval "$_jp/device/../idProduct")"
         printf ',"id":%s,"chip":%s,"bus":%s' "$(js "$_jid")" "$(js "$(known_nic_id "$_jid")")" \
@@ -3982,7 +3991,7 @@ show_report() {
         _rl="  $_rn $_rk driver=$_rd mac=$(mask_mac "$(nic_mac "$_rn")") carrier=$(sysval "$_rp/carrier" 2>/dev/null || echo down)"
         _rs=$(sysval "$_rp/speed" 2>/dev/null)
         case "$_rs" in ''|-1|*[!0-9]*) ;; *) _rl="$_rl link=${_rs}M" ;; esac
-        [ "$(sysval "$_rp/duplex" 2>/dev/null)" = half ] && _rl="$_rl half-duplex"
+        [ "$(nic_duplex "$_rn")" = half ] && _rl="$_rl half-duplex"
         # Its address, last number hidden: shows whether it has one from the router
         _ra=$(iface_ipv4 "$_rn")
         [ -n "$_ra" ] && _rl="$_rl ipv4=$(echo "${_ra%/*}" | sed 's/\.[0-9]*$/.x/')"

@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.26] - 2026-11-14
+
+### Fixed
+
+- **No more false "half duplex" warning on `cdc_ncm` and `cdc_ether`.**  These drivers give the kernel the link speed but never the duplex, so Linux reports every link on them as half duplex.  `status` was warning that the cable link "is slow and loses packets" and the report showed `half-duplex` when the link was fine: yurix67rem's AX88179 on a 2026 C6 showed it while running at 322 Mbit/s down and 293 up (issue #30).  The duplex is now left blank for those two drivers, and still flagged on drivers that report it.
+
 ## [2.11.25] - 2026-11-13
 
 ### Added

@@ -553,6 +553,19 @@ test_link_speed() {
     lacks "cable link is only"
 }
 
+# cdc_ncm never sets the duplex, so the kernel says "half" for every link on it
+test_cdc_ncm_duplex() {
+    add_builtin eth2
+    add_usb eth0 1-1 cdc_ncm 1 "f8:e4:3b:00:00:01" 0b95 1790 480
+    link eth0 1000 half
+    run status
+    lacks "half duplex"
+    run report
+    lacks "half-duplex"
+    run status --json
+    check "json duplex is empty" json_ok "$OUT" "d['adapter']['duplex'] in ('', None)"
+}
+
 lacks_log() { ! grep -q "$1" "$LOG"; }
 wifi_is() { [ "$(cat "$STATE/wifi" 2>/dev/null || echo disabled)" = "$1" ] || { echo "    Wi-Fi is $(cat "$STATE/wifi" 2>/dev/null || echo disabled), wanted $1"; return 1; }; }
 
@@ -1354,6 +1367,7 @@ t boot_late_adapter test_boot_late_adapter
 t watch_hotplug test_watch_hotplug
 t watch_hung_adapter test_watch_hung_adapter
 t link_speed test_link_speed
+t cdc_ncm_duplex test_cdc_ncm_duplex
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings
