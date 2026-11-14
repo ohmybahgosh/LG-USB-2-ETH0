@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.28] - 2026-11-14
+
+### Added
+
+- **The app walks webOS 26 users through the one-time fix.**  When webOS turns the app away from the Homebrew Channel, the app shows a setup screen instead of an error: turn on SSH Server, connect with the TV's address filled in, run one command.  A QR code opens the same steps on a phone, ready to copy ([docs/webos-26-setup.md](docs/webos-26-setup.md)).  The screen checks every few seconds and carries on by itself once it works.
+
+### Changed
+
+- **The fix now covers every homebrew app, not just this one.**  The script backports the Homebrew Channel's own webOS 26 fix (webosbrew PR #233, merged but not released yet): its root service also goes in `lunabus.query`, a permission group every app still has.  A Homebrew Channel that already has the fix is left alone.
+
 ## [2.11.27] - 2026-11-14
 
 ### Fixed

@@ -588,6 +588,38 @@ test_hbc_access() {
     check "json still parses" json_ok "$OUT" "'adapter' in d"
 }
 
+# The Homebrew Channel's own webOS 11 fix (webosbrew PR #233), backported
+test_hbc_backport() {
+    add_builtin eth2
+    _ld="$ROOT/var/luna-service2-dev"
+    mkdir -p "$_ld/manifests.d" "$_ld/api-permissions.d"
+    _mf="$_ld/manifests.d/org.webosbrew.hbchannel.json"
+    _af="$_ld/api-permissions.d/org.webosbrew.hbchannel.service.api.lunabus.query.json"
+    _pub="$_ld/api-permissions.d/org.webosbrew.hbchannel.service.api.public.json"
+    printf '%s\n' "{\"version\":\"0.7.3\",\"apiPermissionFiles\":[\"$_pub\"],\"id\":\"org.webosbrew.hbchannel\"}" > "$_mf"
+    run status
+    check "api file made" grep -qx '{"lunabus.query":\["org.webosbrew.hbchannel.service/\*"\]}' "$_af"
+    check "manifest lists it first" grep -q "\"apiPermissionFiles\":\[\"$_af\",\"$_pub\"\]" "$_mf"
+    check "manifest keeps the rest" grep -q '"id":"org.webosbrew.hbchannel"}$' "$_mf"
+    check "luna bus told" grep -qx 'scan-services' "$STATE/ls-control"
+    rm -f "$STATE/ls-control"
+    run status
+    check "listed once" [ "$(grep -o 'lunabus.query.json' "$_mf" | wc -l)" -eq 1 ]
+    check "no second rescan" [ ! -e "$STATE/ls-control" ]
+    # A Homebrew Channel that already has the fix is left alone
+    rm -f "$_af"
+    printf '%s\n' "{\"apiPermissionFiles\":[\"$_af\"],\"id\":\"x\"}" > "$_mf"
+    echo '{"lunabus.query":["custom"]}' > "$_af"
+    run status
+    check "upstream file kept" grep -q custom "$_af"
+    check "not rescanned" [ ! -e "$STATE/ls-control" ]
+    # A manifest in another layout is left alone
+    rm -f "$_af"
+    printf '{\n"apiPermissionFiles":[]\n}\n' > "$_mf"
+    run status
+    check "multi-line manifest untouched" [ ! -e "$_af" ]
+}
+
 lacks_log() { ! grep -q "$1" "$LOG"; }
 wifi_is() { [ "$(cat "$STATE/wifi" 2>/dev/null || echo disabled)" = "$1" ] || { echo "    Wi-Fi is $(cat "$STATE/wifi" 2>/dev/null || echo disabled), wanted $1"; return 1; }; }
 
@@ -1391,6 +1423,7 @@ t watch_hung_adapter test_watch_hung_adapter
 t link_speed test_link_speed
 t cdc_ncm_duplex test_cdc_ncm_duplex
 t hbc_access test_hbc_access
+t hbc_backport test_hbc_backport
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings

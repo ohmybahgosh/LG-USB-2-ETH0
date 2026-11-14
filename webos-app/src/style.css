@@ -74,6 +74,11 @@ footer .right { margin: 0 0 0 auto; }
 .panel-body pre { white-space: pre-wrap; word-break: break-word; font-size: 20px; color: #93a39b; max-height: 520px; overflow: hidden; margin: 0; }
 .panel-body .qr { display: flex; align-items: center; }
 .panel-body .qr svg { width: 480px; height: 480px; background: #fff; border-radius: 16px; margin-right: 44px; flex: none; }
+.qr-setup svg { width: 340px !important; height: 340px !important; margin-right: 40px !important; }
+.steps { margin: 0; padding-left: 34px; font-size: 23px; }
+.steps li { margin-bottom: 16px; }
+.panel-body code { color: #22e584; font-size: 21px; word-break: break-all; }
+.setup-scan { color: #6f7f78; font-size: 21px; margin: 18px 0 0; }
 .panel-hint { margin-top: 28px; color: #6f7f78; font-size: 22px; }
 .spinner { width: 54px; height: 54px; border: 6px solid #2b3632; border-top-color: #22e584; border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 24px; }
 @keyframes spin { to { transform: rotate(360deg); } }

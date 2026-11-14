@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.27"
+VERSION="2.11.28"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2872,29 +2872,65 @@ app_lang_sync() {
     return 0
 }
 
-# webOS 26 (webOS 11) no longer lets homebrew apps reach the Homebrew
-# Channel's service through the "public" group, so the app says it can't
-# reach the TV as root even on a rooted TV (issue #32).  The Homebrew
-# Channel's own app is in org.webosbrew.hbchannel.service.group.  Put this
-# app there too and have the Luna bus reread its permissions.  Every run as
-# root checks it, so the boot hook puts it back if an app reinstall drops it.
-# Only a file in the one-line layout webOS writes is changed.
+# webOS 26 (webOS 11) no longer puts homebrew apps in the "public" group, so
+# they can't reach the Homebrew Channel's root service and say they can't
+# reach the TV as root, even on a rooted TV (issue #32).  The Homebrew
+# Channel fixed this upstream (webosbrew PR #233, merged August 2026) but
+# hasn't released it yet.  Until it does, every run as root:
+#  1. Backports that fix: the Homebrew Channel's service also goes in
+#     lunabus.query, a group every app still has, so every homebrew app can
+#     reach it again, not just this one.
+#  2. Puts this app in org.webosbrew.hbchannel.service.group, which the
+#     Homebrew Channel's own app has.
+# then has the Luna bus reread its permissions.  The boot hook runs it at every
+# boot, so it comes back if an update drops it.  Only files in the one-line
+# layout webOS writes are changed, and a newer Homebrew Channel that already
+# has the fix is left alone.
 HBC_GROUP="org.webosbrew.hbchannel.service.group"
-app_hbc_access() {
+HBC_SVC="org.webosbrew.hbchannel.service"
+hbc_backport() {
+    _ld="${LGU2E_ROOT}/var/luna-service2-dev"
+    _mf="$_ld/manifests.d/org.webosbrew.hbchannel.json"
+    _af="$_ld/api-permissions.d/$HBC_SVC.api.lunabus.query.json"
+    [ -f "$_mf" ] && [ ! -L "$_mf" ] && [ -w "$_mf" ] && [ -d "$_ld/api-permissions.d" ] || return 1
+    _mc=$(cat "$_mf" 2>/dev/null)
+    case "$_mc" in *"$_af"*) [ -f "$_af" ] && return 1 ;; esac
+    [ "$(printf '%s' "$_mc" | grep -o '"apiPermissionFiles":\[' | wc -l)" -eq 1 ] || return 1
+    case "$_mc" in *'
+'*) return 1 ;; esac
+    if [ ! -f "$_af" ]; then
+        printf '{"lunabus.query":["%s/*"]}\n' "$HBC_SVC" > "$_af" 2>/dev/null || { rm -f "$_af"; return 1; }
+    fi
+    case "$_mc" in *"$_af"*) return 0 ;; esac
+    _mt="$_mf.new.$$"
+    if ! { printf '%s\n' "$_mc" | sed "s|\"apiPermissionFiles\":\[|&\"$_af\",|" > "$_mt" && grep -q "$_af" "$_mt" && mv -f "$_mt" "$_mf"; }; then
+        rm -f "$_mt"
+        return 1
+    fi
+    return 0
+}
+app_group() {
     _pf="${LGU2E_ROOT}/var/luna-service2-dev/client-permissions.d/$APP_ID.app.json"
-    [ -f "$_pf" ] && [ ! -L "$_pf" ] && [ -w "$_pf" ] || return 0
+    [ -f "$_pf" ] && [ ! -L "$_pf" ] && [ -w "$_pf" ] || return 1
     _pc=$(tr -d ' \t\r\n' < "$_pf" 2>/dev/null)
-    case "$_pc" in *"\"$HBC_GROUP\""*) return 0 ;; esac
-    case "$_pc" in "{\"$APP_ID-*\":[\""*"\"]}") ;; *) return 0 ;; esac
+    case "$_pc" in *"\"$HBC_GROUP\""*) return 1 ;; esac
+    case "$_pc" in "{\"$APP_ID-*\":[\""*"\"]}") ;; *) return 1 ;; esac
     _pi=${_pc#*:\[}
-    case "${_pi%\]\}}" in *[][{}:]*) return 0 ;; esac
+    case "${_pi%\]\}}" in *[][{}:]*) return 1 ;; esac
     _pt="$_pf.new.$$"
     if ! { printf '%s\n' "${_pc%]\}},\"$HBC_GROUP\"]}" > "$_pt" && mv -f "$_pt" "$_pf"; }; then
         rm -f "$_pt"
-        return 0
+        return 1
     fi
+    return 0
+}
+app_hbc_access() {
+    _hc=0
+    hbc_backport && _hc=1
+    app_group && _hc=1
+    [ "$_hc" = 1 ] || return 0
     command -v ls-control > /dev/null 2>&1 && ls-control scan-services > /dev/null 2>&1
-    [ -t 1 ] && log "$GREEN" "Gave the TV app access to the Homebrew Channel, which webOS 26 needs.  Reopen the app."
+    [ -t 1 ] && log "$GREEN" "Gave homebrew apps access to the Homebrew Channel again, which webOS 26 needs.  Reopen the app."
     return 0
 }
 

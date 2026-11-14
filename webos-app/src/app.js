@@ -98,11 +98,12 @@
             var data = null;
             try { data = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { data = null; }
             if (!data) {
-                showNoRoot(ok ? T('The script gave an unexpected answer.') : TS(err));
+                showNoRoot(ok ? T('The script gave an unexpected answer.') : TS(err), ok ? '' : err);
                 if (cb) { cb(null); }
                 return;
             }
             state = data;
+            if (overlayMode === 'setup') { setupDone(); }
             render();
             if (cb) { cb(data); }
         });
@@ -166,14 +167,79 @@
         check();
     }
 
-    function showNoRoot(detail) {
+    function showNoRoot(detail, raw) {
         $('dot').className = 'dot dot-bad';
         $('headline').textContent = T('Can\'t reach the TV as root');
         $('subline').textContent = T('This app needs a rooted TV with the Homebrew Channel.  ') + (detail || '');
-        // webOS 26 keeps homebrew apps away from the Homebrew Channel until
-        // the script, run once as root, gives this app access (issue #32)
-        $('notes').innerHTML = '<li>' + esc(T('On webOS 26, a rooted TV can still land here.  Run this once over SSH, then reopen the app: {cmd}', { cmd: 'sh ' + SCRIPT + ' status' })) + '</li>';
         $('facts').innerHTML = '';
+        $('notes').innerHTML = '';
+        // The Homebrew Channel is there and answered, but webOS turned the
+        // app away: webOS 26 (issue #32).  Walk through the one-time fix.
+        if (/denied method call/i.test(raw || '')) { showSetup(); }
+    }
+
+    // ------------------------------------------------------------------ webOS 26 setup
+
+    // webOS 26 no longer lets homebrew apps reach the Homebrew Channel's
+    // root service, until the Homebrew Channel ships its own fix.  The
+    // script, run once as root, backports that fix, and the boot hook keeps
+    // it.  The app can't do that first step itself (it has no way to root
+    // yet), so it shows the steps with a QR code for a phone, and checks
+    // again every few seconds, carrying on by itself once it can.
+    var SETUP_DOC = REPO + '/blob/main/docs/webos-26-setup.md';
+    var setupTimer = null;
+    var tvIp = '';
+
+    // A translated line with a command in it, the command in <code>
+    var CMD = '\u0001';
+    function withCode(text, cmd) {
+        return esc(text).replace(CMD, '<code>' + esc(cmd) + '</code>');
+    }
+
+    function setupBody() {
+        var qr = '';
+        try {
+            var q = window.qrcode(0, 'L');
+            q.addData(SETUP_DOC);
+            q.make();
+            qr = q.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
+        } catch (e) { qr = ''; }
+        return '<div class="qr qr-setup">' + qr + '<ol class="steps">' +
+            '<li>' + esc(T('In the Homebrew Channel, open Settings and turn on SSH Server.')) + '</li>' +
+            '<li>' + withCode(T('From a phone or computer on the same network, connect with {cmd}  The password is alpine unless you changed it.', { cmd: CMD }), 'ssh root@' + (tvIp || T('<TV IP address>'))) + '</li>' +
+            '<li>' + withCode(T('Run {cmd}', { cmd: CMD }), 'sh ' + SCRIPT + ' status') + '</li>' +
+            '<li>' + esc(T('That\'s it.  This screen notices and carries on by itself.')) + '</li>' +
+            '</ol></div>' +
+            '<p class="setup-scan">' + esc(T('Scan the code for these steps on your phone, ready to copy.')) + '</p>';
+    }
+
+    function showSetup() {
+        if (overlayMode === 'setup') { return; }
+        if (overlayMode) { return; }
+        overlay('setup', T('One quick setup step for webOS 26'),
+            '<p>' + esc(T('webOS 26 keeps homebrew apps away from root until the Homebrew Channel gets an update.  One command over SSH fixes it for this app and your other homebrew apps, and it stays fixed.')) + '</p>' + setupBody(),
+            T('Checking every few seconds.  OK checks now, BACK exits.'));
+        // The TV's address, for the ssh line, if webOS will tell the app
+        luna('luna://com.webos.service.connectionmanager/getStatus', {}, function (r) {
+            var ip = (r && r.wired && r.wired.ipAddress) || (r && r.wifi && r.wifi.ipAddress) || '';
+            if (/^[0-9.]{7,15}$/.test(ip) && overlayMode === 'setup') {
+                tvIp = ip;
+                $('overlay-body').innerHTML = $('overlay-body').innerHTML.replace(/root@[^<]*/, 'root@' + esc(ip));
+            }
+        });
+        if (!setupTimer) { setupTimer = setInterval(setupCheck, 5000); }
+    }
+
+    function setupCheck() {
+        if (overlayMode !== 'setup' || document.hidden) { return; }
+        refresh();
+    }
+
+    function setupDone() {
+        if (setupTimer) { clearInterval(setupTimer); setupTimer = null; }
+        closeOverlay();
+        overlay('message', T('All set'), '<p>' + esc(T('The app can reach root now.')) + '</p>', T('Press OK or BACK to close.'));
+        checkUpdate();
     }
 
     function row(label, value) {
@@ -853,6 +919,12 @@
         var k = e.keyCode;
         if (overlayMode) {
             if (overlayMode === 'busy') { e.preventDefault(); return; }
+            if (overlayMode === 'setup') {
+                if (k === KEY.ENTER) { refresh(); }
+                else if (k === KEY.BACK || k === KEY.ESC) { exitApp(); }
+                e.preventDefault();
+                return;
+            }
             if (k === KEY.ENTER && overlayMode === 'confirm' && onConfirm) {
                 var fn = onConfirm;
                 onConfirm = null;
