@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.27] - 2026-11-14
+
+### Fixed
+
+- **The TV app works on webOS 26 again.**  webOS 26 doesn't let homebrew apps use the Homebrew Channel's root service unless they're in its permission group, so the app said it couldn't reach the TV as root even on a rooted TV (yurix67rem tracked it down on a 2026 C6, issue #32).  Every run of the script as root now adds the app to `org.webosbrew.hbchannel.service.group` and has the Luna bus reload its permissions, so running it once over SSH fixes the app, and the boot hook puts the group back if an app update drops it.  Only a permissions file in the layout webOS writes is changed.  When the app can't reach root, it now shows the command to run.
+
 ## [2.11.26] - 2026-11-14
 
 ### Fixed

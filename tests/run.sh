@@ -566,6 +566,28 @@ test_cdc_ncm_duplex() {
     check "json duplex is empty" json_ok "$OUT" "d['adapter']['duplex'] in ('', None)"
 }
 
+# webOS 26 needs the app in the Homebrew Channel's group to reach it (#32)
+test_hbc_access() {
+    add_builtin eth2
+    _pd="$ROOT/var/luna-service2-dev/client-permissions.d"
+    mkdir -p "$_pd"
+    _pf="$_pd/org.ohmybahgosh.lgusb2eth0.app.json"
+    echo '{"org.ohmybahgosh.lgusb2eth0-*":["public"]}' > "$_pf"
+    run status
+    check "group added" grep -qx '{"org.ohmybahgosh.lgusb2eth0-\*":\["public","org.webosbrew.hbchannel.service.group"\]}' "$_pf"
+    check "luna bus told" grep -qx 'scan-services' "$STATE/ls-control"
+    rm -f "$STATE/ls-control"
+    run status
+    check "added only once" [ "$(grep -o hbchannel.service.group "$_pf" | wc -l)" -eq 1 ]
+    check "no second rescan" [ ! -e "$STATE/ls-control" ]
+    echo '{"org.ohmybahgosh.lgusb2eth0-*":["public"],"other":["x"]}' > "$_pf"
+    run status
+    check "other layouts left alone" grep -q '"other":\["x"\]}$' "$_pf"
+    check "and not rescanned" [ ! -e "$STATE/ls-control" ]
+    run status --json
+    check "json still parses" json_ok "$OUT" "'adapter' in d"
+}
+
 lacks_log() { ! grep -q "$1" "$LOG"; }
 wifi_is() { [ "$(cat "$STATE/wifi" 2>/dev/null || echo disabled)" = "$1" ] || { echo "    Wi-Fi is $(cat "$STATE/wifi" 2>/dev/null || echo disabled), wanted $1"; return 1; }; }
 
@@ -1368,6 +1390,7 @@ t watch_hotplug test_watch_hotplug
 t watch_hung_adapter test_watch_hung_adapter
 t link_speed test_link_speed
 t cdc_ncm_duplex test_cdc_ncm_duplex
+t hbc_access test_hbc_access
 t wifi_fallback test_wifi_fallback
 t wifi_fallback_leaves_wifi_alone test_wifi_fallback_leaves_wifi_alone
 t wifi_fallback_settings test_wifi_fallback_settings

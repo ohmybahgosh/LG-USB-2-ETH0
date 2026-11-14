@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fake `ls-control` for the test suite: records each call in $FAKE_STATE
+echo "$*" >> "$FAKE_STATE/ls-control"
+exit 0

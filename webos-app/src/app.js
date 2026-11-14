@@ -170,8 +170,10 @@
         $('dot').className = 'dot dot-bad';
         $('headline').textContent = T('Can\'t reach the TV as root');
         $('subline').textContent = T('This app needs a rooted TV with the Homebrew Channel.  ') + (detail || '');
+        // webOS 26 keeps homebrew apps away from the Homebrew Channel until
+        // the script, run once as root, gives this app access (issue #32)
+        $('notes').innerHTML = '<li>' + esc(T('On webOS 26, a rooted TV can still land here.  Run this once over SSH, then reopen the app: {cmd}', { cmd: 'sh ' + SCRIPT + ' status' })) + '</li>';
         $('facts').innerHTML = '';
-        $('notes').innerHTML = '';
     }
 
     function row(label, value) {

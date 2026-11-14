@@ -10,7 +10,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.26"
+VERSION="2.11.27"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2872,6 +2872,32 @@ app_lang_sync() {
     return 0
 }
 
+# webOS 26 (webOS 11) no longer lets homebrew apps reach the Homebrew
+# Channel's service through the "public" group, so the app says it can't
+# reach the TV as root even on a rooted TV (issue #32).  The Homebrew
+# Channel's own app is in org.webosbrew.hbchannel.service.group.  Put this
+# app there too and have the Luna bus reread its permissions.  Every run as
+# root checks it, so the boot hook puts it back if an app reinstall drops it.
+# Only a file in the one-line layout webOS writes is changed.
+HBC_GROUP="org.webosbrew.hbchannel.service.group"
+app_hbc_access() {
+    _pf="${LGU2E_ROOT}/var/luna-service2-dev/client-permissions.d/$APP_ID.app.json"
+    [ -f "$_pf" ] && [ ! -L "$_pf" ] && [ -w "$_pf" ] || return 0
+    _pc=$(tr -d ' \t\r\n' < "$_pf" 2>/dev/null)
+    case "$_pc" in *"\"$HBC_GROUP\""*) return 0 ;; esac
+    case "$_pc" in "{\"$APP_ID-*\":[\""*"\"]}") ;; *) return 0 ;; esac
+    _pi=${_pc#*:\[}
+    case "${_pi%\]\}}" in *[][{}:]*) return 0 ;; esac
+    _pt="$_pf.new.$$"
+    if ! { printf '%s\n' "${_pc%]\}},\"$HBC_GROUP\"]}" > "$_pt" && mv -f "$_pt" "$_pf"; }; then
+        rm -f "$_pt"
+        return 0
+    fi
+    command -v ls-control > /dev/null 2>&1 && ls-control scan-services > /dev/null 2>&1
+    [ -t 1 ] && log "$GREEN" "Gave the TV app access to the Homebrew Channel, which webOS 26 needs.  Reopen the app."
+    return 0
+}
+
 # Absolute path of this script
 self_path() {
     case "$0" in /*) _sp=$0 ;; *) _sp="$(pwd)/$0" ;; esac
@@ -4141,6 +4167,7 @@ while [ $# -gt 0 ]; do
 done
 
 app_lang_sync
+app_hbc_access
 case "$CMD" in
     install) install_fix ;;
     uninstall) uninstall_fix ;;
