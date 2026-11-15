@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.33] - 2026-11-15
+
+### Added
+
+- **Drivers to test for 2021 UP and NANO LCDs on their new firmware.**  Firmware 03.60.96 (November 2026) moves the LM21A and LM21U chips to kernel `4.4.84-899.kcl4tv.22`, which, like the one before it, has no USB network drivers at all, not even `usbnet` (issues #34 and #35, from the firmware monitor).  `r8152_oot`, `r8152`, `ax88179_178a` and `dm9601`, with `usbnet`, are built from the same LG source and config as for `kcl4tv.19`, and **Test a new driver** offers them.
+- **The firmware audit covers webOS 26 on 2023 QNED and UR LCDs (K8HpP).**  Their 43.22.73 (issue #36) runs `6.12.44-67.18.qilian.6` with only the older `asix` driver built in and module signing off, so added drivers would load, but that firmware came out after LG closed rooting.
+
+### Fixed
+
+- **The speed test's upload works on TVs with an older busybox, like the 2018 B8.**  The upload made its test data with `head -c`, which some older busybox builds leave out, so curl sent nothing and the upload showed "?" (Yevrashka's B8 on webOS 4, issue #33).  It uses `dd` now, which every busybox has, and a transfer that moves nothing counts as failed instead of as a speed.
+
 ## [2.11.32] - 2026-11-15
 
 ### Changed

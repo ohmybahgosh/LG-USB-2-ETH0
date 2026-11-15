@@ -69,3 +69,6 @@ AN-US800K-03.91.51	-	m16pstb	-	4.4.3-p.439.dixie.m16pstb.3	r8152 rtl8150	none	mo
 OLED55C9BNA-05.20.35	05.00.10	o18	-	4.4.84-169.gld4tv.4	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 OLED48CXKNB-03.11.30	03.11.30	o20	-	4.4.84-212	r8152 asix ax88179_178a cdc_ether cdc_ncm rtl8150 usbnet	none	config
 HU70LA-KR-04.00.08	04.00.08	k5lp	-	4.4.84-k5lp.projector.gulaga.1.2	asix usbnet	none	config
+75NANO90JPA.AJLG-03.60.96	03.60.96	lm21u	kolovesi	4.4.84-899.kcl4tv.22	none	none	config
+43NANO756PA.AEK-03.60.96	03.60.96	lm21a	kolovesi	4.4.84-899.kcl4tv.22	none	none	config
+65QNED80KRA-43.22.73	43.22.73	k8hpp	qilian	6.12.44-67.18.qilian.6	asix usbnet	none	config

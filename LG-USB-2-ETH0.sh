@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.32"
+VERSION="2.11.33"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -62,7 +62,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/e32c0596841074a7cc33379cca1bed364922fe16/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/59fd4812260dc98a4eb34f98e893af536dd87fc5/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -2444,7 +2444,12 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
 4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
 4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
-4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b"
+4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b
+4.4.84-899.kcl4tv.22 - r8152_oot.ko 8f501b4f463d8dce2a6e99fc8d825062361e9924fde41ca544d4621b76fb2f56
+4.4.84-899.kcl4tv.22 - r8152.ko b42d7814fadde20ffc003daf1524f639054166d9556e4cfe3c94485c91cf23d0
+4.4.84-899.kcl4tv.22 - usbnet.ko 58bd91b60e69458a811e5812b38a5e816faee8f4bfdcdb4be779c6e70d4494bc
+4.4.84-899.kcl4tv.22 - ax88179_178a.ko 48b58ea22f2b60397469ba56162b513891a762d91d17aca6da61c70eada28e85
+4.4.84-899.kcl4tv.22 - dm9601.ko 38d824f4281dab8966b86406fdab116be768b31efefae8217fbc0207afcda1b7"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -3691,7 +3696,9 @@ speed_worker() {
         if [ "$1" = down ]; then
             _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{http_code}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
         else
-            _sr=$(head -c "$SPEED_CHUNK" /dev/zero | curl -s -o /dev/null --max-time "$_sl" -X POST \
+            # dd, not head -c: some older busybox builds leave out head's -c
+            # (a 2018 B8 on webOS 4), which sent nothing and showed "?" (#33)
+            _sr=$(dd if=/dev/zero bs=1000000 count=$((SPEED_CHUNK / 1000000)) 2>/dev/null | curl -s -o /dev/null --max-time "$_sl" -X POST \
                 -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{http_code}' "$SPEED_URL/__up" 2>/dev/null)
         fi
         # Only a 2xx counts: a "429 Too Many Requests" (Cloudflare limits
@@ -3704,6 +3711,8 @@ speed_worker() {
             *) break ;;
         esac
         case "$_sr" in *[0-9]' '[0-9]*) ;; *) break ;; esac
+        # Nothing moved is a failed transfer, not a speed
+        case "${_sr%% *}" in 0|'') break ;; esac
         _sb=$(awk -v a="$_sb" -v b="${_sr% *}" 'BEGIN { printf "%.0f", a + b }')
         _st=$(awk -v a="$_st" -v b="${_sr#* }" 'BEGIN { printf "%.3f", a + b }')
         _sn=$((_sn + 1))
