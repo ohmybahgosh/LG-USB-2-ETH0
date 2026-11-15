@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.32] - 2026-11-15
+
+### Changed
+
+- **The TV app opens about three times faster.**  The Homebrew Channel runs commands with an LG library (`libsystrim.so`) preloaded into every program they start, which made each of the script's small commands start about three times slower.  Opening the app on a C2 took about 5.5 seconds to check the TV, where the same check over SSH took under 2.  The app now runs the script without that library, and the check takes about 1.5 seconds.  The speed test, Switch now and every other button get the same speedup.
+- **Wi-Fi as a backup explains itself when Wi-Fi wake is on.**  With **Wi-Fi wake in standby** on, Wi-Fi is already connected, so if the cable stops working the TV moves to Wi-Fi by itself, and the backup switch never acts (it only turns Wi-Fi on when it's off, and only ever turns off Wi-Fi it turned on).  The switch's hint and its question now say so, instead of reading as if it would turn your Wi-Fi off.
+
 ## [2.11.31] - 2026-11-15
 
 ### Changed

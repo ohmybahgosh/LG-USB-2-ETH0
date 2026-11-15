@@ -86,7 +86,11 @@
     // Run the bundled script as root. cb(ok, stdout, stderr)
     function runScript(args, cb) {
         if (window.LGU2E_DEMO) { window.LGU2E_DEMO(args, cb); return; }
-        luna(HBC_EXEC, { command: tvEnv + 'sh ' + shq(SCRIPT) + ' ' + args + ' 2>&1' }, function (r) {
+        // The Homebrew Channel starts commands with LG's libsystrim.so preloaded,
+        // which makes every program the script runs start about three times
+        // slower: status took 5.4 s on a C2, against 1.5 s without it.  The
+        // script's short commands don't need it, so it's left out here.
+        luna(HBC_EXEC, { command: 'LD_PRELOAD= ' + tvEnv + 'sh ' + shq(SCRIPT) + ' ' + args + ' 2>&1' }, function (r) {
             cb(r.returnValue !== false, r.stdoutString || '', r.errorText || r.stderrString || '');
         });
     }
@@ -323,6 +327,8 @@
         $('tog-boot').className = 'tog' + (bootOn ? ' on' : '');
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
+        // Wi-Fi wake keeps Wi-Fi connected, so the TV already falls back to it
+        $('wifi-hint').textContent = bootOn && h.wifiWake ? T('Wi-Fi wake keeps Wi-Fi connected already') : T('if the cable stops working');
         $('tog-wake').className = 'tog' + (bootOn && h.wifiWake ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
         // Realtek mode: on kernels with their own r8152, or when it's been
@@ -705,8 +711,10 @@
             if (on) {
                 act(T('Wi-Fi backup off'), installArgs('--no-wifi-fallback'));
             } else {
+                var wakeOn = state.hook.state === 'enabled' && state.hook.wifiWake;
                 confirmThen(T('Use Wi-Fi as a backup?'),
-                    T('If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  Once the cable works again, Wi-Fi goes back off, so traffic returns to the adapter.  Starts from the next boot.'),
+                    wakeOn ? T('You don\'t need this with Wi-Fi wake in standby on.  Wi-Fi wake keeps Wi-Fi connected, so if the cable stops working, the TV moves to Wi-Fi by itself.  This switch only acts when Wi-Fi is off: then it turns Wi-Fi on, and off again once the cable works.  It never turns off Wi-Fi it didn\'t turn on, so it won\'t touch Wi-Fi wake.') :
+                        T('If eth0 loses its cable link for a minute while Wi-Fi is off, the TV turns Wi-Fi on and joins a network it already knows.  Once the cable works again, the Wi-Fi it turned on goes back off, so traffic returns to the adapter.  It never turns off Wi-Fi you had on.  Starts from the next boot.'),
                     function () { act(T('Wi-Fi backup'), installArgs('--wifi-fallback')); });
             }
         },
