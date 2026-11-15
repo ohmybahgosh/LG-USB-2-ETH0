@@ -884,6 +884,26 @@
                 act(T('Turn everything off'), 'uninstall -y --now', null, true);
             });
         },
+        // Who made it and under which licenses, with a QR code for the full texts
+        about: function () {
+            var qr = '';
+            try {
+                var q = window.qrcode(0, 'L');
+                q.addData(REPO + '#license');
+                q.make();
+                qr = q.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
+            } catch (e) { qr = ''; }
+            var v = state && state.version ? state.version : '';
+            overlay('message', T('About and licenses'),
+                '<div class="qr qr-setup">' + qr + '<div class="about">' +
+                '<p>' + esc(T('LG-USB-2-ETH0 {v} by OhMyBahGosh.  Free and open source under the MIT License.', { v: v ? 'v' + v : '' })) + '</p>' +
+                '<p>' + esc(T('It includes qrcode-generator by Kazuhiko Arase, also under the MIT License.')) + '</p>' +
+                '<p>' + esc(T('The driver modules Faster driver downloads are GPL-2.0, like the Linux drivers they come from.  Where each one\'s source is: github.com/ohmybahgosh/lg-webos-usb-drivers')) + '</p>' +
+                '<p>' + esc(T('The full license texts come with the app (LICENSE and vendor/qrcode.LICENSE.txt), and the code opens them on GitHub.')) + '</p>' +
+                '<p>' + esc(T('Not affiliated with LG Electronics.')) + '</p>' +
+                '</div></div>',
+                T('Press OK or BACK to close.'));
+        },
         // Language: Auto (the TV's menu language), then each language in turn.
         // The page reloads in the new one; the choice stays in the app's storage.
         lang: function () {

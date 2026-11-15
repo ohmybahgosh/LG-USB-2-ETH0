@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.30] - 2026-11-15
+
+### Added
+
+- **About and licenses in the TV app.**  A new row near the bottom shows the version, that LG-USB-2-ETH0 is free and open source under the MIT License, that the bundled qrcode-generator by Kazuhiko Arase is MIT too, that the driver modules **Faster driver** downloads are GPL-2.0 and where their source is, and a QR code for the full texts on GitHub.  In English, Russian and Spanish.
+- **The license texts ship in the app.**  The app already carried LG-USB-2-ETH0's `LICENSE`.  It now also carries qrcode-generator's MIT license as `vendor/qrcode.LICENSE.txt`, and the script's header has its copyright and an SPDX license line.
+
 ## [2.11.29] - 2026-11-14
 
 ### Changed
