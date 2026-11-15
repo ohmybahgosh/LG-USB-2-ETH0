@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.35] - 2026-11-15
+
+### Added
+
+- **The speed test works where Cloudflare is blocked.**  Russia cuts connections to Cloudflare after the first 16 KB, so there the test failed, or only worked through a proxy (Yevrashka, issue #33).  **Auto**, the new default, still uses Cloudflare, and where it's blocked or throttled it uses the closest of 18 public [LibreSpeed](https://librespeed.org) servers instead: Amsterdam, Atlanta, Belgrade, Chicago, Denver, Frankfurt, Grand Rapids, Las Vegas, London, Los Angeles, New York, Poznan, Prague and Rome.  The result says when it did that.
+- **Speed test server, a new row in the app.**  It opens a list, closest first with how far each one is, to pick Auto, Cloudflare or one of the servers for every test.  Cloudflare shows as blocked when it is.  Over SSH, `speed-server` lists them, and `speed-server auto`, `cloudflare`, a number from the list, or the URL of your own LibreSpeed server picks one.  The test's result, its history and `report` name the server each test used.
+
 ## [2.11.34] - 2026-11-15
 
 ### Fixed

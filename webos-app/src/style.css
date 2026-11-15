@@ -118,6 +118,17 @@ footer .right { margin: 0 0 0 auto; }
 .actions.squeeze .btn { padding-top: 4px; padding-bottom: 4px; margin-bottom: 5px; font-size: 25px; }
 .actions.squeeze .btn small { font-size: 16px; }
 
+/* Speed test server picker: a list that scrolls with the focus */
+.pick-list { max-height: 590px; overflow-y: auto; margin: 0 -14px; padding: 4px 14px; }
+.pick { display: flex; align-items: center; padding: 12px 22px; border-radius: 14px; margin-bottom: 4px; outline: none; }
+.pick span { flex: 1; }
+.pick b { display: block; font-size: 27px; font-weight: 700; color: #e8efeb; }
+.pick small { display: block; font-size: 19px; color: #93a39b; margin-top: 2px; }
+.pick em { font-style: normal; font-size: 23px; color: #93a39b; margin-left: 24px; }
+.pick.chosen b:after { content: "  \2714"; color: #22e584; }
+.pick.bad b, .pick.bad em, .pick.bad small { color: #6f7f78; }
+.pick:focus { background: #1d2a25; box-shadow: inset 0 0 0 3px #22e584; }
+
 /* Earlier speed tests under the result */
 .hist { margin-top: 8px; border-collapse: collapse; font-size: 22px; opacity: .85; }
 .hist td { padding: 2px 24px 2px 0; }

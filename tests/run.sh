@@ -171,6 +171,11 @@ kind() {
     esac
 }
 
+# The LibreSpeed servers the speed test knows, in the tests
+FAKE_LIBRE='https://ls1.test/backend|16000000|Testville, One (Alpha)
+https://ls2.test|1000000|Nearby, Two (Beta)
+https://ls3.test|4000000|Faraway, Three (Gamma)'
+
 # Run the script under test
 run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
@@ -178,6 +183,7 @@ run() {
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
+        LGU2E_SPEED_LIBRE="$FAKE_LIBRE" \
         LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub $KEYDIR/backup.pub" \
         $SH "$SCRIPT" "$@" < /dev/null > "$SB/out" 2>&1
     RC=$?
@@ -1833,7 +1839,7 @@ test_speedtest() {
     echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
     run speedtest
     check "exit 0" rc_is 0
-    check "names the interface and server" has "Speed test over eth0 (Cloudflare TST)"
+    check "names the interface and server" has "Speed test over eth0, to Cloudflare TST"
     check "latency" has "Latency   12 ms"
     check "download adds the streams" has "Download  1600 Mbit/s"
     check "upload" has "Upload    1600 Mbit/s"
@@ -1851,6 +1857,92 @@ test_speedtest() {
     run status --json
     check "newest first, two kept" json_ok "$OUT" "len(d['speedHistory']) == 2 and d['speedHistory'][0]['at'] >= d['speedHistory'][1]['at']"
     check "kept across reboots" test -s "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speeds"
+    check "history has the server" json_ok "$OUT" "d['speedHistory'][0]['server'] == 'Cloudflare TST'"
+    run report
+    check "report names the server" has "over eth0 to Cloudflare TST (speedtest)"
+}
+
+# speed-server lists the servers, closest measured, and saves a choice
+test_speed_server() {
+    add_builtin
+    echo 0.005 > "$STATE/ping_ls2.test"
+    echo ls3.test > "$STATE/dead"
+    run speed-server
+    check "exit 0" rc_is 0
+    check "Auto by default" has "Speed test server: Auto"
+    check "Cloudflare's city" has "Cloudflare: nearest city TST"
+    check "a server's distance" has "Nearby, Two (Beta), 4 ms"
+    check "one that's down" has "Faraway, Three (Gamma), no answer"
+    run speed-server --json
+    check "json list" json_ok "$OUT" "d['choice'] == 'auto' and d['cloudflare']['ok'] and d['cloudflare']['city'] == 'TST' and len(d['servers']) == 3 and d['servers'][1]['pingMs'] == 4 and d['servers'][2]['pingMs'] is None"
+    run speed-server 2
+    check "saves a number" has "Speed test server: Nearby, Two (Beta)"
+    check "as its URL" grep -qx "https://ls2.test" "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speedserver"
+    run status --json
+    check "status names it" json_ok "$OUT" "d['speedServer'] == {'choice': 'https://ls2.test', 'name': 'Nearby, Two (Beta)'}"
+    run speed-server --json https://ls1.test/backend
+    check "saves a URL, as json" json_ok "$OUT" "d['choice'] == 'https://ls1.test/backend' and d['name'] == 'Testville, One (Alpha)'"
+    run speed-server https://mine.test
+    check "your own server" has "Speed test server: mine.test"
+    run speed-server 9
+    check "no such number" rc_is 1
+    run speed-server tomorrow
+    check "not a choice" rc_is 1
+    run speed-server "https://x.test/;reboot"
+    check "odd URL refused" rc_is 1
+    run speed-server cloudflare
+    check "back to Cloudflare" has "Speed test server: Cloudflare"
+    run speed-server auto
+    check "and Auto" grep -qx auto "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speedserver"
+}
+
+# Where Cloudflare is blocked (Russia cuts it after 16 KB), Auto moves to the
+# closest LibreSpeed server that works
+test_speedtest_cloudflare_blocked() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    touch "$STATE/cf_blocked"
+    echo 0.005 > "$STATE/ping_ls2.test"
+    run speedtest
+    check "exit 0" rc_is 0
+    check "says why" has "Cloudflare looks blocked or throttled on this network"
+    check "names the server" has "Speed test over eth0, to Nearby, Two (Beta)"
+    check "download (25 MiB a transfer)" has "Download  1601 Mbit/s"
+    check "upload, within the server's limit" has "Upload    1600 Mbit/s"
+    check "LibreSpeed's download" grep -q "https://ls2.test/garbage.php?ckSize=25" "$STATE/curl.log"
+    run speedtest --json --phase ping
+    check "json says it moved" json_ok "$OUT" "d['provider'] == 'librespeed' and d['moved'] is True and d['server'] == 'Nearby, Two (Beta)'"
+    run speedtest --json --phase up
+    check "later phases keep the server" json_ok "$OUT" "d['upMbps'] == 1600 and d['server'] == 'Nearby, Two (Beta)'"
+    # Chosen by hand, a blocked Cloudflare says what to do
+    run speed-server cloudflare
+    run speedtest
+    check "Cloudflare chosen: exit 1" rc_is 1
+    check "Cloudflare chosen: what to do" has "choose another server"
+    # Nothing answers at all
+    printf 'ls1.test\nls2.test\nls3.test\n' > "$STATE/dead"
+    run speed-server auto
+    run speedtest
+    check "nothing answers" has "Couldn't reach Cloudflare or any of the other speed test servers"
+}
+
+# A server that takes only small uploads (413 above them) still measures
+test_speedtest_libre_upload_limit() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    echo 1000000 > "$STATE/max_ls2.test"
+    run speed-server 2
+    run speedtest --json
+    check "upload measured" json_ok "$OUT" "d['upMbps'] == 1600 and d['provider'] == 'librespeed' and d['moved'] is False"
+    check "never over the limit" sh -c "! grep -q 'answered 413' '$STATE/curl.log'"
+    run speed-server 3
+    echo ls3.test > "$STATE/dead"
+    run speedtest
+    check "a chosen server that's down" has "didn't answer"
 }
 
 # Cloudflare answers 429 to tests run back to back (a C2 showed "0 Mbit/s")
@@ -3024,6 +3116,9 @@ t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
 t speedtest_upload_old_busybox test_speedtest_upload_old_busybox
 t speedtest_upload_slow test_speedtest_upload_slow
+t speed_server test_speed_server
+t speedtest_cloudflare_blocked test_speedtest_cloudflare_blocked
+t speedtest_libre_upload_limit test_speedtest_libre_upload_limit
 t speedtest_history_clean test_speedtest_history_clean
 t speedtest_limited test_speedtest_limited
 t takeover_cdc_ether test_takeover_cdc_ether

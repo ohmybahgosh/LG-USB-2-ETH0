@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.34"
+VERSION="2.11.35"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -145,6 +145,7 @@ UI_LANG=en
 SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0
 JSON=0
 PHASE=""
+SERVER_ARG=""
 CHECK_ONLY=0
 DRIVER_FILE=""
 LAST=0
@@ -198,7 +199,12 @@ Commands (no command opens the menu):
   update      Check for a newer release and install it.  With --check,
               only say whether there is one
   speedtest   Measure latency, download and upload speed through the TV's
-              current connection, against Cloudflare's nearest server
+              current connection.  Auto uses Cloudflare's nearest server,
+              or the closest other one where Cloudflare is blocked
+  speed-server
+              List the speed test servers and how far each is, or choose
+              one: speed-server auto, cloudflare, a number from the list,
+              or the URL of your own LibreSpeed server
   get-driver  Download a better driver module known to work on this exact
               kernel, if there is one, and check its checksum. With
               --file PATH, check and use a copy you downloaded yourself
@@ -3174,7 +3180,7 @@ uninstall_fix() {
         conf_unlock
         success "Boot hook removed."
     fi
-    rm -f "$SPEED_HIST"
+    rm -f "$SPEED_HIST" "$SPEED_CHOICE"
     [ -f "$WAKE_MARK" ] && { wake_restore 1 || rm -f "$WAKE_MARK"; }
     if [ -f "$WIFI_MARK" ]; then
         rm -f "$WIFI_MARK"
@@ -3665,15 +3671,19 @@ show_json() {
         printf '"speed":null,'
     fi
     printf '"speedHistory":%s,' "$(speed_history_json)"
+    printf '"speedServer":{"choice":%s,"name":%s},' "$(js "$(speed_choice)")" "$(js "$(speed_choice_label "$(speed_choice)")")"
     printf '"issues":%s,"notes":%s,"log":%s}\n' "$(jarr "$ISSUE_LIST")" "$(jarr "$NOTES")" "$(jarr "$(tail -n 8 "$LOG_FILE" 2>/dev/null)")"
 }
 
 # Hide the device-specific half of a MAC address in reports
 # === Speed test ===
-# Cloudflare's speed test endpoints: no account, and the nearest of their
-# servers answers.  Several streams at once, for a few seconds each way, like
-# speed.cloudflare.com itself.  Each transfer is 25 MB; a worker repeats
-# them until its time is up and reports its own rate, and the rates add up.
+# Cloudflare's speed test endpoints by default: no account, and the nearest of
+# their servers answers.  Several streams at once, for a few seconds each way,
+# like speed.cloudflare.com itself.  A worker repeats transfers until its time
+# is up and reports its own rate, and the rates add up.
+# Where Cloudflare is blocked or throttled (Russia cuts connections to it after
+# about 16 KB), Auto uses the closest LibreSpeed server instead, and any of
+# them can be picked with speed-server.
 SPEED_URL=${LGU2E_SPEED_URL:-https://speed.cloudflare.com}
 SPEED_SECS=${LGU2E_SPEED_SECS:-6}
 SPEED_STREAMS=4
@@ -3681,12 +3691,129 @@ SPEED_CHUNK=25000000
 SPEED_FILE="$RUN_DIR/lg-usb-2-eth0.speed"
 # Cloudflare answered 429 (too many tests in a row from this address)
 SPEED_LIMITED="$RUN_DIR/lg-usb-2-eth0.speed.limited"
+# The server picked for the test: auto, cloudflare, or a LibreSpeed server's URL
+SPEED_CHOICE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.speedserver"
+# LibreSpeed servers, from librespeed.org's public list (November 2026).  Each
+# answers garbage.php (download) and empty.php (upload).  "URL|biggest upload
+# it takes, in bytes|name".  All were checked with the same curl calls the test
+# makes; the ones that refused them, or were too slow to measure with, are out.
+SPEED_LIBRE='https://ams.speedtest.clouvider.net/backend|4000000|Amsterdam, Netherlands (Clouvider)
+https://amsspeed.sharktech.net/backend|16000000|Amsterdam, Netherlands (Sharktech)
+https://atl.speedtest.clouvider.net/backend|4000000|Atlanta, USA (Clouvider)
+https://speedtest1.sox.rs/librespeed/backend|16000000|Belgrade, Serbia (SOX)
+https://chispeed.sharktech.net/backend|16000000|Chicago, USA (Sharktech)
+https://denspeed.sharktech.net/backend|16000000|Denver, USA (Sharktech)
+https://fra.speedtest.clouvider.net/backend|4000000|Frankfurt, Germany (Clouvider)
+https://speed.fs-it.systems/backend|16000000|Frankfurt, Germany (FS IT-Systeme)
+https://mispeed.rackgenius.com/backend|1000000|Grand Rapids, USA (RackGenius)
+https://lasspeed.sharktech.net/backend|16000000|Las Vegas, USA (Sharktech)
+https://lon.speedtest.clouvider.net/backend|4000000|London, UK (Clouvider)
+https://la.speedtest.clouvider.net/backend|4000000|Los Angeles, USA (Clouvider)
+https://laxspeed.sharktech.net/backend|16000000|Los Angeles, USA (Sharktech)
+https://nyc.speedtest.clouvider.net/backend|4000000|New York, USA (Clouvider)
+https://speedtest.kamilszczepanski.com|1000000|Poznan, Poland (INEA)
+https://speedtest.cesnet.cz/backend|16000000|Prague, Czech Republic (CESNET)
+https://librespeed.turris.cz/backend|16000000|Prague, Czech Republic (Turris)
+https://st-be-rm2.infra.garr.it|16000000|Rome, Italy (GARR)'
+[ -n "${LGU2E_SPEED_LIBRE:-}" ] && SPEED_LIBRE=$LGU2E_SPEED_LIBRE
+
+# speed_choice: the saved choice, auto if there's none
+speed_choice() { _c=$(head -n 1 "$SPEED_CHOICE" 2>/dev/null); echo "${_c:-auto}"; }
+# speed_libre_get URL FIELD: a listed server's biggest upload (2) or name (3)
+speed_libre_get() {
+    printf '%s\n' "$SPEED_LIBRE" | awk -F'|' -v u="$1" -v f="$2" '$1 == u { print $f; exit }'
+}
+# speed_choice_label CHOICE: what to call it: Auto, Cloudflare, a city, or
+# the host name of your own server
+speed_choice_label() {
+    case "$1" in
+        auto|'') echo Auto ;;
+        cloudflare) echo Cloudflare ;;
+        *) _cl=$(speed_libre_get "$1" 3); echo "${_cl:-$(echo "$1" | sed 's|^[a-z]*://||; s|/.*||')}" ;;
+    esac
+}
+
+# speed_cf_check: Cloudflare lets a 200 kB download through.  Russia cuts
+# connections to Cloudflare after about 16 KB, which stalls here.  Sets
+# _cfcolo to Cloudflare's city code.  A 429 (too many tests in a row) still
+# counts as reachable: the test then says it was limited.
+speed_cf_check() {
+    _cfh="$RUN_DIR/lg-usb-2-eth0.cfh"
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    _cfr=$(curl -s -D "$_cfh" -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__down?bytes=200000" 2>/dev/null)
+    _cfcolo=$(tr -d '\r' < "$_cfh" 2>/dev/null | sed -n 's/^[Cc]olo: *//p' | head -n 1)
+    rm -f "$_cfh"
+    case "$_cfr" in
+        *' 429') return 0 ;;
+        *' 2'??) [ "${_cfr%% *}" -ge 200000 ] 2>/dev/null ;;
+        *) return 1 ;;
+    esac
+}
+# speed_libre_check URL: a LibreSpeed server there sends a full 1 MiB
+speed_libre_check() {
+    _lr=$(curl -s -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$1/garbage.php?ckSize=1" 2>/dev/null)
+    case "$_lr" in *' 2'??) [ "${_lr%% *}" -ge 1048576 ] 2>/dev/null ;; *) return 1 ;; esac
+}
+# speed_libre_pings: "ms URL" for each listed server that answers, closest
+# first.  All at once, so it takes 4 seconds at most.
+speed_libre_pings() {
+    _lp="$RUN_DIR/lg-usb-2-eth0.lp"
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    printf '%s\n' "$SPEED_LIBRE" | {
+        _li=0
+        while IFS='|' read -r _lu _lm _ln; do
+            [ -n "$_lu" ] || continue
+            _li=$((_li + 1))
+            curl -s -o /dev/null --max-time 4 -w "%{time_connect} %{time_namelookup} %{http_code} $_lu\n" "$_lu/empty.php" > "$_lp.$_li" 2>/dev/null &
+        done
+        wait
+    }
+    cat "$_lp".* 2>/dev/null | awk '$3 ~ /^2/ && $1 > 0 { printf "%.0f %s\n", ($1 - $2) * 1000, $4 }' | sort -n
+    rm -f "$_lp".*
+}
+
+# speed_pick: the server for this test, from the saved choice.  Sets SP_KIND
+# (cloudflare or librespeed), SP_BASE, SP_MAX (biggest upload), SP_NAME, and
+# SP_MOVED=1 when Auto moved off a blocked Cloudflare.
+speed_pick() {
+    _choice=$(speed_choice)
+    SP_MOVED=0
+    case "$_choice" in
+        auto|cloudflare)
+            if speed_cf_check; then
+                SP_KIND=cloudflare; SP_BASE=$SPEED_URL; SP_MAX=$SPEED_CHUNK; SP_NAME="Cloudflare${_cfcolo:+ $_cfcolo}"
+                return 0
+            fi
+            [ "$_choice" = auto ] || error_exit "Cloudflare didn't let the test through.  Where it's blocked or throttled (like in Russia), choose another server: Speed test server in the app, or speed-server.  If the TV is offline, check its connection."
+            SP_MOVED=1
+            for _pu in $(speed_libre_pings | awk '{ print $2 }' | head -n 4); do
+                if speed_libre_check "$_pu"; then
+                    SP_KIND=librespeed; SP_BASE=$_pu; SP_MAX=$(speed_libre_get "$_pu" 2); SP_NAME=$(speed_libre_get "$_pu" 3)
+                    return 0
+                fi
+            done
+            error_exit "Couldn't reach Cloudflare or any of the other speed test servers.  Check the TV's internet connection." ;;
+        *)
+            speed_libre_check "$_choice" || error_exit "The speed test server $(speed_choice_label "$_choice") didn't answer.  Choose another one, or Auto: Speed test server in the app, or speed-server."
+            SP_KIND=librespeed; SP_BASE=$_choice; SP_MAX=$(speed_libre_get "$_choice" 2); SP_NAME=$(speed_choice_label "$_choice") ;;
+    esac
+}
+# speed_urls: the download, upload and ping URLs for SP_KIND and SP_BASE
+speed_urls() {
+    SP_MAX=${SP_MAX:-1000000}
+    if [ "$SP_KIND" = librespeed ]; then
+        SP_DOWN="$SP_BASE/garbage.php?ckSize=25"; SP_UP="$SP_BASE/empty.php"; SP_PING="$SP_BASE/empty.php"
+    else
+        SP_DOWN="$SP_BASE/__down?bytes=$SPEED_CHUNK"; SP_UP="$SP_BASE/__up"; SP_PING="$SP_BASE/__down?bytes=0"
+    fi
+}
 
 # speed_worker down|up OUTFILE: write "bytes seconds" for this stream
 speed_worker() {
     _se=$(( $(date +%s) + SPEED_SECS ))
     _sb=0; _st=0; _sn=0
-    # Upload size: 500 kB first, then sized to finish in the time left
+    # Upload size: 500 kB first, then sized to finish in the time left, up
+    # to what the server takes
     _sz=500000
     while [ "$_sn" -lt 20 ]; do
         _sl=$(( _se - $(date +%s) ))
@@ -3696,7 +3823,7 @@ speed_worker() {
             _sl=1
         fi
         if [ "$1" = down ]; then
-            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
+            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SP_DOWN" 2>/dev/null)
         else
             # An upload only counts once it finishes: Cloudflare answers when
             # it has the whole body, and one cut off by --max-time gets no
@@ -3705,7 +3832,7 @@ speed_worker() {
             # upload, so nothing counted and it showed "?" (#33).
             # dd makes the data faster than head does on the TV.
             _sr=$(dd if=/dev/zero bs=100000 count=$((_sz / 100000)) 2>/dev/null | curl -s -o /dev/null --max-time "$_sl" -X POST \
-                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__up" 2>/dev/null)
+                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{time_pretransfer} %{http_code}' "$SP_UP" 2>/dev/null)
         fi
         # Only a 2xx counts: a "429 Too Many Requests" (Cloudflare limits
         # tests run back to back) came back in milliseconds with a few bytes,
@@ -3721,15 +3848,17 @@ speed_worker() {
         # and TLS setup, about 0.2 s a transfer on a TV, which made the many
         # smaller uploads read low
         _sr=$(echo "$_sr" | awk '{ t = $2 - $3; if (t <= 0) t = $2; printf "%s %.3f", $1, t }')
-        # Nothing moved is a failed transfer, not a speed
+        # Nothing moved is a failed transfer, not a speed.  An upload must
+        # have sent all of it: some servers answer early, before reading it
         case "${_sr%% *}" in 0|'') break ;; esac
+        if [ "$1" = up ] && [ "${_sr%% *}" -lt "$_sz" ]; then break; fi
         _sb=$(awk -v a="$_sb" -v b="${_sr% *}" 'BEGIN { printf "%.0f", a + b }')
         _st=$(awk -v a="$_st" -v b="${_sr#* }" 'BEGIN { printf "%.3f", a + b }')
         _sn=$((_sn + 1))
         # Next upload: what this stream sends in half the time left, so it
-        # finishes, from 100 kB up to 25 MB
+        # finishes, from 100 kB up to 25 MB (or the server's limit)
         if [ "$1" = up ]; then
-            _sz=$(awk -v b="${_sr% *}" -v t="${_sr#* }" -v l="$(( _se - $(date +%s) ))" -v m="$SPEED_CHUNK" \
+            _sz=$(awk -v b="${_sr% *}" -v t="${_sr#* }" -v l="$(( _se - $(date +%s) ))" -v m="$SP_MAX" \
                 'BEGIN { s = (t > 0) ? b / t * l / 2 : m; if (s > m) s = m; if (s < 100000) s = 100000; printf "%d", int(s / 100000) * 100000 }')
         fi
     done
@@ -3753,7 +3882,7 @@ speed_run() {
 speed_ping() {
     _pi=0
     while [ "$_pi" -lt 5 ]; do
-        curl -s -o /dev/null --max-time 5 -w '%{time_connect} %{time_namelookup}\n' "$SPEED_URL/__down?bytes=0" 2>/dev/null
+        curl -s -o /dev/null --max-time 5 -w '%{time_connect} %{time_namelookup}\n' "$SP_PING" 2>/dev/null
         _pi=$((_pi + 1))
     done | awk '$1 > 0 { v = ($1 - $2) * 1000; if (m == "" || v < m) m = v } END { if (m != "") printf "%.0f", m }'
 }
@@ -3775,7 +3904,7 @@ speed_remember() {
     _rdrv=$(nic_driver "$_ri")
     _rat=$(speed_get at | grep . || date +%s)
     mkdir -p "$(dirname "$SPEED_HIST")" 2>/dev/null
-    { awk -v a="$_rat" '$1 != a' "$SPEED_HIST" 2>/dev/null | tail -n 9; echo "$_rat $_rd $_ru $(speed_get ping | grep . || echo -) ${_ri:--} ${_rdrv:--} $(uname -r)"; } > "$SPEED_HIST.new" \
+    { awk -v a="$_rat" '$1 != a' "$SPEED_HIST" 2>/dev/null | tail -n 9; echo "$_rat $_rd $_ru $(speed_get ping | grep . || echo -) ${_ri:--} ${_rdrv:--} $(uname -r) $(speed_get server | tr ' ' '_' | grep . || echo -)"; } > "$SPEED_HIST.new" \
         && mv -f "$SPEED_HIST.new" "$SPEED_HIST"
 }
 # A measured speed: a number above 0
@@ -3786,7 +3915,8 @@ speed_history_json() {
     [ -s "$SPEED_HIST" ] || { printf '[]'; return 0; }
     awk 'function q(s) { return (s == "-" ? "null" : "\"" s "\"") }
         function n(s) { return (s ~ /^[0-9.]+$/ ? s : "null") }
-        NF >= 7 && $2 + 0 > 0 && $3 + 0 > 0 && !($1 in seen) { seen[$1] = 1; l[++c] = "{\"at\":" n($1) ",\"downMbps\":" n($2) ",\"upMbps\":" n($3) ",\"pingMs\":" n($4) ",\"interface\":" q($5) ",\"driver\":" q($6) ",\"kernel\":" q($7) "}" }
+        function srv(s) { if (s == "" || s == "-") return "null"; gsub(/_/, " ", s); gsub(/["\\]/, "", s); return "\"" s "\"" }
+        NF >= 7 && $2 + 0 > 0 && $3 + 0 > 0 && !($1 in seen) { seen[$1] = 1; l[++c] = "{\"at\":" n($1) ",\"downMbps\":" n($2) ",\"upMbps\":" n($3) ",\"pingMs\":" n($4) ",\"interface\":" q($5) ",\"driver\":" q($6) ",\"kernel\":" q($7) ",\"server\":" srv($8) "}" }
         END { printf "["; for (i = c; i >= 1; i--) printf "%s%s", l[i], (i > 1 ? "," : ""); printf "]" }' "$SPEED_HIST"
 }
 
@@ -3795,14 +3925,21 @@ speed_test() {
     case "$PHASE" in ''|ping|down|up) ;; *) error_exit "--phase is ping, down or up" ;; esac
     _iface=$(def_iface)
     [ -n "$_iface" ] || error_exit "The TV has no internet connection (no default route)."
-    _ping=""; _down=""; _up=""; _colo=""
+    _ping=""; _down=""; _up=""
     if [ -z "$PHASE" ] || [ "$PHASE" = ping ]; then
-        [ "$JSON" = 1 ] || info "Speed test over $_iface, against Cloudflare.  This uses a few hundred MB of data."
-        _colo=$(curl -s -D - -o /dev/null --max-time 10 "$SPEED_URL/__down?bytes=0" 2>/dev/null | tr -d '\r' | sed -n 's/^[Cc]olo: *//p' | head -n 1)
+        [ "$JSON" = 1 ] || info "Speed test over $_iface.  This uses a few hundred MB of data."
+        speed_pick
+        speed_urls
         _ping=$(speed_ping)
-        [ -n "$_ping" ] || error_exit "Couldn't reach $SPEED_URL.  Check the TV's internet connection."
+        [ -n "$_ping" ] || error_exit "Couldn't reach $SP_NAME.  Check the TV's internet connection."
         rm -f "$SPEED_FILE" "$SPEED_LIMITED"
-        speed_set ping "$_ping"; speed_set iface "$_iface"; speed_set server "$_colo"; speed_set at "$(date +%s)"
+        speed_set ping "$_ping"; speed_set iface "$_iface"; speed_set server "$SP_NAME"; speed_set at "$(date +%s)"
+        speed_set kind "$SP_KIND"; speed_set base "$SP_BASE"; speed_set max "$SP_MAX"; speed_set moved "$SP_MOVED"
+    else
+        # The ping phase picked the server; the app runs the phases one by one
+        SP_KIND=$(speed_get kind); SP_BASE=$(speed_get base); SP_MAX=$(speed_get max); SP_NAME=$(speed_get server); SP_MOVED=$(speed_get moved)
+        [ -n "$SP_BASE" ] || { speed_pick; speed_set kind "$SP_KIND"; speed_set base "$SP_BASE"; speed_set max "$SP_MAX"; speed_set server "$SP_NAME"; speed_set moved "$SP_MOVED"; }
+        speed_urls
     fi
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then
         _down=$(speed_run down)
@@ -3817,13 +3954,12 @@ speed_test() {
     _lim=0
     [ -e "$SPEED_LIMITED" ] && _lim=1
     if [ "$JSON" = 1 ]; then
-        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s,"at":%s}\n' \
-            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")" "$(speed_get at | grep . || echo null)"
+        printf '{"interface":%s,"server":%s,"provider":%s,"moved":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s,"at":%s}\n' \
+            "$(js "$_iface")" "$(js "$SP_NAME")" "$(js "$SP_KIND")" "$(jb "${SP_MOVED:-0}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")" "$(speed_get at | grep . || echo null)"
         return 0
     fi
-    _where=Cloudflare
-    [ -n "$_colo" ] && _where="Cloudflare $_colo"
-    echo "Speed test over $_iface ($_where)"
+    [ "$SP_MOVED" = 1 ] && [ -n "$_ping" ] && info "Cloudflare looks blocked or throttled on this network, so Auto used the closest other server."
+    echo "Speed test over $_iface, to $SP_NAME"
     [ -n "$_ping" ] && echo "  Latency   $_ping ms"
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then echo "  Download  ${_down:-failed} ${_down:+Mbit/s}"; fi
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
@@ -3835,6 +3971,67 @@ speed_test() {
         printf '%s\n' "$_hist" | awk '{ printf "  %s  %s / %s  %s  %s\n", $1, $2, $3, $6, $7 }' | while read -r _ht _hrest; do
             printf '  %s %s\n' "$(date -d "@$_ht" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_ht")" "$_hrest"
         done
+    fi
+}
+
+# speed-server [auto|cloudflare|NUMBER|URL]: show the servers, or choose one
+speed_server() {
+    if [ -n "$SERVER_ARG" ]; then speed_server_set "$SERVER_ARG"; return; fi
+    _cur=$(speed_choice)
+    # The pings and Cloudflare's check run at the same time
+    _spf="$RUN_DIR/lg-usb-2-eth0.spp"
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    speed_libre_pings > "$_spf" &
+    _cfok=1; speed_cf_check || _cfok=0
+    wait
+    if [ "$JSON" = 1 ]; then
+        printf '{"choice":%s,"name":%s,"cloudflare":{"ok":%s,"city":%s},"servers":[' "$(js "$_cur")" "$(js "$(speed_choice_label "$_cur")")" "$(jb "$_cfok")" "$(js "$_cfcolo")"
+        printf '%s\n' "$SPEED_LIBRE" | awk -F'|' -v pf="$_spf" '
+            BEGIN { while ((getline l < pf) > 0) { split(l, a, " "); ms[a[2]] = a[1] } }
+            $1 != "" { gsub(/["\\]/, "", $3); printf "%s{\"url\":\"%s\",\"name\":\"%s\",\"pingMs\":%s}", (c++ ? "," : ""), $1, $3, ($1 in ms ? ms[$1] : "null") }'
+        printf ']}\n'
+        rm -f "$_spf"
+        return 0
+    fi
+    echo "Speed test server: $(speed_choice_label "$_cur")"
+    echo
+    printf '  %-11s %s\n' auto "Cloudflare, or the closest server below if Cloudflare is blocked"
+    if [ "$_cfok" = 1 ]; then _cfl="nearest city${_cfcolo:+ $_cfcolo}"; else _cfl="blocked or throttled on this network"; fi
+    printf '  %-11s %s\n' cloudflare "Cloudflare: $_cfl"
+    printf '%s\n' "$SPEED_LIBRE" | awk -F'|' -v pf="$_spf" '
+        BEGIN { while ((getline l < pf) > 0) { split(l, a, " "); ms[a[2]] = a[1] } }
+        $1 != "" { printf "  %-11s %s, %s\n", ++n, $3, ($1 in ms ? ms[$1] " ms" : "no answer") }'
+    rm -f "$_spf"
+    echo
+    echo "Choose with: sh $(self_path) speed-server auto, cloudflare, a number from the list,"
+    echo "or the URL of your own LibreSpeed server."
+}
+
+# speed_server_set CHOICE: save auto, cloudflare, a list number, or a URL
+speed_server_set() {
+    case "$1" in
+        auto|cloudflare) _new=$1 ;;
+        http://*|https://*)
+            case "$1" in *[!A-Za-z0-9._:/~%-]*) error_exit "That doesn't look like a server URL." ;; esac
+            _new=${1%/}
+            # Your own server: find its garbage.php, there or under backend/
+            if [ -z "$(speed_libre_get "$_new" 1)" ]; then
+                if speed_libre_check "$_new"; then :
+                elif speed_libre_check "$_new/backend"; then _new="$_new/backend"
+                else error_exit "No LibreSpeed server answered at $_new (looked for garbage.php there and under backend/)."
+                fi
+            fi ;;
+        *[!0-9]*|'') error_exit "Choose auto, cloudflare, a number from the list (speed-server shows it), or a server URL." ;;
+        *)
+            _new=$(printf '%s\n' "$SPEED_LIBRE" | awk -F'|' -v n="$1" '$1 != "" && ++c == n { print $1 }')
+            [ -n "$_new" ] || error_exit "There's no server $1 in the list.  Run speed-server to see it." ;;
+    esac
+    mkdir -p "$(dirname "$SPEED_CHOICE")" 2>/dev/null
+    echo "$_new" > "$SPEED_CHOICE" || error_exit "Couldn't save the choice."
+    if [ "$JSON" = 1 ]; then
+        printf '{"choice":%s,"name":%s}\n' "$(js "$_new")" "$(js "$(speed_choice_label "$_new")")"
+    else
+        success "Speed test server: $(speed_choice_label "$_new")"
     fi
 }
 
@@ -4064,7 +4261,7 @@ update_script() {
 speed_summary() {
     _d=$(speed_get down); _u=$(speed_get up)
     [ -n "$_d$_u" ] || return 0
-    echo "${_d:-?} down / ${_u:-?} up Mbit/s, $(speed_get ping) ms, over $(speed_get iface) (speedtest)"
+    echo "${_d:-?} down / ${_u:-?} up Mbit/s, $(speed_get ping) ms, over $(speed_get iface)$(speed_get server | sed "s/^./ to &/") (speedtest)"
 }
 
 mask_mac() { echo "$1" | sed 's/^\(..:..:..\):.*/\1:xx:xx:xx/'; }
@@ -4259,8 +4456,11 @@ while [ $# -gt 0 ]; do
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|update|app-access) CMD=$1 ;;
-        *) usage; error_exit "Unknown option: $1" ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|speed-server|update|app-access) CMD=$1 ;;
+        *)
+            # speed-server's choice
+            if [ "$CMD" = speed-server ] && [ -z "$SERVER_ARG" ]; then SERVER_ARG=$1
+            else usage; error_exit "Unknown option: $1"; fi ;;
     esac
     shift
 done
@@ -4278,6 +4478,7 @@ case "$CMD" in
     get-driver) get_driver ;;
     test-driver) test_driver ;;
     speedtest) speed_test ;;
+    speed-server) speed_server ;;
     update) if [ "$CHECK_ONLY" = 1 ]; then update_check; else update_now; fi ;;
     app-access) app_access ;;
     "") main_menu ;;

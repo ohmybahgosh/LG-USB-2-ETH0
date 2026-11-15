@@ -32,7 +32,7 @@
     var state = null;      // last status --json result
     var busy = false;
     var upd = null;        // last update --check --json result
-    var overlayMode = null; // null, 'busy', 'message', 'confirm'
+    var overlayMode = null; // null, 'busy', 'message', 'confirm', 'pick'
     var onConfirm = null;
 
     function $(id) { return document.getElementById(id); }
@@ -360,6 +360,11 @@
         };
         driverBtn.style.display = offer === 'none' ? 'none' : '';
         $('driver-hint').textContent = hints[offer] || '';
+        // The speed test server row says which one is chosen
+        var ss = s.speedServer;
+        if (ss) {
+            $('speedsrv-hint').textContent = ss.choice === 'auto' ? T('Auto: Cloudflare, or the closest other server') : ss.name;
+        }
         $('tog-driver').className = 'tog' + (offer !== 'none' && offer !== 'available' && bootOn ? ' on' : '');
         // A new driver to test: shown when there's one for this kernel, or a
         // past test's report to send
@@ -630,6 +635,51 @@
             });
     }
 
+    // The speed test server list: UP and DOWN move, OK chooses, BACK cancels
+    var pickItems = [], pickAt = 0;
+    function pick(items, chosen) {
+        pickItems = items;
+        pickAt = 0;
+        var html = '<div class="pick-list">';
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            if (it.id === chosen) { pickAt = i; }
+            html += '<div class="pick' + (it.bad ? ' bad' : '') + (it.id === chosen ? ' chosen' : '') + '" tabindex="0" data-i="' + i + '"><span><b>' +
+                esc(it.name) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' +
+                (typeof it.ms === 'number' ? '<em>' + esc(it.ms + ' ' + T('ms')) + '</em>' : '') + '</div>';
+        }
+        html += '</div><div class="speed-meta">' + esc(T('Cloudflare usually measures the highest.  The others are for when it\'s blocked or slow where you are, and can read lower.')) + '</div>';
+        overlay('pick', T('Speed test server'), html, T('Up and down to move, OK to choose, BACK to cancel.'));
+        Array.prototype.slice.call(document.querySelectorAll('.pick')).forEach(function (el) {
+            el.addEventListener('mouseover', function () { pickAt = +el.getAttribute('data-i'); pickFocus(); });
+            el.addEventListener('click', function (e) { e.stopPropagation(); pickAt = +el.getAttribute('data-i'); pickChoose(); });
+        });
+        pickFocus();
+    }
+    function pickFocus() {
+        var el = document.querySelectorAll('.pick')[pickAt];
+        if (el) { el.focus(); }
+    }
+    function pickChoose() {
+        var it = pickItems[pickAt];
+        if (!it || busy) { return; }
+        busy = true;
+        overlay('busy', T('Speed test server'), '<span class="spinner"></span>' + esc(T('Saving…')), '');
+        runScript('speed-server --json \'' + String(it.id).replace(/'/g, '') + '\'', function (ok, out, err) {
+            busy = false;
+            var d = null;
+            try { d = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { d = null; }
+            if (!d || !d.choice) { pickFailed(out || err); return; }
+            overlay('message', T('Speed test server: {name}', { name: d.choice === 'auto' ? T('Auto') : d.name }),
+                esc(T('The next speed test uses it.')), T('Press OK or BACK to close.'));
+            refresh();
+        });
+    }
+    function pickFailed(text) {
+        overlay('message', T('Speed test server: something went wrong'),
+            '<pre>' + esc((text || T('No answer from the script.')).replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>', T('Press OK or BACK to close.'));
+    }
+
     function confirmThen(title, text, fn) {
         onConfirm = fn;
         overlay('confirm', title, esc(text), T('Press OK to go ahead, or BACK to cancel.'));
@@ -791,7 +841,7 @@
         speed: function () {
             if (busy) { return; }
             busy = true;
-            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', at: null };
+            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', moved: false, at: null };
             function tile(label, value, unit, running) {
                 return '<div class="tile' + (running ? ' run' : '') + '"><small>' + label + '</small>' +
                     (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
@@ -810,16 +860,18 @@
                 for (var i = 0; i < h.length; i++) {
                     var d = h[i].at ? new Date(h[i].at * 1000) : null;
                     rows += '<tr><td>' + esc(d ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') +
-                        '</td><td>' + esc((h[i].downMbps || '?') + ' / ' + (h[i].upMbps || '?')) + '</td><td>' + esc(h[i].driver || '') + '</td></tr>';
+                        '</td><td>' + esc((h[i].downMbps || '?') + ' / ' + (h[i].upMbps || '?')) + '</td><td>' + esc(h[i].driver || '') +
+                        '</td><td>' + esc((h[i].server || '').split(',')[0]) + '</td></tr>';
                 }
-                return '<div class="speed-meta">' + esc(T('Earlier (down / up Mbit/s, driver):')) + '</div><table class="hist">' + rows + '</table>';
+                return '<div class="speed-meta">' + esc(T('Earlier (down / up Mbit/s, driver, server):')) + '</div><table class="hist">' + rows + '</table>';
             }
             function draw(stage, done, s) {
-                var where = r.interface ? (r.server ? T('Over {nic}, to Cloudflare\'s {server} server.', { nic: r.interface, server: r.server }) : T('Over {nic}, to Cloudflare.', { nic: r.interface })) : T('Finding the nearest Cloudflare server…');
+                var where = r.interface ? (r.server ? T('Over {nic}, to {server}.', { nic: r.interface, server: r.server }) : T('Over {nic}.', { nic: r.interface })) : T('Finding a server…');
                 overlay(done ? 'message' : 'busy', done ? T('Speed test') : T('Speed test: {stage}', { stage: T(stage) }),
                     '<div class="speed">' + tile(esc(T('Download')), r.downMbps, esc(T('Mbit/s')), stage === 'download') +
                     tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
                     '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' +
+                    (r.moved ? '<div class="speed-meta warn">' + esc(T('Cloudflare looks blocked or throttled on your network, so Auto used the closest other server.  Speed test server picks a different one.')) + '</div>' : '') +
                     (r.limited ? '<div class="speed-meta warn">' + esc(T('Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low.  Try again in 10 to 15 minutes.')) + '</div>' : '') + (done ? history(s) : ''),
                     done ? T('Press OK or BACK to close.') : T('This takes about 15 seconds.'));
             }
@@ -850,6 +902,36 @@
                         refresh(function (s) { if (overlayMode === 'message' && s) { draw('', true, s); } });
                     });
                 });
+            });
+        },
+        // Speed test server: a list, closest first, measured when it opens
+        speedsrv: function () {
+            if (busy) { return; }
+            busy = true;
+            overlay('busy', T('Speed test server'), '<span class="spinner"></span>' + esc(T('Checking how far each server is…')), '');
+            runScript('speed-server --json', function (ok, out, err) {
+                busy = false;
+                var d = null;
+                try { d = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { d = null; }
+                if (!d || !d.servers) { pickFailed(out || err); return; }
+                var items = [
+                    { id: 'auto', name: T('Auto (recommended)'), sub: T('Cloudflare, or the closest server below where Cloudflare is blocked') },
+                    { id: 'cloudflare', name: 'Cloudflare', bad: !d.cloudflare.ok,
+                        sub: d.cloudflare.ok ? T('Its nearest city: {city}', { city: d.cloudflare.city || '?' }) : T('Blocked or throttled on your network') }
+                ];
+                var list = d.servers.slice().sort(function (a, b) {
+                    if ((a.pingMs === null) !== (b.pingMs === null)) { return a.pingMs === null ? 1 : -1; }
+                    return (a.pingMs || 0) - (b.pingMs || 0) || (a.name < b.name ? -1 : 1);
+                });
+                var mine = d.choice !== 'auto' && d.choice !== 'cloudflare';
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i].url === d.choice) { mine = false; }
+                    items.push({ id: list[i].url, name: list[i].name, ms: list[i].pingMs, bad: list[i].pingMs === null,
+                        sub: list[i].pingMs === null ? T('No answer right now') : '' });
+                }
+                // Your own server, chosen over SSH
+                if (mine) { items.push({ id: d.choice, name: d.name, sub: T('Your own server') }); }
+                pick(items, d.choice);
             });
         },
         report: function () {
@@ -958,6 +1040,14 @@
             if (overlayMode === 'setup') {
                 if (k === KEY.ENTER) { refresh(); }
                 else if (k === KEY.BACK || k === KEY.ESC) { exitApp(); }
+                e.preventDefault();
+                return;
+            }
+            if (overlayMode === 'pick') {
+                if (k === KEY.DOWN) { pickAt = Math.min(pickAt + 1, pickItems.length - 1); pickFocus(); }
+                else if (k === KEY.UP) { pickAt = Math.max(pickAt - 1, 0); pickFocus(); }
+                else if (k === KEY.ENTER) { pickChoose(); }
+                else if (k === KEY.BACK || k === KEY.ESC || k === KEY.BACKSPACE) { closeOverlay(); }
                 e.preventDefault();
                 return;
             }

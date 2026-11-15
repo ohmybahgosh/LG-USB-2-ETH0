@@ -4,22 +4,24 @@
 #   and $FAKE_STATE/download_usbnet for a usbnet.ko
 #   to the file given with -o.  curl_404 makes URLs containing its text 404.
 #   Releases (https://releases.test/...): serves $FAKE_STATE/rel/NAME.
-#   Speed test (URLs with __down or __up): answers -w with a fixed transfer
-#   of 25 MB in 0.5 s per request (400 Mbit/s per stream), a 12 ms connect,
-#   and a "colo: TST" header for -D -.  $FAKE_STATE/speed_time (seconds per
-#   transfer) and $FAKE_STATE/colo change those.  An upload reports the
-#   bytes it really got on stdin, taking that long per 25 MB, or
-#   $FAKE_STATE/up_rate bytes/s: one that can't finish within --max-time
-#   is cut off with no answer (000), like a slow upload link.
-#   -w gets "bytes total setup code", with 10 ms of connect and TLS setup.
+#   Speed test, Cloudflare (__down, __up) and LibreSpeed (garbage.php,
+#   empty.php): -w is filled in for a transfer at 400 Mbit/s (25 MB in 0.5 s),
+#   after 10 ms of connect and TLS setup, and a 12 ms connect.  Files in
+#   $FAKE_STATE change that: speed_time (seconds per 25 MB), up_rate (upload
+#   bytes/s; an upload that can't finish within --max-time is cut off with no
+#   answer, 000), colo (Cloudflare's city, in the -D headers), speed_429
+#   (Cloudflare limiting tests), cf_blocked (Cloudflare cut off after 16 KB,
+#   like in Russia), dead (hosts that don't answer, one a line), ping_HOST
+#   (that host's connect time) and max_HOST (its biggest upload, else 413).
 printf 'curl %s\n' "$*" >> "$FAKE_STATE/curl.log"
-out="" fmt="" url="" dump="" maxt=999
+out="" fmt="" url="" dump="" maxt=999 up=0
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) shift; out=$1 ;;
         -w) shift; fmt=$1 ;;
         -D) shift; dump=$1 ;;
         --max-time) shift; maxt=$1 ;;
+        -T) shift; up=1 ;;
         http*) url=$1 ;;
     esac
     shift
@@ -31,28 +33,52 @@ if [ -s "$FAKE_STATE/curl_404" ]; then
     case "$url" in *"$(cat "$FAKE_STATE/curl_404")"*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
 fi
 case "$url" in
-    *__down*|*__up*)
-        [ "$dump" = - ] && printf 'HTTP/2 200\r\ncolo: %s\r\n\r\n' "$(cat "$FAKE_STATE/colo" 2>/dev/null || echo TST)"
+    *__down*|*__up*|*/garbage.php*|*/empty.php*)
+        host=${url#*://}; host=${host%%/*}
+        conn=$(cat "$FAKE_STATE/ping_$host" 2>/dev/null || echo 0.013)
+        # w CODE BYTES SECONDS: print -w with these filled in
+        w() {
+            printf '%s' "$fmt" | sed "s/%{size_download}/$2/g; s/%{size_upload}/$2/g; s/%{time_total}/$3/g; s/%{time_pretransfer}/0.010/g; s/%{http_code}/$1/g; s/%{time_connect}/$conn/g; s/%{time_namelookup}/0.001/g" \
+                | awk '{ gsub(/\\n/, "\n"); printf "%s", $0 }'
+        }
+        if grep -qxF "$host" "$FAKE_STATE/dead" 2>/dev/null; then conn=0.000000; w 000 0 0.000; exit 7; fi
+        case "$dump" in
+            '') ;;
+            -) printf 'HTTP/2 200\r\ncolo: %s\r\n\r\n' "$(cat "$FAKE_STATE/colo" 2>/dev/null || echo TST)" ;;
+            *) printf 'HTTP/2 200\r\ncolo: %s\r\n\r\n' "$(cat "$FAKE_STATE/colo" 2>/dev/null || echo TST)" > "$dump" ;;
+        esac
+        sent=0
+        case "$url" in
+            *__down*) sent=${url##*bytes=} ;;
+            *garbage.php*) sent=$(( ${url##*ckSize=} * 1048576 )) ;;
+        esac
         # An upload reports the bytes it really got on stdin
-        sent=25000000
-        case "$url" in *__up*) sent=$(wc -c | tr -d ' ') ;; esac
+        [ "$up" = 1 ] && sent=$(wc -c | tr -d ' ')
         sleep 0.2
         per=$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)
-        case "$url" in
-            *__up*) took=$(awk -v s="$sent" -v p="$per" -v r="$(cat "$FAKE_STATE/up_rate" 2>/dev/null)" 'BEGIN { printf "%.3f", (r > 0) ? s / r : s * p / 25000000 }') ;;
-            *) took=$per ;;
-        esac
-        case "$fmt" in
-            *time_connect*) printf '0.013 0.001\n' ;;
-            # $FAKE_STATE/speed_429: Cloudflare limiting tests run back to back
-            *size_*)
-                if [ -e "$FAKE_STATE/speed_429" ]; then printf '13 0.010 0.005 429'
-                elif awk -v t="$took" -v m="$maxt" 'BEGIN { exit !(t > m) }'; then
-                    # Cut off by --max-time before the server answered
-                    printf '%s %s 0.010 000' "$(awk -v s="$sent" -v t="$took" -v m="$maxt" 'BEGIN { printf "%.0f", s * m / t }')" "$maxt"
-                    exit 28
-                else printf '%s %s 0.010 200' "$sent" "$(awk -v t="$took" 'BEGIN { printf "%.3f", t + 0.010 }')"; fi ;;
-        esac
+        rate=""
+        [ "$up" = 1 ] && rate=$(cat "$FAKE_STATE/up_rate" 2>/dev/null)
+        took=$(awk -v s="$sent" -v p="$per" -v r="$rate" 'BEGIN { printf "%.3f", (r > 0) ? s / r : s * p / 25000000 }')
+        cf=0
+        case "$url" in *__down*|*__up*) cf=1 ;; esac
+        if [ "$cf" = 1 ] && [ -e "$FAKE_STATE/speed_429" ]; then w 429 13 0.010; exit 0; fi
+        # Russia: connections to Cloudflare stall after about 16 KB
+        if [ "$cf" = 1 ] && [ -e "$FAKE_STATE/cf_blocked" ] && [ "$sent" -gt 16384 ]; then
+            if [ "$up" = 1 ]; then w 000 16384 "$maxt"; else w 200 16384 "$maxt"; fi
+            exit 28
+        fi
+        if [ "$up" = 1 ] && [ -s "$FAKE_STATE/max_$host" ] && [ "$sent" -gt "$(cat "$FAKE_STATE/max_$host")" ]; then
+            echo "answered 413" >> "$FAKE_STATE/curl.log"
+            w 413 "$(cat "$FAKE_STATE/max_$host")" 0.050; exit 0
+        fi
+        if awk -v t="$took" -v m="$maxt" 'BEGIN { exit !(t > m) }'; then
+            # Cut off by --max-time: a download keeps what it got, an upload
+            # never got its answer
+            part=$(awk -v s="$sent" -v t="$took" -v m="$maxt" 'BEGIN { printf "%.0f", s * m / t }')
+            if [ "$up" = 1 ]; then w 000 "$part" "$maxt"; else w 200 "$part" "$maxt"; fi
+            exit 28
+        fi
+        w 200 "$sent" "$(awk -v t="$took" 'BEGIN { printf "%.3f", t + 0.010 }')"
         exit 0 ;;
 esac
 [ -n "$out" ] || exit 2
