@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.30"
+VERSION="2.11.31"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -575,8 +575,17 @@ load_usbnet() {
 SIG_MSG="This kernel only loads drivers signed by LG (the 2026 models' webOS 26 kernels enforce it), so no added driver can load here.  Only the TV's built-in drivers work."
 
 # The kernel a .ko file was built for (its vermagic), read without modinfo
+# The kernel a driver module was built for, from its vermagic.  strings is
+# about 40 times faster on a 2.6 MB module (0.03 s against 1.2 s on a C2),
+# and status checks the loaded module several times, so it's used when the TV
+# has it.  tr is the fallback for TVs without it.
 module_kernel() {
-    tr -c '[:alnum:]_=.+ -' '\n' < "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1
+    _mkv=""
+    if command -v strings >/dev/null 2>&1; then
+        _mkv=$(strings "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1)
+    fi
+    [ -n "$_mkv" ] || _mkv=$(tr -c '[:alnum:]_=.+ -' '\n' < "$1" 2>/dev/null | sed -n 's/^vermagic=\([^ ]*\).*/\1/p' | head -n 1)
+    [ -z "$_mkv" ] || echo "$_mkv"
 }
 
 # Better driver modules known to work on one exact kernel, as
@@ -3732,21 +3741,27 @@ speed_get() { sed -n "s/^$1=//p" "$SPEED_FILE" 2>/dev/null | head -n 1; }
 
 # Add the finished test to the history (the last 10), with the driver and
 # kernel it ran on, so a firmware or driver change shows up in the numbers
+# Only a test that measured both ways is kept: a download or upload that
+# failed (0, or nothing) would show up as "?" later.  A test that's saved
+# again (the same start time) replaces its line instead of adding one.
 speed_remember() {
     _rd=$(speed_get down) _ru=$(speed_get up) _ri=$(speed_get iface)
-    [ -n "$_rd" ] && [ -n "$_ru" ] || return 0
+    speed_ok "$_rd" && speed_ok "$_ru" || return 0
     _rdrv=$(nic_driver "$_ri")
+    _rat=$(speed_get at | grep . || date +%s)
     mkdir -p "$(dirname "$SPEED_HIST")" 2>/dev/null
-    { tail -n 9 "$SPEED_HIST" 2>/dev/null; echo "$(speed_get at | grep . || date +%s) $_rd $_ru $(speed_get ping | grep . || echo -) ${_ri:--} ${_rdrv:--} $(uname -r)"; } > "$SPEED_HIST.new" \
+    { awk -v a="$_rat" '$1 != a' "$SPEED_HIST" 2>/dev/null | tail -n 9; echo "$_rat $_rd $_ru $(speed_get ping | grep . || echo -) ${_ri:--} ${_rdrv:--} $(uname -r)"; } > "$SPEED_HIST.new" \
         && mv -f "$SPEED_HIST.new" "$SPEED_HIST"
 }
+# A measured speed: a number above 0
+speed_ok() { case "$1" in ''|*[!0-9.]*|.*) return 1 ;; esac; awk -v v="$1" 'BEGIN { exit !(v > 0) }'; }
 
 # The history as JSON, newest first
 speed_history_json() {
     [ -s "$SPEED_HIST" ] || { printf '[]'; return 0; }
     awk 'function q(s) { return (s == "-" ? "null" : "\"" s "\"") }
         function n(s) { return (s ~ /^[0-9.]+$/ ? s : "null") }
-        NF >= 7 { l[++c] = "{\"at\":" n($1) ",\"downMbps\":" n($2) ",\"upMbps\":" n($3) ",\"pingMs\":" n($4) ",\"interface\":" q($5) ",\"driver\":" q($6) ",\"kernel\":" q($7) "}" }
+        NF >= 7 && $2 + 0 > 0 && $3 + 0 > 0 && !($1 in seen) { seen[$1] = 1; l[++c] = "{\"at\":" n($1) ",\"downMbps\":" n($2) ",\"upMbps\":" n($3) ",\"pingMs\":" n($4) ",\"interface\":" q($5) ",\"driver\":" q($6) ",\"kernel\":" q($7) "}" }
         END { printf "["; for (i = c; i >= 1; i--) printf "%s%s", l[i], (i > 1 ? "," : ""); printf "]" }' "$SPEED_HIST"
 }
 
@@ -3777,8 +3792,8 @@ speed_test() {
     _lim=0
     [ -e "$SPEED_LIMITED" ] && _lim=1
     if [ "$JSON" = 1 ]; then
-        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s}\n' \
-            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")"
+        printf '{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s,"at":%s}\n' \
+            "$(js "$_iface")" "$(js "${_colo:-$(speed_get server)}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")" "$(speed_get at | grep . || echo null)"
         return 0
     fi
     _where=Cloudflare
@@ -3788,9 +3803,11 @@ speed_test() {
     if [ -z "$PHASE" ] || [ "$PHASE" = down ]; then echo "  Download  ${_down:-failed} ${_down:+Mbit/s}"; fi
     if [ -z "$PHASE" ] || [ "$PHASE" = up ]; then echo "  Upload    ${_up:-failed} ${_up:+Mbit/s}"; fi
     [ "$_lim" = 1 ] && warn "Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low and weren't saved.  Try again in 10 to 15 minutes."
-    if [ "$(wc -l < "$SPEED_HIST" 2>/dev/null || echo 0)" -gt 1 ]; then
+    # Earlier tests: measured both ways, and not this one
+    _hist=$(awk -v a="$(speed_get at)" 'NF >= 7 && $2 + 0 > 0 && $3 + 0 > 0 && $1 != a' "$SPEED_HIST" 2>/dev/null | tail -n 5)
+    if [ -n "$_hist" ]; then
         echo "Earlier tests (down / up Mbit/s, driver, kernel):"
-        tail -n 6 "$SPEED_HIST" | sed '$d' | awk '{ printf "  %s  %s / %s  %s  %s\n", $1, $2, $3, $6, $7 }' | while read -r _ht _hrest; do
+        printf '%s\n' "$_hist" | awk '{ printf "  %s  %s / %s  %s  %s\n", $1, $2, $3, $6, $7 }' | while read -r _ht _hrest; do
             printf '  %s %s\n' "$(date -d "@$_ht" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_ht")" "$_hrest"
         done
     fi

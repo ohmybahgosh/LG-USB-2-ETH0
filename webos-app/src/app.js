@@ -783,19 +783,23 @@
         speed: function () {
             if (busy) { return; }
             busy = true;
-            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '' };
+            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', at: null };
             function tile(label, value, unit, running) {
                 return '<div class="tile' + (running ? ' run' : '') + '"><small>' + label + '</small>' +
                     (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
                     '<span>' + unit + '</span></div>';
             }
-            // Earlier results (the newest is this one), with the driver and kernel
-            // each ran on, so a firmware or driver change shows in the numbers
+            // Earlier results, with the driver each ran on, so a firmware or
+            // driver change shows in the numbers.  This run is left out by its
+            // start time, so a limited run (not saved) doesn't hide an older one.
             function history(s) {
-                var h = (s && s.speedHistory) || [];
-                if (h.length < 2) { return ''; }
+                var all = (s && s.speedHistory) || [], h = [];
+                for (var j = 0; j < all.length && h.length < 4; j++) {
+                    if (!(r.at && all[j].at === r.at)) { h.push(all[j]); }
+                }
+                if (!h.length) { return ''; }
                 var rows = '';
-                for (var i = 1; i < h.length && i <= 4; i++) {
+                for (var i = 0; i < h.length; i++) {
                     var d = h[i].at ? new Date(h[i].at * 1000) : null;
                     rows += '<tr><td>' + esc(d ? d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') +
                         '</td><td>' + esc((h[i].downMbps || '?') + ' / ' + (h[i].upMbps || '?')) + '</td><td>' + esc(h[i].driver || '') + '</td></tr>';
@@ -831,8 +835,11 @@
                 step('down', 'download', function () {
                     step('up', 'upload', function () {
                         busy = false;
-                        draw('', true);
-                        refresh(function (s) { if (overlayMode === 'message') { draw('', true, s); } });
+                        // The earlier results are already here from when the
+                        // app opened, so they show right away.  The refresh
+                        // behind it updates the main screen and the list.
+                        draw('', true, state);
+                        refresh(function (s) { if (overlayMode === 'message' && s) { draw('', true, s); } });
                     });
                 });
             });

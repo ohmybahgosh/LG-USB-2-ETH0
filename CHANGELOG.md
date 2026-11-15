@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.31] - 2026-11-15
+
+### Changed
+
+- **The app's status loads about four times faster.**  Each refresh read the Faster driver module's kernel version four times, scanning the whole 2.6 MB file each time, about 1.2 seconds a read on a C2.  It now uses `strings` when the TV has it (0.03 seconds), with the old way as the fallback.  On a C2, `status --json` went from 6.2 seconds to 1.4.
+- **Speed test history shows the moment the test ends.**  The app used to wait for a full status refresh before drawing the earlier results.  It now shows the ones it already has right away, and refreshes behind them.
+
+### Fixed
+
+- **No more "?" rows in the speed test history.**  A run whose download or upload failed (often Cloudflare limiting tests run back to back) was saved with 0, and showed as "? / 121".  Only runs that measured both ways are saved now, a run saved twice is kept once, and old failed rows are left out of the list.  This run is told apart from earlier ones by its start time, so a limited run no longer hides an older result.
+
 ## [2.11.30] - 2026-11-15
 
 ### Added

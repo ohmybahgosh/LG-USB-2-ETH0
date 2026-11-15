@@ -9,7 +9,7 @@
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.11.30';
+  var LATEST = '2.11.31';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
@@ -69,7 +69,7 @@
     else if (/^update --check/.test(args)) {
       out = JSON.stringify({ current: ver, latest: LATEST, newer: ver !== LATEST, kind: 'app', source: 'github' });
     }
-    else if (/--phase ping/.test(args)) { out = JSON.stringify({ interface: 'eth0', server: 'DTW', pingMs: 7 }); d = speedDelay * 0.6; }
+    else if (/--phase ping/.test(args)) { out = JSON.stringify({ interface: 'eth0', server: 'DTW', pingMs: 7, at: 1794100000 }); d = speedDelay * 0.6; }
     else if (/--phase down/.test(args)) { out = JSON.stringify({ downMbps: 272 }); d = speedDelay; }
     else if (/--phase up/.test(args)) { out = JSON.stringify({ upMbps: 287 }); d = speedDelay; }
     else if (/^report/.test(args)) { out = report; }

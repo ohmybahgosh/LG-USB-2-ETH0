@@ -1874,6 +1874,29 @@ test_speedtest_limited() {
     check "fresh test not limited" json_ok "$OUT" "d['limited'] is False and d['downMbps'] == 1600"
 }
 
+# Failed runs stay out of the history, and a run saved twice is kept once
+test_speedtest_history_clean() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    _h="$ROOT/var/lib/webosbrew/lg-usb-2-eth0.speeds"
+    mkdir -p "${_h%/*}"
+    printf '%s\n' "1794498705 163 208 11 eth0 r8152 5.4" "1794498940 0 210 14 eth0 r8152 5.4" "1794498940 0 173 14 eth0 r8152 5.4" "1794498998 0 121 7 eth0 r8152 5.4" > "$_h"
+    run status --json
+    check "failed runs hidden" json_ok "$OUT" "len(d['speedHistory']) == 1 and d['speedHistory'][0]['downMbps'] == 163"
+    run speedtest --json --phase ping
+    check "json has the start time" json_ok "$OUT" "isinstance(d['at'], int) and d['at'] > 0"
+    run speedtest --json --phase down
+    run speedtest --json --phase up
+    run speedtest --json --phase up
+    run status --json
+    check "saved once" json_ok "$OUT" "len(d['speedHistory']) == 2 and d['speedHistory'][0]['upMbps'] == 1600"
+    run speedtest
+    check "text lists the earlier good run" has "163 / 208"
+    lacks " 0 / 121"
+}
+
 test_speedtest_offline() {
     add_builtin
     run speedtest
@@ -2972,6 +2995,7 @@ t wifi_driver_name test_wifi_driver_name
 t default_route_wifi test_default_route_wifi
 t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
+t speedtest_history_clean test_speedtest_history_clean
 t speedtest_limited test_speedtest_limited
 t takeover_cdc_ether test_takeover_cdc_ether
 t takeover_only_supported_ids test_takeover_only_supported_ids
