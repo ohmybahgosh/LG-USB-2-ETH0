@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fake `head` for the test suite: the real one, unless $FAKE_STATE/old_head is
-# there, which acts like an older busybox built without head's -c (a 2018 B8)
+# there, which acts like a busybox built without head's -c
 if [ -e "$FAKE_STATE/old_head" ]; then
     for a in "$@"; do case "$a" in -c*) echo "head: invalid option -- 'c'" >&2; exit 1 ;; esac; done
 fi

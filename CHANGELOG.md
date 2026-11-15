@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.34] - 2026-11-15
+
+### Fixed
+
+- **The speed test's upload works on slower upload connections.**  Each upload sent 25 MB, and only counted once Cloudflare answered at the end.  Where 25 MB couldn't go up in the test's 6 seconds (under about 130 Mbit/s of upload over the four streams, common on cable and DSL), every upload was cut off, nothing counted, and the upload showed "?" (Yevrashka's B8, issue #33).  It worked before 2.11.14, which stopped counting transfers without an answer.  Each upload now starts at 500 kB and is sized from the stream's own speed to finish in the time left, up to 25 MB.  The 2.11.33 `head -c` change wasn't the cause: his busybox has `-c` after all.
+- **Speed test times leave out the connection setup.**  Each transfer's time now counts from when the data starts moving, not from the connect and TLS handshake, about 0.2 seconds a transfer on a TV.  This kept the smaller uploads from reading low.  Downloads measure the same as before within a few percent.
+
 ## [2.11.33] - 2026-11-15
 
 ### Added

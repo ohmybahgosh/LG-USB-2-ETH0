@@ -8,14 +8,18 @@
 #   of 25 MB in 0.5 s per request (400 Mbit/s per stream), a 12 ms connect,
 #   and a "colo: TST" header for -D -.  $FAKE_STATE/speed_time (seconds per
 #   transfer) and $FAKE_STATE/colo change those.  An upload reports the
-#   bytes it really got on stdin.
+#   bytes it really got on stdin, taking that long per 25 MB, or
+#   $FAKE_STATE/up_rate bytes/s: one that can't finish within --max-time
+#   is cut off with no answer (000), like a slow upload link.
+#   -w gets "bytes total setup code", with 10 ms of connect and TLS setup.
 printf 'curl %s\n' "$*" >> "$FAKE_STATE/curl.log"
-out="" fmt="" url="" dump=""
+out="" fmt="" url="" dump="" maxt=999
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) shift; out=$1 ;;
         -w) shift; fmt=$1 ;;
         -D) shift; dump=$1 ;;
+        --max-time) shift; maxt=$1 ;;
         http*) url=$1 ;;
     esac
     shift
@@ -33,10 +37,21 @@ case "$url" in
         sent=25000000
         case "$url" in *__up*) sent=$(wc -c | tr -d ' ') ;; esac
         sleep 0.2
+        per=$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)
+        case "$url" in
+            *__up*) took=$(awk -v s="$sent" -v p="$per" -v r="$(cat "$FAKE_STATE/up_rate" 2>/dev/null)" 'BEGIN { printf "%.3f", (r > 0) ? s / r : s * p / 25000000 }') ;;
+            *) took=$per ;;
+        esac
         case "$fmt" in
             *time_connect*) printf '0.013 0.001\n' ;;
             # $FAKE_STATE/speed_429: Cloudflare limiting tests run back to back
-            *size_*) if [ -e "$FAKE_STATE/speed_429" ]; then printf '13 0.010 429'; else printf '%s %s 200' "$sent" "$(cat "$FAKE_STATE/speed_time" 2>/dev/null || echo 0.500)"; fi ;;
+            *size_*)
+                if [ -e "$FAKE_STATE/speed_429" ]; then printf '13 0.010 0.005 429'
+                elif awk -v t="$took" -v m="$maxt" 'BEGIN { exit !(t > m) }'; then
+                    # Cut off by --max-time before the server answered
+                    printf '%s %s 0.010 000' "$(awk -v s="$sent" -v t="$took" -v m="$maxt" 'BEGIN { printf "%.0f", s * m / t }')" "$maxt"
+                    exit 28
+                else printf '%s %s 0.010 200' "$sent" "$(awk -v t="$took" 'BEGIN { printf "%.3f", t + 0.010 }')"; fi ;;
         esac
         exit 0 ;;
 esac

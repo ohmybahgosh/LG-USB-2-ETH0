@@ -1910,6 +1910,20 @@ test_speedtest_upload_old_busybox() {
     check "json upload" json_ok "$OUT" "d['upMbps'] == 1600"
 }
 
+# A slower upload (#33): 25 MB never finished in the time, so nothing counted
+# and it showed "?".  Uploads are sized to finish now.
+test_speedtest_upload_slow() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    echo 1000000 > "$STATE/up_rate"
+    run speedtest --json --phase up
+    check "slow upload measured" json_ok "$OUT" "d['upMbps'] == 32"
+    run speedtest
+    check "upload shown" has "Upload    32 Mbit/s"
+}
+
 test_speedtest_offline() {
     add_builtin
     run speedtest
@@ -3009,6 +3023,7 @@ t default_route_wifi test_default_route_wifi
 t speedtest test_speedtest
 t speedtest_offline test_speedtest_offline
 t speedtest_upload_old_busybox test_speedtest_upload_old_busybox
+t speedtest_upload_slow test_speedtest_upload_slow
 t speedtest_history_clean test_speedtest_history_clean
 t speedtest_limited test_speedtest_limited
 t takeover_cdc_ether test_takeover_cdc_ether

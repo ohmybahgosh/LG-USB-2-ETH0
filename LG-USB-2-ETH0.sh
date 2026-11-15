@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.33"
+VERSION="2.11.34"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -3686,6 +3686,8 @@ SPEED_LIMITED="$RUN_DIR/lg-usb-2-eth0.speed.limited"
 speed_worker() {
     _se=$(( $(date +%s) + SPEED_SECS ))
     _sb=0; _st=0; _sn=0
+    # Upload size: 500 kB first, then sized to finish in the time left
+    _sz=500000
     while [ "$_sn" -lt 20 ]; do
         _sl=$(( _se - $(date +%s) ))
         # Always at least one transfer, even if the clock just ticked over
@@ -3694,12 +3696,16 @@ speed_worker() {
             _sl=1
         fi
         if [ "$1" = down ]; then
-            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{http_code}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
+            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__down?bytes=$SPEED_CHUNK" 2>/dev/null)
         else
-            # dd, not head -c: some older busybox builds leave out head's -c
-            # (a 2018 B8 on webOS 4), which sent nothing and showed "?" (#33)
-            _sr=$(dd if=/dev/zero bs=1000000 count=$((SPEED_CHUNK / 1000000)) 2>/dev/null | curl -s -o /dev/null --max-time "$_sl" -X POST \
-                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{http_code}' "$SPEED_URL/__up" 2>/dev/null)
+            # An upload only counts once it finishes: Cloudflare answers when
+            # it has the whole body, and one cut off by --max-time gets no
+            # answer (its byte count would also include what's still sitting
+            # in the send buffer).  A fixed 25 MB never finished on a slower
+            # upload, so nothing counted and it showed "?" (#33).
+            # dd makes the data faster than head does on the TV.
+            _sr=$(dd if=/dev/zero bs=100000 count=$((_sz / 100000)) 2>/dev/null | curl -s -o /dev/null --max-time "$_sl" -X POST \
+                -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__up" 2>/dev/null)
         fi
         # Only a 2xx counts: a "429 Too Many Requests" (Cloudflare limits
         # tests run back to back) came back in milliseconds with a few bytes,
@@ -3710,12 +3716,22 @@ speed_worker() {
             429) : > "$SPEED_LIMITED"; break ;;
             *) break ;;
         esac
-        case "$_sr" in *[0-9]' '[0-9]*) ;; *) break ;; esac
+        case "$_sr" in *[0-9]' '[0-9]*' '[0-9]*) ;; *) break ;; esac
+        # Count only the time spent moving data: curl's total less its connect
+        # and TLS setup, about 0.2 s a transfer on a TV, which made the many
+        # smaller uploads read low
+        _sr=$(echo "$_sr" | awk '{ t = $2 - $3; if (t <= 0) t = $2; printf "%s %.3f", $1, t }')
         # Nothing moved is a failed transfer, not a speed
         case "${_sr%% *}" in 0|'') break ;; esac
         _sb=$(awk -v a="$_sb" -v b="${_sr% *}" 'BEGIN { printf "%.0f", a + b }')
         _st=$(awk -v a="$_st" -v b="${_sr#* }" 'BEGIN { printf "%.3f", a + b }')
         _sn=$((_sn + 1))
+        # Next upload: what this stream sends in half the time left, so it
+        # finishes, from 100 kB up to 25 MB
+        if [ "$1" = up ]; then
+            _sz=$(awk -v b="${_sr% *}" -v t="${_sr#* }" -v l="$(( _se - $(date +%s) ))" -v m="$SPEED_CHUNK" \
+                'BEGIN { s = (t > 0) ? b / t * l / 2 : m; if (s > m) s = m; if (s < 100000) s = 100000; printf "%d", int(s / 100000) * 100000 }')
+        fi
     done
     echo "$_sb $_st" > "$2"
 }
