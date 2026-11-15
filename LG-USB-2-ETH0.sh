@@ -5,6 +5,8 @@
 # Makes a USB Ethernet adapter the TV's eth0 on rooted LG webOS TVs           #
 # Author: OhMyBahGosh                                                         #
 # https://github.com/ohmybahgosh/LG-USB-2-ETH0                                #
+# Copyright (c) 2025-2026 OhMyBahGosh.  MIT License, see LICENSE.             #
+# SPDX-License-Identifier: MIT                                                #
 ###############################################################################
 #
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]

@@ -38,6 +38,7 @@ if [ ! -f "$QR_CACHE" ]; then
 fi
 echo "$QR_SHA256  $QR_CACHE" | sha256sum -c - >/dev/null || { echo "qrcode.js checksum mismatch" >&2; rm -f "$QR_CACHE"; exit 1; }
 cp "$QR_CACHE" "$DIST/vendor/qrcode.js"
+cp "$HERE/vendor-licenses/qrcode-generator.LICENSE.txt" "$DIST/vendor/qrcode.LICENSE.txt"
 
 node -e '
 const fs = require("fs");
