@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.37] - 2026-11-16
+
+### Changed
+
+- **The speed test servers say plainly that the backups are slower.**  The other servers measured far lower than Cloudflare on a C2 (about 30 Mbit/s down against 230), which could look like the TV or the adapter got slower.  Speed test server now says at the top that Cloudflare is the fastest by far and Auto uses it, and that the others are only a backup for networks where Cloudflare is blocked, mostly small volunteer servers that measure well below your real speed.  Each backup server shows its last result on this TV, or that it's usually slower.  A test run on a backup server you picked says so next to the result, and how to get back to Auto.  `speed-server` and `speedtest` over SSH say the same.
+
 ## [2.11.36] - 2026-11-16
 
 ### Fixed

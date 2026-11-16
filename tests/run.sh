@@ -1884,6 +1884,8 @@ test_speed_server() {
     check "saves a URL, as json" json_ok "$OUT" "d['choice'] == 'https://ls1.test/backend' and d['name'] == 'Testville, One (Alpha)'"
     run speed-server https://mine.test
     check "your own server" has "Speed test server: mine.test"
+    run speed-server
+    check "the list says the others are slower" has "Most are small volunteer"
     run speed-server 9
     check "no such number" rc_is 1
     run speed-server tomorrow
@@ -1909,6 +1911,7 @@ test_speedtest_cloudflare_blocked() {
     check "exit 0" rc_is 0
     check "says why" has "Cloudflare looks blocked or throttled on this network"
     check "names the server" has "Speed test over eth0, to Nearby, Two (Beta)"
+    check "moved there: no backup note" lacks "is a backup server"
     check "download (25 MiB a transfer)" has "Download  1601 Mbit/s"
     check "upload, within the server's limit" has "Upload    1600 Mbit/s"
     check "LibreSpeed's download" grep -q "https://ls2.test/garbage.php?ckSize=25" "$STATE/curl.log"
@@ -1939,6 +1942,8 @@ test_speedtest_libre_upload_limit() {
     run speedtest --json
     check "upload measured" json_ok "$OUT" "d['upMbps'] == 1600 and d['provider'] == 'librespeed' and d['moved'] is False"
     check "never over the limit" sh -c "! grep -q 'answered 413' '$STATE/curl.log'"
+    run speedtest
+    check "a backup server says so" has "Nearby, Two (Beta) is a backup server, and usually measures lower than Cloudflare"
     run speed-server 3
     echo ls3.test > "$STATE/dead"
     run speedtest

@@ -119,6 +119,7 @@ footer .right { margin: 0 0 0 auto; }
 .actions.squeeze .btn small { font-size: 16px; }
 
 /* Speed test server picker: a list that scrolls with the focus */
+.pick-note { margin: 0 0 14px; }
 .pick-list { max-height: 590px; overflow-y: auto; margin: 0 -14px; padding: 4px 14px; }
 .pick { display: flex; align-items: center; padding: 12px 22px; border-radius: 14px; margin-bottom: 4px; outline: none; }
 .pick span { flex: 1; }

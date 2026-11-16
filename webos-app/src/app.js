@@ -637,10 +637,10 @@
 
     // The speed test server list: UP and DOWN move, OK chooses, BACK cancels
     var pickItems = [], pickAt = 0;
-    function pick(items, chosen) {
+    function pick(items, chosen, note) {
         pickItems = items;
         pickAt = 0;
-        var html = '<div class="pick-list">';
+        var html = (note ? '<div class="speed-meta warn pick-note">' + esc(note) + '</div>' : '') + '<div class="pick-list">';
         for (var i = 0; i < items.length; i++) {
             var it = items[i];
             if (it.id === chosen) { pickAt = i; }
@@ -648,7 +648,7 @@
                 esc(it.name) + '</b>' + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</span>' +
                 (typeof it.ms === 'number' ? '<em>' + esc(it.ms + ' ' + T('ms')) + '</em>' : '') + '</div>';
         }
-        html += '</div><div class="speed-meta">' + esc(T('Cloudflare usually measures the highest.  The others are for when it\'s blocked or slow where you are, and can read lower.')) + '</div>';
+        html += '</div>';
         overlay('pick', T('Speed test server'), html, T('Up and down to move, OK to choose, BACK to cancel.'));
         Array.prototype.slice.call(document.querySelectorAll('.pick')).forEach(function (el) {
             el.addEventListener('mouseover', function () { pickAt = +el.getAttribute('data-i'); pickFocus(); });
@@ -841,7 +841,7 @@
         speed: function () {
             if (busy) { return; }
             busy = true;
-            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', moved: false, ipv6Broken: false, at: null };
+            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', provider: '', interface: '', moved: false, ipv6Broken: false, at: null };
             function tile(label, value, unit, running) {
                 return '<div class="tile' + (running ? ' run' : '') + '"><small>' + label + '</small>' +
                     (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
@@ -872,6 +872,7 @@
                     tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
                     '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' +
                     (r.ipv6Broken ? '<div class="speed-meta warn">' + esc(T('IPv6 is broken on your network: the TV tries it first, gets nothing back, and every app waits about 200 ms before it uses IPv4.  This test used IPv4.  Fixing IPv6 on your router, or turning it off there, makes the TV quicker.')) + '</div>' : '') +
+                    (r.provider === 'librespeed' && !r.moved && r.server ? '<div class="speed-meta warn">' + esc(T('{server} is a backup server, and usually measures lower than Cloudflare.  For your real speed, choose Auto in Speed test server.', { server: r.server })) + '</div>' : '') +
                     (r.moved ? '<div class="speed-meta warn">' + esc(T('Cloudflare looks blocked or throttled on your network, so Auto used the closest other server.  Speed test server picks a different one.')) + '</div>' : '') +
                     (r.limited ? '<div class="speed-meta warn">' + esc(T('Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low.  Try again in 10 to 15 minutes.')) + '</div>' : '') + (done ? history(s) : ''),
                     done ? T('Press OK or BACK to close.') : T('This takes about 15 seconds.'));
@@ -918,21 +919,26 @@
                 var items = [
                     { id: 'auto', name: T('Auto (recommended)'), sub: T('Cloudflare, or the closest server below where Cloudflare is blocked') },
                     { id: 'cloudflare', name: 'Cloudflare', bad: !d.cloudflare.ok,
-                        sub: d.cloudflare.ok ? T('Its nearest city: {city}', { city: d.cloudflare.city || '?' }) : T('Blocked or throttled on your network') }
+                        sub: d.cloudflare.ok ? T('The fastest.  Its nearest city: {city}', { city: d.cloudflare.city || '?' }) : T('Blocked or throttled on your network') }
                 ];
                 var list = d.servers.slice().sort(function (a, b) {
                     if ((a.pingMs === null) !== (b.pingMs === null)) { return a.pingMs === null ? 1 : -1; }
                     return (a.pingMs || 0) - (b.pingMs || 0) || (a.name < b.name ? -1 : 1);
                 });
                 var mine = d.choice !== 'auto' && d.choice !== 'cloudflare';
+                // Each backup server's last result here, so the slow ones show
+                var hist = (state && state.speedHistory) || [], last = {};
+                for (var h = hist.length - 1; h >= 0; h--) { if (hist[h].server) { last[hist[h].server] = hist[h]; } }
                 for (var i = 0; i < list.length; i++) {
                     if (list[i].url === d.choice) { mine = false; }
+                    var l = last[list[i].name];
                     items.push({ id: list[i].url, name: list[i].name, ms: list[i].pingMs, bad: list[i].pingMs === null,
-                        sub: list[i].pingMs === null ? T('No answer right now') : '' });
+                        sub: list[i].pingMs === null ? T('No answer right now') :
+                            (l ? T('Backup.  Last test here: {down} / {up} Mbit/s', { down: l.downMbps, up: l.upMbps }) : T('Backup, usually slower than Cloudflare')) });
                 }
                 // Your own server, chosen over SSH
                 if (mine) { items.push({ id: d.choice, name: d.name, sub: T('Your own server') }); }
-                pick(items, d.choice);
+                pick(items, d.choice, T('Cloudflare is the fastest by far, and Auto uses it.  The other servers are only a backup for networks where Cloudflare is blocked, like in Russia.  Most are small volunteer servers and measure well below your real speed.'));
             });
         },
         report: function () {

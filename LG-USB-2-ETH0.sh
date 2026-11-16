@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.36"
+VERSION="2.11.37"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -3980,6 +3980,7 @@ speed_test() {
         return 0
     fi
     [ "$SP_V6" = 1 ] && [ -n "$_ping" ] && warn "$V6_SAYS"
+    [ "$SP_KIND" = librespeed ] && [ "$SP_MOVED" != 1 ] && [ -n "$_ping" ] && info "$SP_NAME is a backup server, and usually measures lower than Cloudflare.  For your real speed, choose auto: speed-server auto, or Speed test server in the app."
     [ "$SP_MOVED" = 1 ] && [ -n "$_ping" ] && info "Cloudflare looks blocked or throttled on this network, so Auto used the closest other server."
     echo "Speed test over $_iface, to $SP_NAME"
     [ -n "$_ping" ] && echo "  Latency   $_ping ms"
@@ -4026,6 +4027,10 @@ speed_server() {
         BEGIN { while ((getline l < pf) > 0) { split(l, a, " "); ms[a[2]] = a[1] } }
         $1 != "" { printf "  %-11s %s, %s\n", ++n, $3, ($1 in ms ? ms[$1] " ms" : "no answer") }'
     rm -f "$_spf"
+    echo
+    echo "Cloudflare is the fastest by far, and auto uses it.  The others are only a backup"
+    echo "for networks where Cloudflare is blocked, like in Russia.  Most are small volunteer"
+    echo "servers and measure well below your real speed."
     echo
     echo "Choose with: sh $(self_path) speed-server auto, cloudflare, a number from the list,"
     echo "or the URL of your own LibreSpeed server."
