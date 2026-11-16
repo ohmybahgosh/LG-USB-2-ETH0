@@ -72,3 +72,5 @@ HU70LA-KR-04.00.08	04.00.08	k5lp	-	4.4.84-k5lp.projector.gulaga.1.2	asix usbnet	
 75NANO90JPA.AJLG-03.60.96	03.60.96	lm21u	kolovesi	4.4.84-899.kcl4tv.22	none	none	config
 43NANO756PA.AEK-03.60.96	03.60.96	lm21a	kolovesi	4.4.84-899.kcl4tv.22	none	none	config
 65QNED80KRA-43.22.73	43.22.73	k8hpp	qilian	6.12.44-67.18.qilian.6	asix usbnet	none	config
+OLED48A2ENA-43.22.73	43.22.73	k8hp	qilian	6.12.44-67.18.qilian.6	asix usbnet	none	config
+43NA1C90AKA-43.22.74	43.22.74	k25lp	qilian	6.12.44-67.18.qilian.6	asix usbnet	none	config
