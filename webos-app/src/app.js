@@ -331,6 +331,12 @@
         $('wifi-hint').textContent = bootOn && h.wifiWake ? T('Wi-Fi wake keeps Wi-Fi connected already') : T('if the cable stops working');
         $('tog-wake').className = 'tog' + (bootOn && h.wifiWake ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
+        // Turn off IPv6: only where it helps, once the speed test found IPv6
+        // broken, or when it's on (so it can be turned off again)
+        var v6Bad = !!(s.speed && s.speed.ipv6Broken);
+        document.querySelector('[data-action="ipv6"]').style.display = (v6Bad || h.ipv6Off) ? '' : 'none';
+        $('tog-ipv6').className = 'tog' + (bootOn && h.ipv6Off ? ' on' : '');
+        $('ipv6-hint').textContent = !(bootOn && h.ipv6Off) && v6Bad ? T('the last speed test found IPv6 broken here') : T('for networks where IPv6 is broken');
         // Realtek mode: on kernels with their own r8152, or when it's been
         // turned off (so it can be turned back on)
         var rt = s.realtek || {};
@@ -383,7 +389,7 @@
     // doesn't run into the footer while the app is still checking the TV.
     function fitRows() {
         var n = buttons().length;
-        $('actions').className = 'actions' + (n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
+        $('actions').className = 'actions' + (n >= 14 ? ' tightest squeeze cram' : n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
     }
 
     // The update row only shows when a newer release is out.  If the
@@ -791,6 +797,16 @@
                     function () { act(T('Block updates'), installArgs('--block-updates')); });
             }
         },
+        ipv6: function () {
+            if (!state) { return; }
+            if (state.hook.state === 'enabled' && state.hook.ipv6Off) {
+                confirmThen(T('Turn IPv6 back on?'), T('IPv6 goes back to how it was.  If the speed test still says IPv6 is broken, connections wait about 200 ms again.'),
+                    function () { act(T('IPv6 back on'), installArgs('--no-ipv6-off')); });
+            } else {
+                confirmThen(T('Turn off IPv6?'), T('Only for networks that give the TV IPv6 but don\'t carry it, where every app waits about 200 ms on each new connection (the speed test says when).  It turns IPv6 off on the TV, so everything uses IPv4, which every streaming app works over.  It starts now and at every boot, and turning it off puts IPv6 back.'),
+                    function () { act(T('IPv6 off'), installArgs('--ipv6-off')); });
+            }
+        },
         apply: function () {
             confirmThen(T('Switch now?'), T('The network drops for a few seconds while the adapter becomes eth0.'), function () {
                 act(T('Switch now'), 'apply -y', null, true);
@@ -871,7 +887,7 @@
                     '<div class="speed">' + tile(esc(T('Download')), r.downMbps, esc(T('Mbit/s')), stage === 'download') +
                     tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
                     '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' +
-                    (r.ipv6Broken ? '<div class="speed-meta warn">' + esc(T('IPv6 is broken on your network: the TV tries it first, gets nothing back, and every app waits about 200 ms before it uses IPv4.  This test used IPv4.  Fixing IPv6 on your router, or turning it off there, makes the TV quicker.')) + '</div>' : '') +
+                    (r.ipv6Broken ? '<div class="speed-meta warn">' + esc(T('IPv6 is broken on your network: the TV tries it first, gets nothing back, and every app waits about 200 ms before it uses IPv4.  This test used IPv4.  Fix IPv6 on your router, or turn on Turn off IPv6 below.')) + '</div>' : '') +
                     (r.provider === 'librespeed' && !r.moved && r.server ? '<div class="speed-meta warn">' + esc(T('{server} is a backup server, and usually measures lower than Cloudflare.  For your real speed, choose Auto in Speed test server.', { server: r.server })) + '</div>' : '') +
                     (r.moved ? '<div class="speed-meta warn">' + esc(T('Cloudflare looks blocked or throttled on your network, so Auto used the closest other server.  Speed test server picks a different one.')) + '</div>' : '') +
                     (r.limited ? '<div class="speed-meta warn">' + esc(T('Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low.  Try again in 10 to 15 minutes.')) + '</div>' : '') + (done ? history(s) : ''),

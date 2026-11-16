@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.39] - 2026-11-16
+
+### Added
+
+- **Turn off IPv6, a new switch in the app (`--ipv6-off`), off by default.**  On a network that gives the TV IPv6 but doesn't carry it, every app waits about 200 ms on each new connection before it falls back to IPv4 (issue #37, and what the speed test has warned about since 2.11.36).  The switch turns IPv6 off on the TV, so everything uses IPv4 right away.  It starts at once, again at every boot, and stays off if webOS turns it back on when it reconnects.  Turning it off, or uninstalling, puts each interface's IPv6 back the way it was.  The row shows up once the speed test finds IPv6 broken (or while it's on), and the speed test's warning points to it.
+
 ## [2.11.38] - 2026-11-16
 
 ### Added

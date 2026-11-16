@@ -1059,6 +1059,41 @@ hbc_hosts() {
         '127.0.0.1 snu.lge.com su-dev.lge.com su.lge.com su-ssl.lge.com' '::1 snu.lge.com su-dev.lge.com su.lge.com su-ssl.lge.com' > "$SB/hosts"
 }
 
+# --ipv6-off: IPv6 off where the network hands it out but doesn't carry it
+# (#37), and back to how it was when it's turned off again
+test_ipv6_off() {
+    add_builtin
+    V6="$ROOT/proc/sys/net/ipv6/conf"
+    for _i in all default lo eth0 wlan0; do mkdir -p "$V6/$_i"; echo 0 > "$V6/$_i/disable_ipv6"; done
+    echo 1 > "$V6/wlan0/disable_ipv6"
+    run install -y --ipv6-off
+    check "exit 0" rc_is 0
+    check "saved" grep -q '^IPV6_OFF="1"' "$CONF"
+    check "says so" has "IPv6 is off now"
+    check "eth0 off" grep -qx 1 "$V6/eth0/disable_ipv6"
+    check "new interfaces off" grep -qx 1 "$V6/default/disable_ipv6"
+    check "lo left alone" grep -qx 0 "$V6/lo/disable_ipv6"
+    check "all left alone" grep -qx 0 "$V6/all/disable_ipv6"
+    check "remembers eth0 was on" grep -qx "eth0 0" "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.ipv6"
+    check "doesn't note one already off" sh -c "! grep -q wlan0 '$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.ipv6'"
+    run status --json
+    check "json says on" has '"ipv6Off":true'
+    run status
+    check "status names it" has "IPv6 off (--ipv6-off)"
+    run install -y --no-ipv6-off
+    check "eth0 back on" grep -qx 0 "$V6/eth0/disable_ipv6"
+    check "default back" grep -qx 0 "$V6/default/disable_ipv6"
+    check "wlan0 still as it was" grep -qx 1 "$V6/wlan0/disable_ipv6"
+    check "note gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.ipv6"
+    check "says so" has "IPv6 is back to how it was"
+    run status --json
+    check "json says off" has '"ipv6Off":false'
+    run install -y --ipv6-off
+    run uninstall -y
+    check "uninstall puts it back" grep -qx 0 "$V6/eth0/disable_ipv6"
+    check "uninstall says so" has "Undid --ipv6-off"
+}
+
 # --block-updates adds to the Homebrew Channel's block, and undoes only its own
 test_block_updates() {
     add_builtin
@@ -1470,6 +1505,7 @@ t wifi_wake_skips test_wifi_wake_skips
 t wifi_wake_retry_reasons test_wifi_wake_retry_reasons
 t wifi_wake_power_cut test_wifi_wake_power_cut
 t block_updates test_block_updates
+t ipv6_off test_ipv6_off
 t block_updates_undo test_block_updates_undo
 t block_updates_without_hbc test_block_updates_without_hbc
 t disable_enable test_disable_enable
@@ -1744,7 +1780,7 @@ test_concurrent_lang_saves() {
         check "round $round: watch kept" grep -q '^WATCH="1"' "$CONF"
         check "round $round: wake kept" grep -q '^WIFI_WAKE="1"' "$CONF"
         check "round $round: one language line" test "$(grep -c '^UI_LANG=' "$CONF")" = 1
-        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 14
+        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 15
     done
     check "no temp files left" sh -c "! ls '$CONF'.new* 2>/dev/null | grep -q ."
     check "no lock left" test ! -e "$CONF.lock"

@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.38"
+VERSION="2.11.39"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -119,6 +119,12 @@ SPEED_HIST="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.speeds"
 # off, so turning the option off puts it back
 UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
 HOSTS_FILE="${LGU2E_HOSTS:-/etc/hosts}"
+# --ipv6-off: each interface's IPv6 switch, and the values it had before
+# they were turned off, so turning the option off puts them back.  The
+# switches reset at every restart, so the values are kept in RUN_DIR.
+# shellcheck disable=SC2034 # used by ipv6_off, in CORE
+IPV6_CONF="${LGU2E_ROOT}/proc/sys/net/ipv6/conf"
+IPV6_MARK="$RUN_DIR/lg-usb-2-eth0.ipv6"
 # shellcheck disable=SC2034 # used by updates_block, in CORE
 SWUPDATE_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/swupdate"
 
@@ -136,13 +142,14 @@ WATCH=0
 WIFI_FALLBACK=0
 WIFI_WAKE=0
 BLOCK_UPDATES=0
+IPV6_OFF=0
 # The TV app's language (en or ru), for the messages the boot hook shows on
 # the TV screen.  The app hands it over (LGU2E_APP_LANG) and it's saved with
 # the settings, since the hook runs at boot without the app.
 UI_LANG=en
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0 SET_V6=0
 JSON=0
 PHASE=""
 SERVER_ARG=""
@@ -240,12 +247,16 @@ Options:
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
                      it reaches by IP.  Updates can remove root for good
+  --ipv6-off         Turn IPv6 off on the TV, for networks that hand out
+                     IPv6 but don't carry it: there, every new connection
+                     waits about 200 ms before it falls back to IPv4 (the
+                     speed test says when).  Starts now and at every boot
   --no-realtek-mode  Don't switch Realtek adapters to their Realtek mode.
                      By default, a Realtek RTL8152 or RTL8153 adapter that
                      the kernel left on the generic driver is switched over
                      to the kernel's own r8152, when it has one
   --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-wifi-wake,
-  --no-block-updates
+  --no-block-updates, --no-ipv6-off
                      Turn that setting off again (--realtek-mode turns it on)
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
@@ -1459,6 +1470,36 @@ wake_watch() {
     done
 }
 
+# --ipv6-off: IPv6 off on every interface but lo, for networks that give
+# the TV IPv6 but don't carry it (#37).  Each switch's old value is noted the
+# first time, for ipv6_restore.  Interfaces that appear later (an adapter
+# plugged in) get it from "default".
+ipv6_off() {
+    [ -d "$IPV6_CONF" ] || return 0
+    mkdir -p "${IPV6_MARK%/*}" 2>/dev/null
+    for _vd in "$IPV6_CONF"/*; do
+        _vn=${_vd##*/}
+        case "$_vn" in all|lo|*[!A-Za-z0-9._-]*) continue ;; esac
+        _vv=""
+        { read -r _vv < "$_vd/disable_ipv6"; } 2>/dev/null
+        case "$_vv" in 0) ;; *) continue ;; esac
+        grep -q "^$_vn " "$IPV6_MARK" 2>/dev/null || echo "$_vn $_vv" >> "$IPV6_MARK"
+        echo 1 > "$_vd/disable_ipv6" 2>/dev/null
+    done
+    return 0
+}
+# Put back the IPv6 switches ipv6_off changed
+ipv6_restore() {
+    [ -f "$IPV6_MARK" ] || return 0
+    while read -r _vn _vv; do
+        case "$_vn" in ''|all|*[!A-Za-z0-9._-]*) continue ;; esac
+        case "$_vv" in 0|1) ;; *) continue ;; esac
+        [ -e "$IPV6_CONF/$_vn/disable_ipv6" ] && echo "$_vv" > "$IPV6_CONF/$_vn/disable_ipv6" 2>/dev/null
+    done < "$IPV6_MARK"
+    rm -f "$IPV6_MARK"
+    return 0
+}
+
 # --block-updates: close more of LG's firmware update path, on top of the
 # Homebrew Channel's own Block system updates.  It never touches that
 # setting, and only adds: webOS's own update switch turned off, every update
@@ -1558,6 +1599,7 @@ watch_run() {
     if [ "$WIFI_FALLBACK" = 1 ]; then
         echo "Turning Wi-Fi on if eth0 has no cable link for ${WIFI_GRACE}s."
     fi
+    [ "$IPV6_OFF" = 1 ] && echo "Keeping IPv6 off."
     _skip=""
     _last=""
     _down=0
@@ -1569,6 +1611,13 @@ watch_run() {
     while :; do
         sleep "$WATCH_EVERY"
         _clock=$((_clock + WATCH_EVERY))
+        # --ipv6-off: webOS can turn IPv6 on again when it reconnects.  One
+        # read, no subprocess.
+        if [ "$IPV6_OFF" = 1 ]; then
+            _v6=""
+            { read -r _v6 < "$IPV6_CONF/eth0/disable_ipv6"; } 2>/dev/null
+            [ "$_v6" = 0 ] && ipv6_off
+        fi
         # A hung adapter: the cable link is up and the TV keeps sending, but
         # nothing comes back (DonZoomik saw Realtek adapters do this on LG's
         # USB controller).  Three sysfs reads, no subprocess.
@@ -1701,6 +1750,7 @@ toast() {
 boot_run() {
     echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
     [ "$BLOCK_UPDATES" = 1 ] && updates_block
+    [ "$IPV6_OFF" = 1 ] && ipv6_off
     # Not $(load_module): that would run it in a subshell
     _lmf=${RUN_DIR:-/tmp}/lg-usb-2-eth0.boot
     load_module > "$_lmf" 2>&1
@@ -1733,7 +1783,8 @@ boot_run() {
         ( wake_watch ) &
         echo $! > "$WAKE_PID_FILE"
     fi
-    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ]; then watch_run; fi
+    [ "$IPV6_OFF" = 1 ] && ipv6_off
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ]; then watch_run; fi
     return 0
 }
 CORE_EOF
@@ -2822,6 +2873,7 @@ settings_ok() {
     case "$WIFI_FALLBACK" in 0|1) ;; *) return 1 ;; esac
     case "$WIFI_WAKE" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
+    case "$IPV6_OFF" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
     case "$UI_LANG" in en|ru|es) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
@@ -2842,6 +2894,7 @@ load_settings() {
     if [ "$SET_WIFI" = 0 ]; then _v=$(hook_setting WIFI_FALLBACK); [ -n "$_v" ] && WIFI_FALLBACK=$_v; fi
     if [ "$SET_WAKE" = 0 ]; then _v=$(hook_setting WIFI_WAKE); [ -n "$_v" ] && WIFI_WAKE=$_v; fi
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
+    if [ "$SET_V6" = 0 ]; then _v=$(hook_setting IPV6_OFF); [ -n "$_v" ] && IPV6_OFF=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     _v=$(hook_setting UI_LANG); case "$_v" in en|ru|es) UI_LANG=$_v ;; esac
@@ -3022,6 +3075,7 @@ write_hook() {
         echo "WIFI_FALLBACK=\"$WIFI_FALLBACK\""
         echo "WIFI_WAKE=\"$WIFI_WAKE\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
+        echo "IPV6_OFF=\"$IPV6_OFF\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
         echo "UI_LANG=\"$UI_LANG\""
         echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
@@ -3138,6 +3192,7 @@ install_fix() {
     [ "$WIFI_FALLBACK" = 1 ] && echo "  -  If eth0 loses its cable link for ${WIFI_GRACE}s while Wi-Fi is off, turn Wi-Fi on, and off again once the cable works"
     [ "$WIFI_WAKE" = 1 ] && echo "  -  Before standby, disconnect only the adapter's network session so Wi-Fi stays ready for Wake on LAN, and connect it again on wake"
     [ "$BLOCK_UPDATES" = 1 ] && echo "  -  Block firmware updates more thoroughly, on top of the Homebrew Channel's own block (starts now)"
+    [ "$IPV6_OFF" = 1 ] && echo "  -  Turn IPv6 off and keep it off, so connections don't wait for a broken IPv6 (starts now)"
     echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
@@ -3162,6 +3217,13 @@ install_fix() {
     elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
         updates_unblock
         echo "Update blocking is off again.  The Homebrew Channel's own block is unchanged."
+    fi
+    if [ "$IPV6_OFF" = 1 ]; then
+        ipv6_off
+        success "IPv6 is off now."
+    elif [ -f "$IPV6_MARK" ]; then
+        ipv6_restore
+        echo "IPv6 is back to how it was."
     fi
     if [ "$APPLY_NOW" = 1 ]; then
         rm -f "$TAKEOVER_STATE"
@@ -3193,6 +3255,10 @@ uninstall_fix() {
     if [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
         updates_unblock
         echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
+    fi
+    if [ -f "$IPV6_MARK" ]; then
+        ipv6_restore
+        echo "Undid --ipv6-off: IPv6 is back to how it was."
     fi
     _bi=$(find_builtin_nic)
     if [ "$APPLY_NOW" = 1 ]; then
@@ -3301,6 +3367,7 @@ show_status() {
             [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _s="$_s, Wi-Fi as a backup (--wifi-fallback)"
             [ "$(hook_setting WIFI_WAKE)" = 1 ] && _s="$_s, Wi-Fi wake in standby (--wifi-wake)"
             [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _s="$_s, blocks firmware updates (--block-updates)"
+            [ "$(hook_setting IPV6_OFF)" = 1 ] && _s="$_s, IPv6 off (--ipv6-off)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
@@ -3636,11 +3703,11 @@ show_json() {
     printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
-        "$(jb "$(hook_setting WIFI_WAKE)")" "$(jb "$([ -f "$WAKE_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" \
+        "$(jb "$(hook_setting WIFI_WAKE)")" "$(jb "$([ -f "$WAKE_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" "$(jb "$(hook_setting IPV6_OFF)")" \
         "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"kernelAtSetup":%s,"sigEnforced":%s,' "$(js "$(hook_setting KERNEL)")" "$(jb "$(sig_enforced && echo 1)")"
@@ -3668,9 +3735,9 @@ show_json() {
     printf '"driverTest":{"available":%s,"adapterOk":%s,"folder":%s,"state":%s,"result":%s},' \
         "$(jb "$_xa")" "$(jb "$_xok")" "$(js "$_xfo")" "$(js "$(drvtest_get state)")" "$(js "$(drvtest_get result)")"
     if [ -n "$(speed_get down)$(speed_get up)" ]; then
-        printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"at":%s},' \
+        printf '"speed":{"interface":%s,"server":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"ipv6Broken":%s,"at":%s},' \
             "$(js "$(speed_get iface)")" "$(js "$(speed_get server)")" "$(jn "$(speed_get ping)")" \
-            "$(jn "$(speed_get down)")" "$(jn "$(speed_get up)")" "$(jn "$(speed_get at)")"
+            "$(jn "$(speed_get down)")" "$(jn "$(speed_get up)")" "$(jb "$(speed_get ipv6)")" "$(jn "$(speed_get at)")"
     else
         printf '"speed":null,'
     fi
@@ -3907,7 +3974,7 @@ speed_v6() {
     curl -6 -s -o /dev/null --max-time 3 "$SPEED_URL/__down?bytes=0" >/dev/null 2>&1 && return 0
     SP_IP=-4; SP_V6=1
 }
-V6_SAYS="IPv6 is broken on this network: the TV tries IPv6 first, gets nothing back, and every app waits about 200 ms on each new connection before it falls back to IPv4.  This test used IPv4.  Fixing IPv6 on the router, or turning it off there, makes the TV faster to respond."
+V6_SAYS="IPv6 is broken on this network: the TV tries IPv6 first, gets nothing back, and every app waits about 200 ms on each new connection before it falls back to IPv4.  This test used IPv4.  Fix IPv6 on the router, or turn it off on the TV: install --ipv6-off, or Turn off IPv6 in the app."
 
 # speed_set KEY VALUE: remember one result for the report and the app
 speed_set() {
@@ -4325,6 +4392,7 @@ show_report() {
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
         [ "$(hook_setting WIFI_WAKE)" = 1 ] && _h="$_h, wifi-wake"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
+        [ "$(hook_setting IPV6_OFF)" = 1 ] && _h="$_h, ipv6-off"
         [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
         _hk=$(hook_setting KERNEL)
         [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ] && _h="$_h, set up on kernel $_hk"
@@ -4470,6 +4538,8 @@ while [ $# -gt 0 ]; do
         --no-wifi-wake) WIFI_WAKE=0; SET_WAKE=1 ;;
         --block-updates) BLOCK_UPDATES=1; SET_BLOCK=1 ;;
         --no-block-updates) BLOCK_UPDATES=0; SET_BLOCK=1 ;;
+        --ipv6-off) IPV6_OFF=1; SET_V6=1 ;;
+        --no-ipv6-off) IPV6_OFF=0; SET_V6=1 ;;
         --realtek-mode) REALTEK_MODE=1; SET_RTK=1 ;;
         --no-realtek-mode) REALTEK_MODE=0; SET_RTK=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
