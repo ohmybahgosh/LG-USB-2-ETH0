@@ -942,13 +942,13 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
   <a href="https://github.com/tirth0jain" title="tirth0jain: 2 driver tests, 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/163157087?v=4&amp;s=96" width="48" height="48" alt="tirth0jain"></a>
   <a href="https://github.com/yurix67rem" title="yurix67rem: 4 compatibility reports, 1 bug report or idea"><img src="https://avatars.githubusercontent.com/u/285026565?v=4&amp;s=96" width="48" height="48" alt="yurix67rem"></a>
   <a href="https://github.com/romansat" title="romansat: 1 compatibility report, 1 bug report or idea, 1 discussion"><img src="https://avatars.githubusercontent.com/u/94401139?v=4&amp;s=96" width="48" height="48" alt="romansat"></a>
+  <a href="https://github.com/tirsojrp" title="tirsojrp: 2 bug reports and ideas"><img src="https://avatars.githubusercontent.com/u/13843184?v=4&amp;s=96" width="48" height="48" alt="tirsojrp"></a>
   <a href="https://github.com/artemisxrpg" title="artemisxrpg: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/74358884?v=4&amp;s=96" width="48" height="48" alt="artemisxrpg"></a>
   <a href="https://github.com/fatfingers" title="fatfingers: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/39812282?v=4&amp;s=96" width="48" height="48" alt="fatfingers"></a>
   <a href="https://github.com/jasonchangandsrarhchen" title="jasonchangandsrarhchen: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/66562022?v=4&amp;s=96" width="48" height="48" alt="jasonchangandsrarhchen"></a>
   <a href="https://github.com/Mazda77" title="Mazda77: 1 discussion"><img src="https://avatars.githubusercontent.com/u/44847930?v=4&amp;s=96" width="48" height="48" alt="Mazda77"></a>
   <a href="https://github.com/OCT0PUSCRIME" title="OCT0PUSCRIME: 1 discussion"><img src="https://avatars.githubusercontent.com/u/65912221?v=4&amp;s=96" width="48" height="48" alt="OCT0PUSCRIME"></a>
   <a href="https://github.com/PargsZ" title="PargsZ: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/60362178?v=4&amp;s=96" width="48" height="48" alt="PargsZ"></a>
-  <a href="https://github.com/tirsojrp" title="tirsojrp: 1 bug report or idea"><img src="https://avatars.githubusercontent.com/u/13843184?v=4&amp;s=96" width="48" height="48" alt="tirsojrp"></a>
 </p>
 
 - **[izoT3P](https://github.com/izoT3P)**: 2 driver tests, 3 compatibility reports
@@ -957,13 +957,13 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
 - **[tirth0jain](https://github.com/tirth0jain)**: 2 driver tests, 1 compatibility report
 - **[yurix67rem](https://github.com/yurix67rem)**: 4 compatibility reports, 1 bug report or idea
 - **[romansat](https://github.com/romansat)**: 1 compatibility report, 1 bug report or idea, 1 discussion
+- **[tirsojrp](https://github.com/tirsojrp)**: 2 bug reports and ideas
 - **[artemisxrpg](https://github.com/artemisxrpg)**: 1 compatibility report
 - **[fatfingers](https://github.com/fatfingers)**: 1 compatibility report
 - **[jasonchangandsrarhchen](https://github.com/jasonchangandsrarhchen)**: 1 compatibility report
 - **[Mazda77](https://github.com/Mazda77)**: 1 discussion
 - **[OCT0PUSCRIME](https://github.com/OCT0PUSCRIME)**: 1 discussion
 - **[PargsZ](https://github.com/PargsZ)**: 1 compatibility report
-- **[tirsojrp](https://github.com/tirsojrp)**: 1 bug report or idea
 <!-- thanks:end -->
 
 ## Thanks
