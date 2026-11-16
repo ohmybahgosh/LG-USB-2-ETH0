@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.35"
+VERSION="2.11.36"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -3740,7 +3740,7 @@ speed_choice_label() {
 speed_cf_check() {
     _cfh="$RUN_DIR/lg-usb-2-eth0.cfh"
     mkdir -p "$RUN_DIR" 2>/dev/null
-    _cfr=$(curl -s -D "$_cfh" -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__down?bytes=200000" 2>/dev/null)
+    _cfr=$(curl ${SP_IP:+"$SP_IP"} -s -D "$_cfh" -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SPEED_URL/__down?bytes=200000" 2>/dev/null)
     _cfcolo=$(tr -d '\r' < "$_cfh" 2>/dev/null | sed -n 's/^[Cc]olo: *//p' | head -n 1)
     rm -f "$_cfh"
     case "$_cfr" in
@@ -3751,7 +3751,7 @@ speed_cf_check() {
 }
 # speed_libre_check URL: a LibreSpeed server there sends a full 1 MiB
 speed_libre_check() {
-    _lr=$(curl -s -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$1/garbage.php?ckSize=1" 2>/dev/null)
+    _lr=$(curl ${SP_IP:+"$SP_IP"} -s -o /dev/null --max-time 6 -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$1/garbage.php?ckSize=1" 2>/dev/null)
     case "$_lr" in *' 2'??) [ "${_lr%% *}" -ge 1048576 ] 2>/dev/null ;; *) return 1 ;; esac
 }
 # speed_libre_pings: "ms URL" for each listed server that answers, closest
@@ -3764,7 +3764,7 @@ speed_libre_pings() {
         while IFS='|' read -r _lu _lm _ln; do
             [ -n "$_lu" ] || continue
             _li=$((_li + 1))
-            curl -s -o /dev/null --max-time 4 -w "%{time_connect} %{time_namelookup} %{http_code} $_lu\n" "$_lu/empty.php" > "$_lp.$_li" 2>/dev/null &
+            curl ${SP_IP:+"$SP_IP"} -s -o /dev/null --max-time 4 -w "%{time_connect} %{time_namelookup} %{http_code} $_lu\n" "$_lu/empty.php" > "$_lp.$_li" 2>/dev/null &
         done
         wait
     }
@@ -3823,7 +3823,7 @@ speed_worker() {
             _sl=1
         fi
         if [ "$1" = down ]; then
-            _sr=$(curl -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SP_DOWN" 2>/dev/null)
+            _sr=$(curl ${SP_IP:+"$SP_IP"} -s -o /dev/null --max-time "$_sl" -w '%{size_download} %{time_total} %{time_pretransfer} %{http_code}' "$SP_DOWN" 2>/dev/null)
         else
             # An upload only counts once it finishes: Cloudflare answers when
             # it has the whole body, and one cut off by --max-time gets no
@@ -3831,7 +3831,7 @@ speed_worker() {
             # in the send buffer).  A fixed 25 MB never finished on a slower
             # upload, so nothing counted and it showed "?" (#33).
             # dd makes the data faster than head does on the TV.
-            _sr=$(dd if=/dev/zero bs=100000 count=$((_sz / 100000)) 2>/dev/null | curl -s -o /dev/null --max-time "$_sl" -X POST \
+            _sr=$(dd if=/dev/zero bs=100000 count=$((_sz / 100000)) 2>/dev/null | curl ${SP_IP:+"$SP_IP"} -s -o /dev/null --max-time "$_sl" -X POST \
                 -H 'Content-Type: application/octet-stream' -T - -w '%{size_upload} %{time_total} %{time_pretransfer} %{http_code}' "$SP_UP" 2>/dev/null)
         fi
         # Only a 2xx counts: a "429 Too Many Requests" (Cloudflare limits
@@ -3879,13 +3879,31 @@ speed_run() {
 }
 
 # speed_ping: the fastest of 5 TCP connects, in ms
-speed_ping() {
+speed_ping() { speed_connect_ms "$SP_IP" "$SP_PING" 5; }
+# speed_connect_ms [-4] URL N: the fastest of N TCP connects there, in ms
+speed_connect_ms() {
     _pi=0
-    while [ "$_pi" -lt 5 ]; do
-        curl -s -o /dev/null --max-time 5 -w '%{time_connect} %{time_namelookup}\n' "$SP_PING" 2>/dev/null
+    while [ "$_pi" -lt "$3" ]; do
+        curl ${1:+"$1"} -s -o /dev/null --max-time 5 -w '%{time_connect} %{time_namelookup}\n' "$2" 2>/dev/null
         _pi=$((_pi + 1))
     done | awk '$1 > 0 { v = ($1 - $2) * 1000; if (m == "" || v < m) m = v } END { if (m != "") printf "%.0f", m }'
 }
+# speed_v6: SP_IP=-4 and SP_V6=1 when IPv6 is broken on this network.  The
+# TV has an IPv6 address and route, so it tries IPv6 first, nothing comes
+# back, and every new connection waits about 200 ms before it falls back to
+# IPv4 (#37: 206 ms to Cloudflare, 23 ms over IPv4).  The test then runs over
+# IPv4, so it measures the network and not that wait.
+speed_v6() {
+    SP_IP=""; SP_V6=0
+    _v6d=$(speed_connect_ms "" "$SPEED_URL/__down?bytes=0" 3)
+    _v6f=$(speed_connect_ms -4 "$SPEED_URL/__down?bytes=0" 3)
+    [ -n "$_v6d" ] && [ -n "$_v6f" ] || return 0
+    [ $((_v6d - _v6f)) -ge 150 ] || return 0
+    # And IPv6 on its own doesn't connect at all
+    curl -6 -s -o /dev/null --max-time 3 "$SPEED_URL/__down?bytes=0" >/dev/null 2>&1 && return 0
+    SP_IP=-4; SP_V6=1
+}
+V6_SAYS="IPv6 is broken on this network: the TV tries IPv6 first, gets nothing back, and every app waits about 200 ms on each new connection before it falls back to IPv4.  This test used IPv4.  Fixing IPv6 on the router, or turning it off there, makes the TV faster to respond."
 
 # speed_set KEY VALUE: remember one result for the report and the app
 speed_set() {
@@ -3928,16 +3946,19 @@ speed_test() {
     _ping=""; _down=""; _up=""
     if [ -z "$PHASE" ] || [ "$PHASE" = ping ]; then
         [ "$JSON" = 1 ] || info "Speed test over $_iface.  This uses a few hundred MB of data."
+        speed_v6
         speed_pick
         speed_urls
         _ping=$(speed_ping)
         [ -n "$_ping" ] || error_exit "Couldn't reach $SP_NAME.  Check the TV's internet connection."
         rm -f "$SPEED_FILE" "$SPEED_LIMITED"
         speed_set ping "$_ping"; speed_set iface "$_iface"; speed_set server "$SP_NAME"; speed_set at "$(date +%s)"
-        speed_set kind "$SP_KIND"; speed_set base "$SP_BASE"; speed_set max "$SP_MAX"; speed_set moved "$SP_MOVED"
+        speed_set kind "$SP_KIND"; speed_set base "$SP_BASE"; speed_set max "$SP_MAX"; speed_set moved "$SP_MOVED"; speed_set ipv6 "$SP_V6"
     else
         # The ping phase picked the server; the app runs the phases one by one
         SP_KIND=$(speed_get kind); SP_BASE=$(speed_get base); SP_MAX=$(speed_get max); SP_NAME=$(speed_get server); SP_MOVED=$(speed_get moved)
+        SP_V6=$(speed_get ipv6); SP_IP=""
+        [ "$SP_V6" = 1 ] && SP_IP=-4
         [ -n "$SP_BASE" ] || { speed_pick; speed_set kind "$SP_KIND"; speed_set base "$SP_BASE"; speed_set max "$SP_MAX"; speed_set server "$SP_NAME"; speed_set moved "$SP_MOVED"; }
         speed_urls
     fi
@@ -3954,10 +3975,11 @@ speed_test() {
     _lim=0
     [ -e "$SPEED_LIMITED" ] && _lim=1
     if [ "$JSON" = 1 ]; then
-        printf '{"interface":%s,"server":%s,"provider":%s,"moved":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s,"at":%s}\n' \
-            "$(js "$_iface")" "$(js "$SP_NAME")" "$(js "$SP_KIND")" "$(jb "${SP_MOVED:-0}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")" "$(speed_get at | grep . || echo null)"
+        printf '{"interface":%s,"server":%s,"provider":%s,"moved":%s,"ipv6Broken":%s,"pingMs":%s,"downMbps":%s,"upMbps":%s,"limited":%s,"at":%s}\n' \
+            "$(js "$_iface")" "$(js "$SP_NAME")" "$(js "$SP_KIND")" "$(jb "${SP_MOVED:-0}")" "$(jb "${SP_V6:-0}")" "${_ping:-null}" "${_down:-null}" "${_up:-null}" "$(jb "$_lim")" "$(speed_get at | grep . || echo null)"
         return 0
     fi
+    [ "$SP_V6" = 1 ] && [ -n "$_ping" ] && warn "$V6_SAYS"
     [ "$SP_MOVED" = 1 ] && [ -n "$_ping" ] && info "Cloudflare looks blocked or throttled on this network, so Auto used the closest other server."
     echo "Speed test over $_iface, to $SP_NAME"
     [ -n "$_ping" ] && echo "  Latency   $_ping ms"
@@ -3978,6 +4000,7 @@ speed_test() {
 speed_server() {
     if [ -n "$SERVER_ARG" ]; then speed_server_set "$SERVER_ARG"; return; fi
     _cur=$(speed_choice)
+    speed_v6
     # The pings and Cloudflare's check run at the same time
     _spf="$RUN_DIR/lg-usb-2-eth0.spp"
     mkdir -p "$RUN_DIR" 2>/dev/null
@@ -3985,7 +4008,7 @@ speed_server() {
     _cfok=1; speed_cf_check || _cfok=0
     wait
     if [ "$JSON" = 1 ]; then
-        printf '{"choice":%s,"name":%s,"cloudflare":{"ok":%s,"city":%s},"servers":[' "$(js "$_cur")" "$(js "$(speed_choice_label "$_cur")")" "$(jb "$_cfok")" "$(js "$_cfcolo")"
+        printf '{"choice":%s,"name":%s,"ipv6Broken":%s,"cloudflare":{"ok":%s,"city":%s},"servers":[' "$(js "$_cur")" "$(js "$(speed_choice_label "$_cur")")" "$(jb "$SP_V6")" "$(jb "$_cfok")" "$(js "$_cfcolo")"
         printf '%s\n' "$SPEED_LIBRE" | awk -F'|' -v pf="$_spf" '
             BEGIN { while ((getline l < pf) > 0) { split(l, a, " "); ms[a[2]] = a[1] } }
             $1 != "" { gsub(/["\\]/, "", $3); printf "%s{\"url\":\"%s\",\"name\":\"%s\",\"pingMs\":%s}", (c++ ? "," : ""), $1, $3, ($1 in ms ? ms[$1] : "null") }'
@@ -3994,6 +4017,7 @@ speed_server() {
         return 0
     fi
     echo "Speed test server: $(speed_choice_label "$_cur")"
+    [ "$SP_V6" = 1 ] && warn "IPv6 is broken on this network, so these times are over IPv4.  Run a speed test for more."
     echo
     printf '  %-11s %s\n' auto "Cloudflare, or the closest server below if Cloudflare is blocked"
     if [ "$_cfok" = 1 ]; then _cfl="nearest city${_cfcolo:+ $_cfcolo}"; else _cfl="blocked or throttled on this network"; fi

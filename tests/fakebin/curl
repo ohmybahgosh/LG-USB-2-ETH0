@@ -13,8 +13,10 @@
 #   (Cloudflare limiting tests), cf_blocked (Cloudflare cut off after 16 KB,
 #   like in Russia), dead (hosts that don't answer, one a line), ping_HOST
 #   (that host's connect time) and max_HOST (its biggest upload, else 413).
+#   v6_broken: IPv6 goes nowhere, so -6 times out and a plain connect
+#   takes 200 ms longer (the fallback to IPv4); -4 is as fast as ever.
 printf 'curl %s\n' "$*" >> "$FAKE_STATE/curl.log"
-out="" fmt="" url="" dump="" maxt=999 up=0
+out="" fmt="" url="" dump="" maxt=999 up=0 ipv=""
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) shift; out=$1 ;;
@@ -22,6 +24,8 @@ while [ $# -gt 0 ]; do
         -D) shift; dump=$1 ;;
         --max-time) shift; maxt=$1 ;;
         -T) shift; up=1 ;;
+        -4) ipv=4 ;;
+        -6) ipv=6 ;;
         http*) url=$1 ;;
     esac
     shift
@@ -36,6 +40,10 @@ case "$url" in
     *__down*|*__up*|*/garbage.php*|*/empty.php*)
         host=${url#*://}; host=${host%%/*}
         conn=$(cat "$FAKE_STATE/ping_$host" 2>/dev/null || echo 0.013)
+        if [ -e "$FAKE_STATE/v6_broken" ]; then
+            [ "$ipv" = 6 ] && exit 28
+            [ -z "$ipv" ] && conn=$(awk -v c="$conn" 'BEGIN { printf "%.3f", c + 0.200 }')
+        fi
         # w CODE BYTES SECONDS: print -w with these filled in
         w() {
             printf '%s' "$fmt" | sed "s/%{size_download}/$2/g; s/%{size_upload}/$2/g; s/%{time_total}/$3/g; s/%{time_pretransfer}/0.010/g; s/%{http_code}/$1/g; s/%{time_connect}/$conn/g; s/%{time_namelookup}/0.001/g" \

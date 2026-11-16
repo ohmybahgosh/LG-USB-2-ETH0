@@ -841,7 +841,7 @@
         speed: function () {
             if (busy) { return; }
             busy = true;
-            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', moved: false, at: null };
+            var r = { pingMs: null, downMbps: null, upMbps: null, server: '', interface: '', moved: false, ipv6Broken: false, at: null };
             function tile(label, value, unit, running) {
                 return '<div class="tile' + (running ? ' run' : '') + '"><small>' + label + '</small>' +
                     (value === null ? '<b class="wait">' + (running ? '…' : '–') + '</b>' : '<b>' + esc(String(value)) + '</b>') +
@@ -871,6 +871,7 @@
                     '<div class="speed">' + tile(esc(T('Download')), r.downMbps, esc(T('Mbit/s')), stage === 'download') +
                     tile(esc(T('Upload')), r.upMbps, esc(T('Mbit/s')), stage === 'upload') + tile(esc(T('Latency')), r.pingMs, esc(T('ms')), stage === 'latency') +
                     '</div><div class="speed-meta">' + esc(where + T('  Uses a few hundred MB of data.')) + '</div>' +
+                    (r.ipv6Broken ? '<div class="speed-meta warn">' + esc(T('IPv6 is broken on your network: the TV tries it first, gets nothing back, and every app waits about 200 ms before it uses IPv4.  This test used IPv4.  Fixing IPv6 on your router, or turning it off there, makes the TV quicker.')) + '</div>' : '') +
                     (r.moved ? '<div class="speed-meta warn">' + esc(T('Cloudflare looks blocked or throttled on your network, so Auto used the closest other server.  Speed test server picks a different one.')) + '</div>' : '') +
                     (r.limited ? '<div class="speed-meta warn">' + esc(T('Cloudflare limited this test (too many speed tests from your network in a row), so these numbers are too low.  Try again in 10 to 15 minutes.')) + '</div>' : '') + (done ? history(s) : ''),
                     done ? T('Press OK or BACK to close.') : T('This takes about 15 seconds.'));

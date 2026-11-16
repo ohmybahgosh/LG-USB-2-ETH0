@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.36] - 2026-11-16
+
+### Fixed
+
+- **The speed test's latency is right where IPv6 is broken.**  On a network that gives the TV an IPv6 address and route but doesn't actually carry IPv6, the TV tries IPv6 first, gets nothing back, and waits about 200 ms before it falls back to IPv4.  That wait showed up as the latency: 206 ms to Cloudflare, when it was really 23 ms (fatfingers' C1, issue #37).  Only servers with IPv6 were affected, so a few nearby servers looked close and the rest looked far away.  The speed test and the server list now spot this, run over IPv4, and say that IPv6 is broken on the network, since every app on the TV waits the same 200 ms on each new connection.  Fixing IPv6 on the router, or turning it off there, fixes that for all of them.
+
 ## [2.11.35] - 2026-11-15
 
 ### Added

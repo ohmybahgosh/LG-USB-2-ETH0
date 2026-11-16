@@ -1945,6 +1945,35 @@ test_speedtest_libre_upload_limit() {
     check "a chosen server that's down" has "didn't answer"
 }
 
+# Broken IPv6: the TV tries IPv6 first and every connect waits 200 ms for
+# the fallback to IPv4 (#37), so the test runs over IPv4 and says why
+test_speedtest_ipv6_broken() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run speedtest --json
+    check "working IPv6 isn't flagged" json_ok "$OUT" "d['ipv6Broken'] is False and d['pingMs'] == 12"
+    check "transfers on the plain path" sh -c "! grep -q 'curl -4 -s -o /dev/null --max-time [0-9]* -w %{size_download}' '$STATE/curl.log'"
+    touch "$STATE/v6_broken"
+    : > "$STATE/curl.log"
+    run speedtest
+    check "exit 0" rc_is 0
+    check "says IPv6 is broken" has "IPv6 is broken on this network"
+    check "latency over IPv4" has "Latency   12 ms"
+    check "transfers over IPv4" grep -q "curl -4 -s -o /dev/null --max-time [0-9]* -w %{size_download}" "$STATE/curl.log"
+    run speedtest --json --phase ping
+    check "json says so" json_ok "$OUT" "d['ipv6Broken'] is True and d['pingMs'] == 12"
+    : > "$STATE/curl.log"
+    run speedtest --json --phase up
+    check "later phases keep IPv4" json_ok "$OUT" "d['ipv6Broken'] is True and d['upMbps'] == 1600"
+    check "uploads over IPv4" grep -q "curl -4 -s -o /dev/null --max-time [0-9]* -X POST" "$STATE/curl.log"
+    run speed-server --json
+    check "server list over IPv4" json_ok "$OUT" "d['ipv6Broken'] is True and all(x['pingMs'] == 12 for x in d['servers'])"
+    run speed-server
+    check "server list says so" has "IPv6 is broken on this network, so these times are over IPv4"
+}
+
 # Cloudflare answers 429 to tests run back to back (a C2 showed "0 Mbit/s")
 test_speedtest_limited() {
     add_builtin
@@ -3121,6 +3150,7 @@ t speedtest_cloudflare_blocked test_speedtest_cloudflare_blocked
 t speedtest_libre_upload_limit test_speedtest_libre_upload_limit
 t speedtest_history_clean test_speedtest_history_clean
 t speedtest_limited test_speedtest_limited
+t speedtest_ipv6_broken test_speedtest_ipv6_broken
 t takeover_cdc_ether test_takeover_cdc_ether
 t takeover_only_supported_ids test_takeover_only_supported_ids
 t driver_offer_2024 test_driver_offer_2024
