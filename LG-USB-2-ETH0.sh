@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.37"
+VERSION="2.11.38"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2085,7 +2085,9 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
 4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
 4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
-5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99"
+5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99
+5.4.268-223.29.okapi.pine.4 k8hpp ax88179_178a.ko 42e7c03cee10cb0cece885806176cda8a6c2382e7487bae02dd1325135911b9e
+4.4.84-636.glacier.26 lm18a r8152_oot.ko 99c81dd48fb3feb3cc0d289a28e3d606dc8631106fcc00c3fb141117d3507321"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -2126,7 +2128,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.268-223.obr4tv.42 k8hpt r8152_oot.ko 70b6b3f00f1659f33d8cebea170e10d23f67847fbce8750832132f0e18ced407
 5.4.268-223.obr4tv.42 k8hpt ax88179_178a.ko 464c8ab0381f2a02eecaf49b2a6318ab9f81c052ccbb8513de8654b7c6b14028
 5.4.268-223.29.okapi.pine.4 k8hpp r8152_oot.ko 1f60160b502a51f7fdbf1347dc975f7ca68bd5d580336b56a8a23b175205d244
-5.4.268-223.29.okapi.pine.4 k8hpp ax88179_178a.ko 42e7c03cee10cb0cece885806176cda8a6c2382e7487bae02dd1325135911b9e
 5.4.268-223.42.okapi.nmrm.2 k24t r8152_oot.ko b4d92c085389e0da84ec8261bd12767c64dde2035ac6c12b7e1dc982224f1ba0
 5.4.268-223.42.okapi.nmrm.2 k24t ax88179_178a.ko 1f17eb1cf7895edfe1743b14ad38374290cedaa247bad33963cd211035d992c8
 5.4.96-115.16.mebbin.1 k8lp r8152_oot.ko 2551ed3d73a2a96106ab6256f50059a9f3a00691803589434c13526e9b35294f
@@ -2427,7 +2428,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-404.glacier.10 m3 ax88179_178a.ko 1f1e36c8a86cea8ba2dbbb01bb5e57c6766cd8ea3abfb59369a62575cc856219
 4.4.84-404.glacier.10 m3 dm9601.ko 3b3181fab35cd8a441eb598f28a328dec43821c406249adf705b9d587b973a1d
 4.4.84-636.glacier.26 lm18a r8152.ko 423aeba6c26282b701736341180a99f5e04b584244729f0b5a7c314792d5b456
-4.4.84-636.glacier.26 lm18a r8152_oot.ko 99c81dd48fb3feb3cc0d289a28e3d606dc8631106fcc00c3fb141117d3507321
 4.4.84-636.glacier.26 lm18a usbnet.ko 7374f9c280858f21e24d23c46a28991ee92fbfe6a9b20b4c7dc2121ce0040d43
 4.4.84-636.glacier.26 lm18a ax88179_178a.ko 4bef243a4dc461521ba69a17706b4994e2ffa0de543f3b8d386bdcb8452008a6
 4.4.84-636.glacier.26 lm18a dm9601.ko 23c57483a3ebb10e9a6723f9333a0c69964036d17eb2c4c07744ac792a12cbd0
@@ -2514,9 +2514,13 @@ EOF
 }
 
 # pick_experimental KERNEL: of its experimental drivers, the one for the
-# adapter plugged in (nothing, and false, if none supports it)
+# adapter plugged in (nothing, and false, if none supports it).  r8152_oot
+# comes first: Realtek's own current driver runs every Realtek chip, while an
+# r8152.ko built from a 4.4 kernel's source predates the RTL8153B, which has
+# the same USB ID as the RTL8153, and never takes it over (#43)
 pick_experimental() {
     _pel=$(experimental_driver "$1") || return 1
+    _pel=$(printf '%s\n' "$_pel" | awk '$3 == "r8152_oot.ko"'; printf '%s\n' "$_pel" | awk '$3 != "r8152_oot.ko"')
     while IFS= read -r _pe; do
         [ -n "$_pe" ] || continue
         # shellcheck disable=SC2086 # split the fields on purpose

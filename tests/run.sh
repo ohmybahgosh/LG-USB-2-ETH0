@@ -2447,6 +2447,19 @@ drvtest_setup() {
     drvtest_file
 }
 
+# A 4.4 kernel's own r8152.ko predates the RTL8153B (same USB ID as the
+# RTL8153) and never takes it over, so r8152_oot is tested first (#43)
+test_test_driver_prefers_r8152_oot() {
+    drvtest_setup
+    _oot=$(sha256sum "$STATE/download" | awk '{print $1}')
+    XDRV="https://example.test/r8152.ko 0000000000000000000000000000000000000000000000000000000000000000 r8152.ko 5.4.268-999 0bda:8152,0bda:8153
+$XDRV"
+    LGU2E_TEST_EXPERIMENTAL=$XDRV FAKE_KERNEL=5.4.268-999 run test-driver -y
+    check "exit 0" rc_is 0
+    check "tested r8152_oot" dt_is "sha=$_oot"
+    check "and moved the adapter to it" has "Now on r8152_oot"
+}
+
 # webOS hasn't given the adapter an address within the wait (an older webOS
 # can be slow, issue #17): the link goes down and up, webOS reconnects, and
 # the test reports it works
@@ -2735,7 +2748,7 @@ test_test_driver_k6lp() {
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
-    check "Realtek: the r8152 build" grep -q "59fd481.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152.ko" "$STATE/curl.log"
+    check "Realtek: Realtek's own driver first (#43)" grep -q "59fd481.*/experimental/4.4.84-612.21.6.jardine.2-k6lp/r8152_oot.ko" "$STATE/curl.log"
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8156
     : > "$STATE/curl.log"
@@ -3201,6 +3214,7 @@ t no_tr_escape_ranges test_no_tr_escape_ranges
 t module_path_hint test_module_path_hint
 t test_driver_reconnects test_test_driver_reconnects
 t test_driver_link_bounce test_test_driver_link_bounce
+t test_driver_prefers_r8152_oot test_test_driver_prefers_r8152_oot
 t test_driver_from_r8152 test_test_driver_from_r8152
 t test_driver_no_wait test_test_driver_no_wait
 t test_driver_eth0_kept test_test_driver_eth0_kept

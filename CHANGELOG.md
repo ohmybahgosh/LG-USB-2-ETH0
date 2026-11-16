@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.38] - 2026-11-16
+
+### Added
+
+- **Two more drivers confirmed working, now offered by Faster driver.**  The ASIX `ax88179_178a` for kernel `5.4.268-223.29.okapi.pine.4` on the K8Hpp chip (a 2024 QNED816RE, sodasoba1, issue #42), and Realtek's `r8152_oot` for kernel `4.4.84-636.glacier.26` on the LM18A chip (a 2018 UK6300 with an RTL8153, 297 Mbit/s down and 331 up, zheskov-art, issue #43).
+
+### Fixed
+
+- **Test a new driver picks `r8152_oot` for Realtek adapters.**  Where a kernel had both, it tried the `r8152.ko` built from the TV's own kernel source first.  On the 2018 and older 4.4 kernels that driver predates the RTL8153B, which has the same USB ID as the RTL8153, so the adapter never moved to it, and the RTL8153 only worked once an RTL8156 had loaded `r8152_oot` (zheskov-art, issue #43).  Realtek's own current driver runs every Realtek chip, so it's tried first now.
+
 ## [2.11.37] - 2026-11-16
 
 ### Changed
