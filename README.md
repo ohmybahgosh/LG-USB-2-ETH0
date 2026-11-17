@@ -963,6 +963,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
   <a href="https://github.com/Mazda77" title="Mazda77: 1 discussion"><img src="https://avatars.githubusercontent.com/u/44847930?v=4&amp;s=96" width="48" height="48" alt="Mazda77"></a>
   <a href="https://github.com/OCT0PUSCRIME" title="OCT0PUSCRIME: 1 discussion"><img src="https://avatars.githubusercontent.com/u/65912221?v=4&amp;s=96" width="48" height="48" alt="OCT0PUSCRIME"></a>
   <a href="https://github.com/PargsZ" title="PargsZ: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/60362178?v=4&amp;s=96" width="48" height="48" alt="PargsZ"></a>
+  <a href="https://github.com/tosomax" title="tosomax: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/155764036?v=4&amp;s=96" width="48" height="48" alt="tosomax"></a>
   <a href="https://github.com/zheskov-art" title="zheskov-art: 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/247677814?v=4&amp;s=96" width="48" height="48" alt="zheskov-art"></a>
 </p>
 
@@ -980,6 +981,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
 - **[Mazda77](https://github.com/Mazda77)**: 1 discussion
 - **[OCT0PUSCRIME](https://github.com/OCT0PUSCRIME)**: 1 discussion
 - **[PargsZ](https://github.com/PargsZ)**: 1 compatibility report
+- **[tosomax](https://github.com/tosomax)**: 1 compatibility report
 - **[zheskov-art](https://github.com/zheskov-art)**: 1 compatibility report
 <!-- thanks:end -->
 
