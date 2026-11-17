@@ -9,7 +9,7 @@
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.11.40';
+  var LATEST = '2.11.41';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {

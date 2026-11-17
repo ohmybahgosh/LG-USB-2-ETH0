@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.40"
+VERSION="2.11.41"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2139,7 +2139,7 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99
 5.4.268-223.29.okapi.pine.4 k8hpp ax88179_178a.ko 42e7c03cee10cb0cece885806176cda8a6c2382e7487bae02dd1325135911b9e
 4.4.84-636.glacier.26 lm18a r8152_oot.ko 99c81dd48fb3feb3cc0d289a28e3d606dc8631106fcc00c3fb141117d3507321
-4.4.84-723.kcl4tv.20 k7lp r8152.ko 5b85ac1b84c0b9341f9c0bb87c325d27366b565b2d4961d0ec884292581a89c0"
+4.4.84-723.kcl4tv.20 k7lp r8152_oot.ko ec89ac2a0da869e2a784bca7c9304dc69a229f9cd8ff3f5673db82ee943e0015"
 
 EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
@@ -2444,7 +2444,6 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 5.4.268-955.16.nbr4tv.nmrm.10 - ax88179_178a.ko fba0553635804a3b018049db64a31407f9c843428d82ef8a8c13befb8f2dab9c
 5.4.268-955.16.nbr4tv.nmrm.10 - dm9601.ko 7abbe41e5a84d2e7225dc00c6ae0e049842e436f407324caaf53ab666a335d14
 5.4.268-955.16.nbr4tv.nmrm.10 - aqc111.ko f0f7fd57031297f28e578e8cbae1e38617a7d77e4d68080101a70e1e30d72a23
-4.4.84-723.kcl4tv.20 k7lp r8152_oot.ko ec89ac2a0da869e2a784bca7c9304dc69a229f9cd8ff3f5673db82ee943e0015
 4.4.84-723.kcl4tv.20 k7lp ax88179_178a.ko 08c91c63048b8efd7315227843bf34db4c11e7ea21966de509b3b9a1034bc725
 4.4.84-723.kcl4tv.20 k7lp dm9601.ko 58e26bceaa0f48e5f2703984b526747af7fbf344526e4e7f708e34039229a3ce
 4.4.84-723.kcl4tv.20 k7lp lan78xx.ko 4e2f06b71522a8aac2d3db98e940ea5e66ad3238c46f2e759cc2958b0cce9ae5
@@ -2506,7 +2505,8 @@ EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94
 4.4.84-899.kcl4tv.22 - r8152.ko b42d7814fadde20ffc003daf1524f639054166d9556e4cfe3c94485c91cf23d0
 4.4.84-899.kcl4tv.22 - usbnet.ko 58bd91b60e69458a811e5812b38a5e816faee8f4bfdcdb4be779c6e70d4494bc
 4.4.84-899.kcl4tv.22 - ax88179_178a.ko 48b58ea22f2b60397469ba56162b513891a762d91d17aca6da61c70eada28e85
-4.4.84-899.kcl4tv.22 - dm9601.ko 38d824f4281dab8966b86406fdab116be768b31efefae8217fbc0207afcda1b7"
+4.4.84-899.kcl4tv.22 - dm9601.ko 38d824f4281dab8966b86406fdab116be768b31efefae8217fbc0207afcda1b7
+4.4.84-723.kcl4tv.20 k7lp r8152.ko 5b85ac1b84c0b9341f9c0bb87c325d27366b565b2d4961d0ec884292581a89c0"
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)

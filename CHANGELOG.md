@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.41] - 2026-11-16
+
+### Fixed
+
+- **The right driver for the 2021 UP7670.**  tirsojrp's best report for kernel `4.4.84-723.kcl4tv.20` on the K7LP chip was with Realtek's `r8152_oot`, which made his RTL8153 `eth0` and is now what Faster driver offers there (issue #47).  He asked to set aside the earlier `r8152` report that 2.11.40 went by (#45), so that one is back to waiting for testers.
+- **The driver test's QR code says to open it in the browser.**  On a phone that opens github.com links in the GitHub app, the filled-in form came through empty, only the title (#38, #39).
+
 ## [2.11.40] - 2026-11-16
 
 ### Added

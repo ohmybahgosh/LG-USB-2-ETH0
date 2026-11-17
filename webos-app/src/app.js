@@ -575,7 +575,7 @@
                 '&report=' + q(short);
             var svg = formQr(form);
             var said = result === 'works' ? T('It works!  ') : (result === 'crashed' ? T('The TV restarted during the test, so this driver doesn\'t fit as it is.  ') : '');
-            var html = '<div class="qr">' + svg + '<div>' + esc(said) + esc(T('Scan this with your phone to send the result on GitHub, already filled in.  Every result helps, good or bad.  MAC and IP addresses are left out.')) + '<br><br><pre>' +
+            var html = '<div class="qr">' + svg + '<div>' + esc(said) + esc(T('Scan this with your phone to send the result on GitHub, already filled in.  Every result helps, good or bad.  MAC and IP addresses are left out.')) + ' ' + esc(T('If your phone opens the GitHub app, open the link in your browser instead, or the form arrives empty.')) + '<br><br><pre>' +
                 esc(report.split('\n').slice(0, 10).join('\n')) + '</pre></div></div>';
             if (again) {
                 stepThen(T('Driver test: {result}', { result: T(DT_SAYS[result] || result) }), html, T('Press OK to test again, or BACK to close.'), drvtestStart);
