@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.40] - 2026-11-16
+
+### Added
+
+- **One more driver confirmed working, now offered by Faster driver.**  The Realtek `r8152` built for kernel `4.4.84-723.kcl4tv.20` on the K7LP chip ran an RTL8153 adapter on a 2021 50UP7670PUC (webOS 6), online at 1000 Mbit/s (tirsojrp, issue #45).
+
 ## [2.11.39] - 2026-11-16
 
 ### Added
