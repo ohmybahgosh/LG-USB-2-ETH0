@@ -92,6 +92,23 @@ for (const k of (toasts.match(/\*:([a-z-]+)\)/g) || []).map((x) => x.slice(2, -1
   }
 }
 
+// Each language's changelog (docs/changelog.<lang>.md) has this version's
+// What's new, with the same headings and the same number of items as
+// CHANGELOG.md, each item starting with a bold summary like the English
+const { parse } = require('../webos-app/gen-whatsnew.js');
+const ver = JSON.parse(fs.readFileSync(path.join(SRC, 'appinfo.json'), 'utf8')).version;
+const enSecs = parse(path.join(__dirname, '../CHANGELOG.md'), ver);
+if (!enSecs) { console.log(`CHANGELOG.md has no section for ${ver}`); bad++; }
+for (const lang of Object.keys(I.dicts)) {
+  const file = `docs/changelog.${lang}.md`;
+  const secs = parse(path.join(__dirname, '..', file), ver);
+  if (!secs) { console.log(`${file} has no section for ${ver}: translate this version's CHANGELOG entry`); bad++; continue; }
+  const shape = (ss) => ss.map((s) => `${s.title}:${s.items.length}`).join(' ');
+  if (enSecs && shape(secs) !== shape(enSecs)) { console.log(`${file} ${ver} doesn't match CHANGELOG.md: ${shape(secs)} vs ${shape(enSecs)}`); bad++; }
+  secs.forEach((s) => s.items.forEach((it) => { if (!/^\*\*.+?\*\*/.test(it)) { console.log(`${file} ${ver}: an item without a bold summary: ${it.slice(0, 60)}`); bad++; } }));
+  console.log(`${lang}: What's new for ${ver} translated`);
+}
+
 // English stays English, and placeholders fill in
 if (I.T('Update to v{v}', { v: '2.8.0' }) !== 'Update to v2.8.0') { console.log('T() placeholder fill broken'); bad++; }
 process.exit(bad ? 1 : 0);

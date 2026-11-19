@@ -507,7 +507,9 @@
         var updated = s.updatedTo === v || (seen && seen !== v);
         if (!updated || seen === v || !wn || wn.version !== v || overlayMode) { return; }
         var html = '', n = 0;
-        wn.sections.forEach(function (sec) {
+        // In the app's language when its changelog has this version
+        var secs = (I18N && wn.i18n && wn.i18n[I18N.lang]) || wn.sections;
+        secs.forEach(function (sec) {
             if (n >= 7 || !sec.items.length) { return; }
             html += '<div class="walk-h">' + esc(T(sec.title)) + '</div><ul class="walk">';
             sec.items.forEach(function (it) { if (n < 7) { html += li(sec.title === 'Fixed' ? 'ok' : '', mdShort(it)); n++; } });

@@ -36,7 +36,7 @@ Ground rules:
 - **Leave Wi-Fi, tethering and other USB devices alone.**
 - **A test for every change in behavior,** in `tests/run.sh`.
 - **Translations.**  The TV app speaks English, Russian and Spanish.  New text in the app needs a translation in each, or `node tests/check-i18n.js` fails.  If you can't translate it, say so in the pull request and the maintainer will.  New languages are welcome: see [Translating the app](README.md#translating-the-app).
-- **Write for TV owners.**  Plain words in output, the app and docs, two spaces between sentences, no em dashes, and a line in `CHANGELOG.md` for anything they'd notice.
+- **Write for TV owners.**  Plain words in output, the app and docs, two spaces between sentences, no em dashes, and a line in `CHANGELOG.md` for anything they'd notice.  If you can, add it to `docs/changelog.ru.md` and `docs/changelog.es.md` too, for the app's What's new in Russian and Spanish (or say so in the PR, and it gets translated before the release).
 
 Open a pull request against `main`; the template lists what to check.
 

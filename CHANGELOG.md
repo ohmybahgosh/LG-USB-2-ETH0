@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.45] - 2026-11-19
+
+### Added
+
+- **What's new in your language.**  After an update, the app's What's new screen now shows the release notes in Russian or Spanish when the app is set to one, instead of only in English.  The notes in each language are in `docs/changelog.ru.md` and `docs/changelog.es.md`, and a check makes sure every release has them.
+
 ## [2.11.44] - 2026-11-19
 
 ### Changed

@@ -48,8 +48,10 @@ a.version = process.argv[2];
 fs.writeFileSync(f, JSON.stringify(a, null, 4) + "\n");
 ' "$DIST/appinfo.json" "$VERSION"
 
-# This version's CHANGELOG section, for the app's What's new screen
-node "$HERE/gen-whatsnew.js" "$ROOT/CHANGELOG.md" "$VERSION" "$DIST/whatsnew.js"
+# This version's CHANGELOG section, for the app's What's new screen, with
+# the same section from each translated changelog
+node "$HERE/gen-whatsnew.js" "$ROOT/CHANGELOG.md" "$VERSION" "$DIST/whatsnew.js" \
+    ru="$ROOT/docs/changelog.ru.md" es="$ROOT/docs/changelog.es.md"
 
 ares-package --no-minify "$DIST" -o "$OUT" >/dev/null
 IPK=$(ls "$OUT"/*.ipk)
