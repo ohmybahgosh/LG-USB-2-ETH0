@@ -2732,36 +2732,36 @@ test_test_driver_checks() {
     check "nothing for this kernel" has "No new driver to test for kernel 9.9.9-other"
     FAKE_KERNEL=5.4.268-329.ptl4tv.5 run test-driver -y
     check "points to the tested one" has "It does have a tested one"
-    # The K24 build only on K24, and only with a supported adapter
+    # The K24N build only on K24N, and only with a supported adapter
     FAKE_SOC=k9xyz FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "other chip: nothing" has "No new driver to test"
     FAKE_SOC=k8hpp FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "K8Hpp has its own build" has "Plug in a USB adapter with a chip the new driver is for"
-    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    FAKE_SOC=k24n FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "no adapter: refused" has "Plug in a USB adapter with a chip the new driver is for"
     check "nothing downloaded" test ! -e "$STATE/curl.log"
     add_unclaimed 1-1 0bda 8153
-    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
-    check "pinned experimental download" grep -q "lg-webos-usb-drivers/59fd481.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    FAKE_SOC=k24n FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    check "pinned experimental download" grep -q "lg-webos-usb-drivers/59fd481.*/experimental/5.4.268-294.24.papikonda.2-k24n/r8152_oot.ko" "$STATE/curl.log"
     check "checksummed" has "Checksum mismatch"
     check "no test started" test ! -e "$DT"
     check "nothing loaded" test ! -e "$STATE/insmod.log"
     # An ASIX adapter there has a tested driver (dd3git's), so no test
     remove_usb 1-1
     add_unclaimed 1-1 0b95 1790
-    FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    FAKE_SOC=k24n FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "ASIX: use the tested one" has "has a tested driver for your adapter"
     # A build reported working moves to TESTED_DRIVERS: get-driver offers it,
     # and test-driver doesn't test it again
     remove_usb 1-1
     add_unclaimed 1-1 0bda 8153
     : > "$STATE/curl.log"
-    LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24 r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
-        FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
+    LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24n r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
+        FAKE_SOC=k24n FAKE_KERNEL=5.4.268-294.24.papikonda.2 run test-driver -y
     check "tested: no new test" has "has a tested driver for your adapter"
-    LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24 r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
-        FAKE_SOC=k24 FAKE_KERNEL=5.4.268-294.24.papikonda.2 run get-driver -y
-    check "tested: get-driver downloads it" grep -q "59fd481.*/experimental/5.4.268-294.24.papikonda.2-k24/r8152_oot.ko" "$STATE/curl.log"
+    LGU2E_TEST_TESTED="5.4.268-294.24.papikonda.2 k24n r8152_oot.ko 0000000000000000000000000000000000000000000000000000000000000000" \
+        FAKE_SOC=k24n FAKE_KERNEL=5.4.268-294.24.papikonda.2 run get-driver -y
+    check "tested: get-driver downloads it" grep -q "59fd481.*/experimental/5.4.268-294.24.papikonda.2-k24n/r8152_oot.ko" "$STATE/curl.log"
 }
 
 # 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
