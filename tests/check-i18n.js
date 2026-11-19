@@ -63,7 +63,7 @@ const fill = (t) => t
   .replace(/\$_chip/g, 'Microchip LAN78xx').replace(/\$_id/g, '0424:7800')
   .replace(/\$\{_\w+:-[^}]*\}|\$_\w+|\$[A-Z_]+/g, 'eth1')
   .replace(/\\"/g, '"');
-const OK = /Block system updates|Homebrew Channel|sh \/home\/root\/r8152-autobind\.sh uninstall|Busybox run-parts|LG-USB-2-ETH0|Microchip LAN78xx/g;
+const OK = /Energy Efficient Ethernet|Block system updates|Homebrew Channel|sh \/home\/root\/r8152-autobind\.sh uninstall|Busybox run-parts|LG-USB-2-ETH0|Microchip LAN78xx/g;
 // In a language with another alphabet, any run of three Latin words is left
 // over English.  In one with the same alphabet, English's small words are
 // the tell: none of these is a word in Spanish

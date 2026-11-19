@@ -131,6 +131,7 @@
         if (h.wait && h.wait !== '120') { o.push('--wait'); }
         if (h.wifiFallback) { o.push('--wifi-fallback'); }
         if (h.wifiWake) { o.push('--wifi-wake'); }
+        if (h.eeeOff) { o.push('--eee-off'); }
         return o.length ? o.join(' ') : 'None, the defaults';
     }
 
@@ -304,6 +305,13 @@
             html += row(T('Speed'), esc(T('{down} down · {up} up Mbit/s', { down: s.speed.downMbps || '?', up: s.speed.upMbps || '?' }) +
                 (s.speed.pingMs !== null ? ' · ' + s.speed.pingMs + ' ' + T('ms') : '')));
         }
+        // The cable link dropping in the last day (standby doesn't count)
+        var drops = (s.links || []).filter(function (e) { return e.kind === 'lost' && e.at * 1000 > Date.now() - 86400000; });
+        if (drops.length) {
+            var dl = new Date(drops[0].at * 1000);
+            html += row(T('Cable link'), '<span class="warn">' + esc(T('dropped {n} times in the last day, last at {time}', {
+                n: drops.length, time: dl.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })) + '</span>');
+        }
         if (b) { html += row(T('Built-in port'), esc(b.name + ' · ' + (b.carrier ? T('cable in') : T('no cable')))); }
         if (w) { html += row('Wi-Fi', w.carrier ? '<span class="warn">' + esc(T('connected')) + '</span>' : esc(T('off'))); }
         var hookText = { enabled: T('on'), disabled: T('off (disabled)'), none: T('off'), broken: T('broken link'), legacy: T('old v1 hook'), 'legacy-disabled': T('old v1 hook') }[h.state] || h.state;
@@ -348,9 +356,21 @@
         $('realtek-hint').textContent = rt.result === 'ok' ? T('your adapter is on the TV\'s own r8152') :
             rt.result === 'failed' ? T('r8152 didn\'t take your adapter') : T('uses the TV\'s own Realtek driver');
         var u = s.updates || {};
-        $('updates-hint').textContent = u.hbcBlock === false ?
-            (bootOn && h.blockUpdates ? T('also covers the Homebrew Channel\'s block, which is off') : T('the Homebrew Channel\'s block is off too')) :
-            T('on top of the Homebrew Channel\'s block');
+        // With it on: what it has caught, so there's proof it works
+        var blocking = bootOn && h.blockUpdates;
+        $('updates-hint').textContent = blocking && u.found && Date.now() - u.found * 1000 < 2592000000 ?
+            T('removed an update webOS found on {date}', { date: new Date(u.found * 1000).toLocaleDateString() }) :
+            (blocking && u.tries ? T('stopped LG\'s updater {n} times, last on {date}', { n: u.tries, date: new Date(u.lastTry * 1000).toLocaleDateString() }) :
+            (blocking && h.running ? T('checked every 10 minutes, no tries seen yet') :
+            (blocking ? T('on now, checked every 10 minutes from the next restart') :
+            (u.hbcBlock === false ? T('the Homebrew Channel\'s block is off too') : T('on top of the Homebrew Channel\'s block')))));
+        // Energy Efficient Ethernet off: only where ethtool is there to do it,
+        // or when it's on (so it can be turned off again)
+        var ee = s.eee || {};
+        document.querySelector('[data-action="eee"]').style.display = (ee.tool || h.eeeOff) ? '' : 'none';
+        $('tog-eee').className = 'tog' + (bootOn && h.eeeOff ? ' on' : '');
+        $('eee-hint').textContent = !ee.tool ? T('needs ethtool from Entware') :
+            (ee.state === 'on' ? T('on now, can make the link drop for a moment') : T('for a link that drops for a few seconds'));
         // The faster-driver row only appears when it fits this TV: a driver is
         // known for this exact kernel and the adapter is one it supports, or a
         // driver is already set up (so it can be turned off again).
@@ -805,6 +825,16 @@
             } else {
                 confirmThen(T('Turn off IPv6?'), T('Only for networks that give the TV IPv6 but don\'t carry it, where every app waits about 200 ms on each new connection (the speed test says when).  It turns IPv6 off on the TV, so everything uses IPv4, which every streaming app works over.  It starts now and at every boot, and turning it off puts IPv6 back.'),
                     function () { act(T('IPv6 off'), installArgs('--ipv6-off')); });
+            }
+        },
+        eee: function () {
+            if (!state) { return; }
+            if (state.hook.state === 'enabled' && state.hook.eeeOff) {
+                confirmThen(T('Leave Energy Efficient Ethernet on?'), T('The adapter goes back to its own setting the next time its link comes up.'),
+                    function () { act(T('EEE back to default'), installArgs('--no-eee-off')); });
+            } else {
+                confirmThen(T('Turn off Energy Efficient Ethernet?'), T('Energy Efficient Ethernet lets the adapter and the router save a little power between packets.  On some adapters and routers it makes the link drop for a few seconds now and then.  This turns it off whenever the adapter\'s link comes up.  It uses ethtool, and not every driver allows it.'),
+                    function () { act(T('EEE off'), installArgs('--eee-off')); });
             }
         },
         apply: function () {

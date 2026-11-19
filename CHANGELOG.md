@@ -2,6 +2,15 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.43] - 2026-11-19
+
+### Added
+
+- **Block updates harder now keeps checking.**  Before, it only did its job at boot, and these TVs can go weeks in standby without one.  Now it checks every 10 minutes that nothing has undone it: webOS's update check turned back on, its servers gone from `/etc/hosts`, or its firewall rule gone.  Anything missing is put back right away and noted in the log.  An update webOS found or downloaded is removed as soon as it shows up, not just at the next boot.
+- **Proof the update block works.**  The firewall rule counts every time LG's updater tries to reach its server by IP, and the app's Block updates harder row now says how many times it stopped it and when, or that it removed an update webOS found.  `status` points out anything it had to put back in the last week, and the report shows the count.
+- **Connection history.**  The background job notes each time the adapter's cable link drops and comes back, with how long it was gone and the speed it came back at.  Drops while the TV goes to standby don't count, since standby turns the adapter off.  The app shows how many drops there were in the last day, `status` points it out from two on, and the report lists the last few, to help find a bad cable, port or adapter.
+- **Turn off Energy Efficient Ethernet (`--eee-off`), off by default.**  EEE is a common cause of a link that drops for a few seconds on some adapters and routers.  It needs `ethtool`, which webOS doesn't have (with Entware: `opkg install ethtool`), so the app only shows the row where `ethtool` is there.  It turns EEE off whenever the adapter's link comes up.
+
 ## [2.11.42] - 2026-11-18
 
 ### Added

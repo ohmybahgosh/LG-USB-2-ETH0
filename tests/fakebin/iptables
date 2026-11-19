@@ -1,6 +1,7 @@
 #!/bin/sh
 # Fake `iptables` for the test suite: keeps OUTPUT rules, one per line, in
-# $FAKE_STATE/iptables.  Handles -C (check), -I (insert) and -D (delete).
+# $FAKE_STATE/iptables.  Handles -C (check), -I (insert), -D (delete) and -L
+# (list).
 printf 'iptables %s\n' "$*" >> "$FAKE_STATE/iptables.log"
 f=$FAKE_STATE/iptables
 touch "$f"
@@ -13,5 +14,12 @@ case "$op" in
     -D) n=$(grep -nxF -- "$rule" "$f" | head -n 1 | cut -d: -f1)
         [ -n "$n" ] || exit 1
         sed "${n}d" "$f" > "$f.new"; mv "$f.new" "$f" ;;
+    # -L OUTPUT -n -v -x: the rules with packet counts, each DROP rule's
+    # count from $FAKE_STATE/iptables_hits (default 0)
+    -L) echo "Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)"
+        echo "    pkts      bytes target     prot opt in     out     source               destination"
+        sed -n 's/^OUTPUT -d \([^ ]*\) -j DROP$/\1/p' "$f" | while read -r _ip; do
+            printf '%8s %10s DROP       all  --  *      *       0.0.0.0/0            %s\n' "$(cat "$FAKE_STATE/iptables_hits" 2>/dev/null || echo 0)" 0 "$_ip"
+        done ;;
     *) exit 0 ;;
 esac

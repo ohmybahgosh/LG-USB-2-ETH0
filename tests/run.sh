@@ -195,7 +195,7 @@ run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 LGU2E_UPD_EVERY=2 \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
@@ -1174,6 +1174,105 @@ test_block_updates_undo() {
     check "firewall clean" sh -c "! grep -q 156.147.69.32 '$STATE/iptables'"
     run --help
     check "help lists it" has "--block-updates"
+    stop_bg
+}
+
+# After boot, the block is checked every UPD_EVERY seconds: anything that
+# undid it is put back, an update webOS found is removed, and the updater's
+# tries the firewall stopped are counted
+test_block_rechecks() {
+    add_builtin
+    hbc_hosts
+    run install -y --block-updates --wait 2
+    run_hook
+    check "checks it" wait_log "Checking the update block every"
+    : > "$STATE/iptables"
+    echo true > "$STATE/updcheck"
+    check "notices" wait_log "update block was partly undone (check firewall)"
+    check "rule back" wait_for_file "$STATE/iptables" 156.147.69.32
+    check "check off again" grep -qx false "$STATE/updcheck"
+    mkdir -p "$ROOT/mnt/lg/cmn_data/swupdate"
+    echo x > "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    check "removes a found update" wait_log "webOS had found a firmware update"
+    check "it's gone" test ! -e "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    echo 7 > "$STATE/iptables_hits"
+    check "counts a try" wait_log "stopped the updater reaching LG by IP (7 packets)"
+    sleep 3
+    check "the same packets count once" test "$(grep -c 'stopped the updater' "$LOG")" = 1
+    echo 9 > "$STATE/iptables_hits"
+    check "a second try" wait_log "(2 packets)"
+    stop_bg
+    run status --json
+    check "json counts" json_ok "$OUT" "d['updates']['tries'] == 2 and d['updates']['lastTry'] > 0 and d['updates']['found'] > 0 and 'firewall' in d['updates']['fixedWhat']"
+    run status
+    check "says it removed one" has "webOS found a firmware update in the last week"
+    check "says what it put back" has "Something undid part of the update block in the last week (check firewall"
+    run report
+    check "report counts" has "stopped 2 tries by IP"
+}
+
+# The cable link coming and going goes into the connection history, but not
+# when the TV is going to standby
+test_link_history() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y --watch --wait 4
+    run_hook
+    check "boot swaps" wait_log "Done: the USB adapter is eth0"
+    sleep 2
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    check "notes a drop" wait_log "eth0 lost its cable link"
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    check "notes it back" wait_log "eth0 has its cable link back"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    sleep 3
+    check "a second drop" test "$(grep -c ' lost' "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.links")" = 2
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    sleep 2
+    # Going to standby: not a drop
+    echo "Active Standby" > "$STATE/power_events"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    sleep 3
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    sleep 2
+    stop_bg
+    rm -f "$STATE/power_events"
+    check "standby isn't a drop" test "$(grep -c ' lost' "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.links")" = 2
+    run status --json
+    check "json lists them" json_ok "$OUT" "[e['kind'] for e in d['links']][:3] == ['back', 'lost', 'back'] and d['links'][0]['at'] > 0"
+    run status
+    check "status points it out" has "eth0 lost its cable link 2 times in the last day"
+    run report
+    check "report lists them" has "Connection history:"
+    check "report: when and what" has "0m ago: lost"
+}
+
+# --eee-off: Energy Efficient Ethernet off with ethtool, when the TV has it
+test_eee_off() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run install -y --eee-off --now
+    check "warns without ethtool" has "needs ethtool"
+    check "saved anyway" grep -q '^EEE_OFF="1"' "$CONF"
+    run status --json
+    check "json: no tool" json_ok "$OUT" "d['eee']['tool'] is False and d['hook']['eeeOff'] is True"
+    # Where Entware puts it
+    mkdir -p "$ROOT/opt/sbin"
+    # shellcheck disable=SC2016 # the fake's own variables
+    printf '#!/bin/sh\necho "ethtool $*" >> "$FAKE_STATE/ethtool.log"\ncase "$1" in\n  --show-eee) [ -f "$FAKE_STATE/eee_off" ] && echo "EEE status: disabled" || echo "EEE status: enabled - active" ;;\n  --set-eee) touch "$FAKE_STATE/eee_off" ;;\nesac\n' > "$ROOT/opt/sbin/ethtool"
+    chmod +x "$ROOT/opt/sbin/ethtool"
+    run install -y --eee-off
+    check "turns it off" has "Turned Energy Efficient Ethernet off on eth0"
+    check "with ethtool" grep -q "set-eee eth0 eee off" "$STATE/ethtool.log"
+    run status --json
+    check "json: off" json_ok "$OUT" "d['eee']['tool'] is True and d['eee']['state'] == 'off'"
+    run status
+    check "status names it" has "EEE off (--eee-off)"
+    run report
+    check "report says" has "EEE:     off"
+    rm -f "$STATE/eee_off"
+    run install -y --no-eee-off
+    check "off again" grep -q '^EEE_OFF="0"' "$CONF"
 }
 
 test_disable_enable() {
@@ -1508,6 +1607,9 @@ t block_updates test_block_updates
 t ipv6_off test_ipv6_off
 t block_updates_undo test_block_updates_undo
 t block_updates_without_hbc test_block_updates_without_hbc
+t block_rechecks test_block_rechecks
+t link_history test_link_history
+t eee_off test_eee_off
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
 t v1_disabled_in_initd test_v1_disabled_in_initd
@@ -1780,7 +1882,7 @@ test_concurrent_lang_saves() {
         check "round $round: watch kept" grep -q '^WATCH="1"' "$CONF"
         check "round $round: wake kept" grep -q '^WIFI_WAKE="1"' "$CONF"
         check "round $round: one language line" test "$(grep -c '^UI_LANG=' "$CONF")" = 1
-        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 15
+        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 16
     done
     check "no temp files left" sh -c "! ls '$CONF'.new* 2>/dev/null | grep -q ."
     check "no lock left" test ! -e "$CONF.lock"

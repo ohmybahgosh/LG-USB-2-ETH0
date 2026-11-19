@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.42"
+VERSION="2.11.43"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -118,6 +118,17 @@ SPEED_HIST="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.speeds"
 # --block-updates: what webOS's own update switch was before it was turned
 # off, so turning the option off puts it back
 UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
+# --block-updates: what the block has caught, kept across reboots
+# ("tries=", "last=", "found=", "fixed=", "fixedWhat="), and the firewall
+# rule's packet count this boot
+# shellcheck disable=SC2034 # used by upd_watch, in CORE
+UPD_STATS="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.blocked"
+# shellcheck disable=SC2034 # used by upd_watch, in CORE
+UPD_HITS="$RUN_DIR/lg-usb-2-eth0.updhits"
+# The cable link coming and going, kept across reboots: "time kind detail",
+# newest last
+# shellcheck disable=SC2034 # used by link_event, in CORE
+LINK_LOG="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.links"
 HOSTS_FILE="${LGU2E_HOSTS:-/etc/hosts}"
 # --ipv6-off: each interface's IPv6 switch, and the values it had before
 # they were turned off, so turning the option off puts them back.  The
@@ -143,13 +154,14 @@ WIFI_FALLBACK=0
 WIFI_WAKE=0
 BLOCK_UPDATES=0
 IPV6_OFF=0
+EEE_OFF=0
 # The TV app's language (en or ru), for the messages the boot hook shows on
 # the TV screen.  The app hands it over (LGU2E_APP_LANG) and it's saved with
 # the settings, since the hook runs at boot without the app.
 UI_LANG=en
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0 SET_V6=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0 SET_V6=0 SET_EEE=0
 JSON=0
 PHASE=""
 SERVER_ARG=""
@@ -246,17 +258,22 @@ Options:
   --block-updates    Block firmware updates more thoroughly, on top of the
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
-                     it reaches by IP.  Updates can remove root for good
+                     it reaches by IP.  Updates can remove root for good.
+                     After boot it checks every 10 minutes that nothing
+                     undid it, and counts what it caught
   --ipv6-off         Turn IPv6 off on the TV, for networks that hand out
                      IPv6 but don't carry it: there, every new connection
                      waits about 200 ms before it falls back to IPv4 (the
                      speed test says when).  Starts now and at every boot
+  --eee-off          Turn off Energy Efficient Ethernet on the adapter, a
+                     common cause of a link that drops for a few seconds.
+                     Needs ethtool (opkg install ethtool, with Entware)
   --no-realtek-mode  Don't switch Realtek adapters to their Realtek mode.
                      By default, a Realtek RTL8152 or RTL8153 adapter that
                      the kernel left on the generic driver is switched over
                      to the kernel's own r8152, when it has one
   --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-wifi-wake,
-  --no-block-updates, --no-ipv6-off
+  --no-block-updates, --no-ipv6-off, --no-eee-off
                      Turn that setting off again (--realtek-mode turns it on)
   --json             With status or speedtest: machine-readable output (used
                      by the TV app)
@@ -289,6 +306,8 @@ WIFI_BACK_SECS=${LGU2E_WIFI_BACK:-30}
 # software, and seconds before that's done again
 HANG_SECS=${LGU2E_HANG_SECS:-60}
 HANG_EVERY=${LGU2E_HANG_EVERY:-1800}
+# --block-updates: seconds between checks that the block is still in place
+UPD_EVERY=${LGU2E_UPD_EVERY:-600}
 # --wifi-wake: tries to connect the adapter again on wake, seconds apart
 WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
 WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
@@ -1586,10 +1605,141 @@ updates_unblock() {
     return 0
 }
 
-# Runs after boot when --watch or --wifi-fallback is on, or when a --module
-# driver is in use.  With a driver: if the adapter comes back on cdc_ncm (TV
-# standby can reset USB), move it over again.  With --watch: also follow
-# plug and unplug.  With --wifi-fallback: Wi-Fi as a backup for the cable.
+# What's missing from the block now: any of "check" (webOS's update check is
+# on again), "hosts", "firewall", "download" (an update was found or
+# downloaded).  Changes nothing.
+upd_gaps() {
+    _ug=""
+    [ "$(upd_setting)" = true ] && _ug="check"
+    [ -n "$(upd_missing_hosts)" ] && _ug="$_ug hosts"
+    command -v iptables >/dev/null 2>&1 && ! upd_fw_rule && _ug="$_ug firewall"
+    { [ -e "$SWUPDATE_DIR/Image_Update_Info.xml" ] || [ -e "$SWUPDATE_DIR/Package_Update_Info.xml" ]; } && _ug="$_ug download"
+    echo "${_ug# }"
+}
+# Packets the firewall rule has stopped since boot
+upd_fw_hits() {
+    iptables -L OUTPUT -n -v -x 2>/dev/null | awk -v ip="$UPD_IP" '$3 == "DROP" && $9 == ip { print $1; exit }'
+}
+upd_stat_get() { sed -n "s/^$1=//p" "$UPD_STATS" 2>/dev/null | head -n 1; }
+upd_stat_set() {
+    mkdir -p "${UPD_STATS%/*}" 2>/dev/null
+    { grep -v "^$1=" "$UPD_STATS" 2>/dev/null; echo "$1=$2"; } > "$UPD_STATS.new" && mv -f "$UPD_STATS.new" "$UPD_STATS"
+}
+
+# The watch loop's check, every UPD_EVERY seconds: put back anything that
+# undid the block, and count the updater's tries the firewall stopped (a
+# try is new packets since the last check: one try sends several).
+upd_watch() {
+    _gw=$(upd_gaps)
+    if [ -n "$_gw" ]; then
+        _nw=$(date +%s)
+        case " $_gw " in
+            *" download "*)
+                echo "=== $(date) webOS had found a firmware update.  Removed it before it could install. ==="
+                upd_stat_set found "$_nw" ;;
+        esac
+        _gu=$(echo " $_gw " | sed 's/ download / /; s/^ *//; s/ *$//')
+        if [ -n "$_gu" ]; then
+            echo "=== $(date) the update block was partly undone ($_gu).  Putting it back. ==="
+            upd_stat_set fixed "$_nw"
+            upd_stat_set fixedWhat "$(echo "$_gu" | tr ' ' ,)"
+        fi
+        updates_block
+    fi
+    _hw=$(upd_fw_hits)
+    case "$_hw" in ''|*[!0-9]*) return 0 ;; esac
+    _pw=$(cat "$UPD_HITS" 2>/dev/null)
+    case "$_pw" in ''|*[!0-9]*) _pw=0 ;; esac
+    # Fewer than last time: the rule was put back, so its count started over
+    [ "$_hw" -lt "$_pw" ] && _pw=0
+    if [ "$_hw" -gt "$_pw" ]; then
+        _tw=$(upd_stat_get tries)
+        case "$_tw" in ''|*[!0-9]*) _tw=0 ;; esac
+        upd_stat_set tries $((_tw + 1))
+        upd_stat_set last "$(date +%s)"
+        echo "=== $(date) stopped the updater reaching LG by IP ($((_hw - _pw)) packets). ==="
+    fi
+    echo "$_hw" > "$UPD_HITS" 2>/dev/null
+    return 0
+}
+
+# link_event KIND [DETAIL]: note the cable link or the adapter changing, for
+# the connection history.  Keeps the last 50.
+link_event() {
+    mkdir -p "${LINK_LOG%/*}" 2>/dev/null
+    { tail -n 49 "$LINK_LOG" 2>/dev/null; echo "$(date +%s) $1${2:+ $2}"; } > "$LINK_LOG.new" && mv -f "$LINK_LOG.new" "$LINK_LOG"
+}
+
+# ethtool, if the TV has it (Entware puts it in /opt/sbin)
+eee_tool() {
+    for _et in "${LGU2E_ROOT}/opt/sbin/ethtool" "${LGU2E_ROOT}/opt/bin/ethtool"; do
+        [ -x "$_et" ] && { echo "$_et"; return 0; }
+    done
+    command -v ethtool 2>/dev/null
+}
+# --eee-off: Energy Efficient Ethernet off on eth0, if it's the adapter, the
+# driver supports it and it's on.  Quiet when there's nothing to do.
+eee_off() {
+    _et=$(eee_tool) || return 0
+    [ -e "$NET/eth0" ] || return 0
+    _es=$("$_et" --show-eee eth0 2>/dev/null) || return 0
+    case "$_es" in *"EEE status: enabled"*) ;; *) return 0 ;; esac
+    if "$_et" --set-eee eth0 eee off 2>/dev/null; then
+        echo "Turned Energy Efficient Ethernet off on eth0."
+    else
+        echo "Could not turn Energy Efficient Ethernet off on eth0 (its driver may not allow it)."
+    fi
+}
+# Is the TV on (not going to or in standby)?  Yes when it can't tell.
+tv_is_on() {
+    command -v luna-send >/dev/null 2>&1 || return 0
+    _po=$(luna-send -n 1 luna://com.webos.service.tvpower/power/getPowerState '{}' 2>/dev/null)
+    case "$_po" in *'"state"'*) ;; *) return 0 ;; esac
+    case "$_po" in *'"processing"'*Standby*|*'"processing"'*Suspend*|*'"processing"'*ower*ff*) return 1 ;; esac
+    case "$_po" in *'"state"'*'"Active"'*|*'"Screen Saver"'*|*'"Screen Off"'*) return 0 ;; esac
+    return 1
+}
+
+# The cable link on eth0 changing, seen by the watch loop: a drop goes into
+# the connection history (not one from standby, which turns the adapter off),
+# and so does its coming back, with how long it was gone and its speed.
+link_seen() {
+    if [ "$1" = 0 ]; then
+        if tv_is_on; then
+            LINK_LOST=1 LINK_LOST_AT=$2
+            echo "=== $(date) eth0 lost its cable link ==="
+            link_event lost
+        else
+            LINK_LOST="" LINK_LOST_AT=""
+        fi
+    elif [ -n "$LINK_LOST" ]; then
+        _lsp=$(sysval "$NET/eth0/speed" 2>/dev/null)
+        case "$_lsp" in ''|-1|*[!0-9]*) _lsp="" ;; esac
+        _ldur=""
+        [ -n "$2" ] && [ -n "$LINK_LOST_AT" ] && _ldur=$(($2 - LINK_LOST_AT))
+        echo "=== $(date) eth0 has its cable link back${_ldur:+ after ${_ldur}s}${_lsp:+, at $_lsp Mbit/s} ==="
+        link_event back "${_ldur:--} ${_lsp:--}"
+        LINK_LOST="" LINK_LOST_AT=""
+        [ "$EEE_OFF" = 1 ] && eee_off
+    fi
+}
+
+# EEE on eth0: on, off, or nothing when it can't tell
+eee_state() {
+    _et=$(eee_tool) || return 0
+    case "$("$_et" --show-eee eth0 2>/dev/null)" in
+        *"EEE status: enabled"*) echo on ;;
+        *"EEE status: disabled"*|*"EEE status: not supported"*) echo off ;;
+    esac
+}
+
+# Runs after boot when --watch, --wifi-fallback, --ipv6-off, --block-updates
+# or --eee-off is on, or when a --module driver is in use.  With a driver: if
+# the adapter comes back on cdc_ncm (TV standby can reset USB), move it over
+# again.  With --watch: also follow plug and unplug.  With --wifi-fallback:
+# Wi-Fi as a backup for the cable.  With --block-updates: check the block is
+# still in place every UPD_EVERY seconds.  Always: note the cable link coming
+# and going, for the connection history.
 watch_run() {
     if [ "$WATCH" = 1 ]; then
         echo "Watching for the adapter (every ${WATCH_EVERY}s)."
@@ -1600,6 +1750,7 @@ watch_run() {
         echo "Turning Wi-Fi on if eth0 has no cable link for ${WIFI_GRACE}s."
     fi
     [ "$IPV6_OFF" = 1 ] && echo "Keeping IPv6 off."
+    [ "$BLOCK_UPDATES" = 1 ] && echo "Checking the update block every ${UPD_EVERY}s."
     _skip=""
     _last=""
     _down=0
@@ -1607,10 +1758,26 @@ watch_run() {
     _wifi_tried=""
     _wifi_on=""
     [ -f "$WIFI_MARK" ] && _wifi_on=1
-    _clock=0 _stall=0 _prx="" _ptx="" _last_reset=""
+    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _pcar=""
+    LINK_LOST="" LINK_LOST_AT=""
+    { read -r _pcar < "$NET/eth0/carrier"; } 2>/dev/null
     while :; do
         sleep "$WATCH_EVERY"
         _clock=$((_clock + WATCH_EVERY))
+        # The cable link coming and going: one sysfs read, and the uptime
+        # (another) only when it changed
+        _lc=""
+        { read -r _lc < "$NET/eth0/carrier"; } 2>/dev/null
+        if [ -n "$_lc" ] && [ -n "$_pcar" ] && [ "$_lc" != "$_pcar" ]; then
+            _ut=""
+            { read -r _ut _ < "${LGU2E_ROOT}/proc/uptime"; } 2>/dev/null
+            link_seen "$_lc" "${_ut%%.*}"
+        fi
+        _pcar=$_lc
+        if [ "$BLOCK_UPDATES" = 1 ]; then
+            _uc=$((_uc + WATCH_EVERY))
+            if [ "$_uc" -ge "$UPD_EVERY" ]; then _uc=0; upd_watch; fi
+        fi
         # --ipv6-off: webOS can turn IPv6 on again when it reconnects.  One
         # read, no subprocess.
         if [ "$IPV6_OFF" = 1 ]; then
@@ -1665,6 +1832,7 @@ watch_run() {
         _last=$_now
         if [ -n "$DRIVER" ] && [ "$_cdc" = 1 ] && takeover_pending; then
             echo "=== $(date) adapter is on a generic driver again ==="
+            link_event generic
             takeover_after_standby
             continue
         fi
@@ -1677,12 +1845,14 @@ watch_run() {
             # Don't retry a swap that already failed until something changes
             [ "$_u" = "$_skip" ] && continue
             echo "=== $(date) adapter $_u appeared ==="
+            link_event plugged
             sleep "$SETTLE_SECS"
             take_over
             wait_for_nic
             swap_in || _skip=$(find_usb_nic)
         elif [ -z "$_u" ] && [ ! -e "$NET/eth0" ] && [ -n "$(find_builtin_nic)" ]; then
             echo "=== $(date) adapter gone ==="
+            link_event unplugged
             swap_out
             _skip=""
         else
@@ -1700,6 +1870,7 @@ replug_hung() {
     _hdev=${_hdev%%:*}
     [ -n "$_hdev" ] && [ -e "$USB_DEVS/$_hdev" ] || return 0
     echo "=== $(date) eth0 sent for ${HANG_SECS}s with nothing coming back, cable link up: the adapter seems hung.  Re-plugging it in software. ==="
+    link_event hung
     sys_write "$USB_DEVS/$_hdev/authorized" 0
     sleep 2
     sys_write "$USB_DEVS/$_hdev/authorized" 1
@@ -1784,7 +1955,8 @@ boot_run() {
         echo $! > "$WAKE_PID_FILE"
     fi
     [ "$IPV6_OFF" = 1 ] && ipv6_off
-    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ]; then watch_run; fi
+    [ "$EEE_OFF" = 1 ] && eee_off
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ]; then watch_run; fi
     return 0
 }
 CORE_EOF
@@ -2874,6 +3046,7 @@ settings_ok() {
     case "$WIFI_WAKE" in 0|1) ;; *) return 1 ;; esac
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$IPV6_OFF" in 0|1) ;; *) return 1 ;; esac
+    case "$EEE_OFF" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
     case "$UI_LANG" in en|ru|es) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
@@ -2895,6 +3068,7 @@ load_settings() {
     if [ "$SET_WAKE" = 0 ]; then _v=$(hook_setting WIFI_WAKE); [ -n "$_v" ] && WIFI_WAKE=$_v; fi
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     if [ "$SET_V6" = 0 ]; then _v=$(hook_setting IPV6_OFF); [ -n "$_v" ] && IPV6_OFF=$_v; fi
+    if [ "$SET_EEE" = 0 ]; then _v=$(hook_setting EEE_OFF); [ -n "$_v" ] && EEE_OFF=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     _v=$(hook_setting UI_LANG); case "$_v" in en|ru|es) UI_LANG=$_v ;; esac
@@ -3076,6 +3250,7 @@ write_hook() {
         echo "WIFI_WAKE=\"$WIFI_WAKE\""
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
         echo "IPV6_OFF=\"$IPV6_OFF\""
+        echo "EEE_OFF=\"$EEE_OFF\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
         echo "UI_LANG=\"$UI_LANG\""
         echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
@@ -3193,6 +3368,7 @@ install_fix() {
     [ "$WIFI_WAKE" = 1 ] && echo "  -  Before standby, disconnect only the adapter's network session so Wi-Fi stays ready for Wake on LAN, and connect it again on wake"
     [ "$BLOCK_UPDATES" = 1 ] && echo "  -  Block firmware updates more thoroughly, on top of the Homebrew Channel's own block (starts now)"
     [ "$IPV6_OFF" = 1 ] && echo "  -  Turn IPv6 off and keep it off, so connections don't wait for a broken IPv6 (starts now)"
+    [ "$EEE_OFF" = 1 ] && echo "  -  Turn Energy Efficient Ethernet off on the adapter, whenever its link comes up (starts now)"
     echo "It writes $CONF and the link $HOOK, and nothing else."
     case "$(hook_state)" in legacy|legacy-disabled)
         warn "This replaces the v1 hook, which renamed eth0 even with no adapter plugged in." ;;
@@ -3217,6 +3393,13 @@ install_fix() {
     elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
         updates_unblock
         echo "Update blocking is off again.  The Homebrew Channel's own block is unchanged."
+    fi
+    if [ "$EEE_OFF" = 1 ]; then
+        if eee_tool > /dev/null; then
+            eee_off
+        else
+            warn "--eee-off needs ethtool, and this TV doesn't have it.  With Entware: opkg install ethtool.  It's saved, and starts working once ethtool is there."
+        fi
     fi
     if [ "$IPV6_OFF" = 1 ]; then
         ipv6_off
@@ -3368,6 +3551,7 @@ show_status() {
             [ "$(hook_setting WIFI_WAKE)" = 1 ] && _s="$_s, Wi-Fi wake in standby (--wifi-wake)"
             [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _s="$_s, blocks firmware updates (--block-updates)"
             [ "$(hook_setting IPV6_OFF)" = 1 ] && _s="$_s, IPv6 off (--ipv6-off)"
+            [ "$(hook_setting EEE_OFF)" = 1 ] && _s="$_s, EEE off (--eee-off)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
@@ -3568,7 +3752,13 @@ show_status() {
         else
             status_note "Firmware updates aren't blocked.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel."
         fi
+    else
+        [ -n "$(ago_week "$(upd_stat_get found)")" ] && status_note "webOS found a firmware update in the last week.  The update block removed it before it could install."
+        _sw=$(upd_stat_get fixedWhat | tr , ' ')
+        [ -n "$(ago_week "$(upd_stat_get fixed)")" ] && status_note "Something undid part of the update block in the last week ($_sw).  It was put back."
     fi
+    _ld=$(link_drops_day)
+    [ "${_ld:-0}" -gt 1 ] && status_note "eth0 lost its cable link $_ld times in the last day.  Check the cable and its plugs, try another port on the router, or turn on --eee-off.  The app's report lists when."
     hbc_undo_backport check && status_note "Version 2.11.28 added a file to the Homebrew Channel's permissions.  Run app-access to take it back out."
     [ -f "$WIFI_MARK" ] && status_note "The Wi-Fi fallback turned Wi-Fi on because eth0 lost its cable link.  It turns Wi-Fi off again once the cable works for ${WIFI_BACK_SECS}s."
     [ "$_wired_up" -gt 1 ] && status_note "Both wired ports have a cable. Unplug the built-in one, or traffic may take the slower port."
@@ -3640,6 +3830,39 @@ js() { printf '"%s"' "$(json_esc "$1")"; }
 jb() { if [ "$1" = 1 ]; then printf true; else printf false; fi; }
 # A JSON number, or null for anything that isn't one
 jn() { case "$1" in ''|*[!0-9.]*|.*|*.) printf null ;; *) printf '%s' "$1" ;; esac; }
+# ago_week TIME: prints something if it's a time in the last 7 days
+ago_week() {
+    case "$1" in ''|*[!0-9]*) return 0 ;; esac
+    [ $(( $(date +%s) - $1 )) -lt 604800 ] && echo 1
+    return 0
+}
+# How many times eth0 lost its cable link in the last day (not in standby)
+link_drops_day() {
+    [ -s "$LINK_LOG" ] || { echo 0; return 0; }
+    awk -v since=$(( $(date +%s) - 86400 )) '$2 == "lost" && $1 >= since { c++ } END { print c + 0 }' "$LINK_LOG"
+}
+# The connection history, newest first, for the report: up to 5 (the
+# report goes into a QR code, so it stays short)
+links_text() {
+    [ -s "$LINK_LOG" ] || return 0
+    tail -n 5 "$LINK_LOG" | awk -v now="$(date +%s)" '$1 ~ /^[0-9]+$/ {
+            a = now - $1
+            w = (a < 3600 ? int(a / 60) "m" : (a < 172800 ? int(a / 3600) "h" : int(a / 86400) "d"))
+            d = ""; for (i = 3; i <= NF; i++) d = d " " $i
+            if ($2 == "back") { split(d, b, " "); d = " after " (b[1] == "-" ? "?" : b[1] "s") (b[2] == "-" ? "" : ", " b[2] "M") }
+            l[++c] = "  " w " ago: " $2 d }
+        END { for (i = c; i >= 1; i--) print l[i] }'
+}
+
+# The connection history as JSON, newest first: up to 20
+links_json() {
+    [ -s "$LINK_LOG" ] || { printf '[]'; return 0; }
+    tail -n 20 "$LINK_LOG" | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[a-z]+$/ {
+            d = ""; for (i = 3; i <= NF; i++) d = d (i > 3 ? " " : "") $i
+            gsub(/[^0-9A-Za-z .-]/, "", d)
+            l[++c] = "{\"at\":" $1 ",\"kind\":\"" $2 "\",\"detail\":\"" d "\"}" }
+        END { printf "["; for (i = c; i >= 1; i--) printf "%s%s", l[i], (i > 1 ? "," : ""); printf "]" }'
+}
 # A JSON array from lines, skipping empty ones and the "  - " note prefix
 jarr() {
     printf '['
@@ -3700,15 +3923,17 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
-        "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
+        "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
+        "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")"
+    printf '"links":%s,"eee":{"tool":%s,"state":%s},' "$(links_json)" "$(jb "$(eee_tool > /dev/null && echo 1)")" "$(js "$(eee_state)")"
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
         "$(jb "$(hook_setting WIFI_WAKE)")" "$(jb "$([ -f "$WAKE_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" "$(jb "$(hook_setting IPV6_OFF)")" \
-        "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
+        "$(jb "$(hook_setting EEE_OFF)")" "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"kernelAtSetup":%s,"sigEnforced":%s,' "$(js "$(hook_setting KERNEL)")" "$(jb "$(sig_enforced && echo 1)")"
     printf '"realtek":{"r8152":%s,"result":%s},' \
@@ -4393,6 +4618,7 @@ show_report() {
         [ "$(hook_setting WIFI_WAKE)" = 1 ] && _h="$_h, wifi-wake"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
         [ "$(hook_setting IPV6_OFF)" = 1 ] && _h="$_h, ipv6-off"
+        [ "$(hook_setting EEE_OFF)" = 1 ] && _h="$_h, eee-off"
         [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
         _hk=$(hook_setting KERNEL)
         [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ] && _h="$_h, set up on kernel $_hk"
@@ -4452,6 +4678,17 @@ show_report() {
     echo "Default route: $(def_iface)"
     _sp=$(speed_summary)
     [ -n "$_sp" ] && echo "Speed:   $_sp"
+    _ee=$(eee_state)
+    [ -n "$_ee" ] && echo "EEE:     $_ee"
+    if [ "$(hook_setting BLOCK_UPDATES)" = 1 ]; then
+        _rt=$(upd_stat_get tries); _rg=$(upd_gaps)
+        echo "Update block: ${_rg:+missing $_rg, }stopped ${_rt:-0} tries by IP"
+    fi
+    _lt=$(links_text)
+    if [ -n "$_lt" ]; then
+        echo "Connection history:"
+        echo "$_lt"
+    fi
     echo '```'
 }
 
@@ -4540,6 +4777,8 @@ while [ $# -gt 0 ]; do
         --no-block-updates) BLOCK_UPDATES=0; SET_BLOCK=1 ;;
         --ipv6-off) IPV6_OFF=1; SET_V6=1 ;;
         --no-ipv6-off) IPV6_OFF=0; SET_V6=1 ;;
+        --eee-off) EEE_OFF=1; SET_EEE=1 ;;
+        --no-eee-off) EEE_OFF=0; SET_EEE=1 ;;
         --realtek-mode) REALTEK_MODE=1; SET_RTK=1 ;;
         --no-realtek-mode) REALTEK_MODE=0; SET_RTK=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
