@@ -1675,7 +1675,8 @@ eee_tool() {
     for _et in "${LGU2E_ROOT}/opt/sbin/ethtool" "${LGU2E_ROOT}/opt/bin/ethtool"; do
         [ -x "$_et" ] && { echo "$_et"; return 0; }
     done
-    command -v ethtool 2>/dev/null
+    # On the PATH too, but not under a test root (a build machine has its own)
+    [ -z "${LGU2E_ROOT}" ] && command -v ethtool 2>/dev/null
 }
 # --eee-off: Energy Efficient Ethernet off on eth0, if it's the adapter, the
 # driver supports it and it's on.  Quiet when there's nothing to do.
