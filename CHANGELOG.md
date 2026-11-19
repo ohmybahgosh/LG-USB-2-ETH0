@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.44] - 2026-11-19
+
+### Changed
+
+- **The update block's check starts right away.**  Turning on Block updates harder, or changing any setting, used to stop the background job until the next boot, and these TVs can go weeks in standby without one.  Now the job starts again as soon as the settings are saved.  If one was already running, it carries on as before.  If not, only the parts that can't wait start (the update block's check, IPv6 off, EEE off and the connection history); following the adapter, moving it to a faster driver and the Wi-Fi backup still start at the next boot, as they always have.
+
+### Added
+
+- **A warning if webOS's updater is switched to another update server.**  The updater keeps flag files that can point it at a different server than the ones the hosts lines block (there are none on a C2 on webOS 25).  The check every 10 minutes now looks for them, notes one in the log, and `status`, the app and the report point it out.  It doesn't touch LG's file.  The update check switch still stays off, so the updater can't check either way.
+
 ## [2.11.43] - 2026-11-19
 
 ### Added

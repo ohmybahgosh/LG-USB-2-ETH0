@@ -180,7 +180,7 @@ https://ls3.test|4000000|Faraway, Three (Gamma)'
 run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
-        LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 \
+        LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 LGU2E_UPD_EVERY=2 \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SPEED_LIBRE="$FAKE_LIBRE" \
@@ -1185,7 +1185,9 @@ test_block_rechecks() {
     hbc_hosts
     run install -y --block-updates --wait 2
     run_hook
-    check "checks it" wait_log "Checking the update block every"
+    check "boot done" wait_log "No USB Ethernet adapter after 2s"
+    sleep 1
+    check "checks it" test "$(grep -c 'Checking the update block every' "$LOG")" = 2
     : > "$STATE/iptables"
     echo true > "$STATE/updcheck"
     check "notices" wait_log "update block was partly undone (check firewall)"
@@ -1209,6 +1211,40 @@ test_block_rechecks() {
     check "says what it put back" has "Something undid part of the update block in the last week (check firewall"
     run report
     check "report counts" has "stopped 2 tries by IP"
+}
+
+# Saving settings starts the background job again right away, so the update
+# block's check doesn't wait for a boot.  With none running before, only the
+# parts that can't wait: it doesn't start moving the adapter.  It notes, and
+# leaves alone, a flag switching webOS's updater to another server.
+test_block_starts_now() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    hbc_hosts
+    run install -y --block-updates --watch
+    check "job started" wait_log "background job started again with the new settings"
+    check "checking the block" wait_log "Checking the update block every"
+    check "pid kept" test -s "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.pid"
+    : > "$STATE/iptables"
+    check "puts it back without a boot" wait_log "update block was partly undone (firewall)"
+    sleep 2
+    check "light: the adapter isn't moved" is eth1 usb:1-1
+    check "light: no following" lacks_log "Watching for the adapter"
+    mkdir -p "$ROOT/mnt/lg/cmn_data/update"
+    touch "$ROOT/mnt/lg/cmn_data/update/.nsuServerTypeSDP"
+    check "notes a server switch" wait_log "switched to another update server (SDP)"
+    sleep 3
+    check "noted once" test "$(grep -c 'another update server' "$LOG")" = 1
+    check "leaves LG's file alone" test -e "$ROOT/mnt/lg/cmn_data/update/.nsuServerTypeSDP"
+    run status
+    check "status says so" has "switched to another update server (SDP)"
+    run status --json
+    check "json says so" json_ok "$OUT" "d['updates']['serverSwitch'] == 'SDP'"
+    # With the job running, saving again carries it on as it was
+    run install -y --no-ipv6-off
+    check "restarted once more" wait_for_file "$LOG" "Checking the update block"
+    check "two starts" test "$(grep -c 'started again with the new settings' "$LOG")" = 2
+    stop_bg
 }
 
 # The cable link coming and going goes into the connection history, but not
@@ -1609,6 +1645,7 @@ t block_updates_undo test_block_updates_undo
 t block_updates_without_hbc test_block_updates_without_hbc
 t block_rechecks test_block_rechecks
 t link_history test_link_history
+t block_starts_now test_block_starts_now
 t eee_off test_eee_off
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1

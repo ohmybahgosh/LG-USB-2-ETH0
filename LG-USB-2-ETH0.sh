@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.43"
+VERSION="2.11.44"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -138,6 +138,11 @@ IPV6_CONF="${LGU2E_ROOT}/proc/sys/net/ipv6/conf"
 IPV6_MARK="$RUN_DIR/lg-usb-2-eth0.ipv6"
 # shellcheck disable=SC2034 # used by updates_block, in CORE
 SWUPDATE_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/swupdate"
+# Where webOS's updater keeps flag files that switch it to another update
+# server (.nsuServerTypeSDP, Network or Origin).  None on a C2 on webOS 25,
+# which means LG's usual update servers.
+# shellcheck disable=SC2034 # used by upd_server_switch, in CORE
+UPD_FLAG_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/update"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -1616,6 +1621,15 @@ upd_gaps() {
     { [ -e "$SWUPDATE_DIR/Image_Update_Info.xml" ] || [ -e "$SWUPDATE_DIR/Package_Update_Info.xml" ]; } && _ug="$_ug download"
     echo "${_ug# }"
 }
+# The other update server webOS's updater was switched to, if any (SDP,
+# Network or Origin).  The update check switch still stops it, but its
+# servers aren't ones the hosts lines block.
+upd_server_switch() {
+    for _uf in SDP Network Origin; do
+        [ -e "$UPD_FLAG_DIR/.nsuServerType$_uf" ] && { echo "$_uf"; return 0; }
+    done
+    return 0
+}
 # Packets the firewall rule has stopped since boot
 upd_fw_hits() {
     iptables -L OUTPUT -n -v -x 2>/dev/null | awk -v ip="$UPD_IP" '$3 == "DROP" && $9 == ip { print $1; exit }'
@@ -1645,6 +1659,12 @@ upd_watch() {
             upd_stat_set fixedWhat "$(echo "$_gu" | tr ' ' ,)"
         fi
         updates_block
+    fi
+    # Only noted, not changed: LG's own file, and other parts may read it
+    _sw=$(upd_server_switch)
+    if [ -n "$_sw" ] && [ "$_sw" != "$(upd_stat_get server)" ]; then
+        echo "=== $(date) webOS's updater was switched to another update server ($_sw).  Its update check stays off. ==="
+        upd_stat_set server "$_sw"
     fi
     _hw=$(upd_fw_hits)
     case "$_hw" in ''|*[!0-9]*) return 0 ;; esac
@@ -3276,9 +3296,42 @@ boot_main() {
     fi
     # Keep the log small
     [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE")" -gt 32768 ] && mv -f "$LOG_FILE" "$LOG_FILE.1"
-    ( boot_run ) >> "$LOG_FILE" 2>&1 < /dev/null &
+    # One background job at a time: one that 'install' started stops here
+    _opid=$(watcher_pid) && tr '\0' ' ' < "/proc/$_opid/cmdline" 2>/dev/null | grep -q 'S01fix-eth' && kill "$_opid" 2>/dev/null
+    case "${LGU2E_WATCH_ONLY:-}" in
+        full|light) ( watch_restart "$LGU2E_WATCH_ONLY" ) >> "$LOG_FILE" 2>&1 < /dev/null & ;;
+        *) ( boot_run ) >> "$LOG_FILE" 2>&1 < /dev/null & ;;
+    esac
     echo $! > "$PID_FILE"
     exit 0
+}
+
+# The background job again, after 'install' stopped it to save new settings,
+# without the boot's swap.  "full": one was running, so it carries on as it
+# was.  "light": none was, so only what can't wait for a boot (the update
+# block's check, IPv6 off, EEE off, the connection history): following the
+# adapter, moving it to a driver and the Wi-Fi backup start at the next boot,
+# as they always have.
+watch_restart() {
+    echo "=== $(date) background job started again with the new settings ==="
+    if [ "$1" = light ]; then WATCH=0; DRIVER=""; WIFI_FALLBACK=0; fi
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ]; then
+        watch_run
+    fi
+    return 0
+}
+
+# Start the background job now, after a settings change ('install'), when the
+# hook is on and a setting needs it.  WHICH is full or light, as above.
+start_watcher() {
+    [ "$(hook_state)" = enabled ] && [ -L "$HOOK" ] || return 0
+    [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ] || return 0
+    if command -v setsid >/dev/null 2>&1; then
+        LGU2E_WATCH_ONLY=$1 setsid sh "$HOOK" < /dev/null > /dev/null 2>&1
+    else
+        LGU2E_WATCH_ONLY=$1 sh "$HOOK" < /dev/null > /dev/null 2>&1
+    fi
+    return 0
 }
 
 # === Live changes ===
@@ -3380,6 +3433,8 @@ install_fix() {
         echo "  It does the same job as --module. Keep only one: sh /home/root/r8152-autobind.sh uninstall"
     fi
     confirm "Install the boot hook?" || { echo "Cancelled. Nothing changed."; return 1; }
+    _had_job=""
+    watcher_pid > /dev/null && _had_job=1
     stop_watcher
     write_hook
     success "Boot hook installed: $HOOK"
@@ -3415,6 +3470,10 @@ install_fix() {
     else
         echo "It takes effect at the next reboot. Run 'apply' to switch now."
     fi
+    # The background job again, so the update block's check and the rest
+    # don't wait for a boot (these TVs can go weeks in standby without one).
+    # Light while a swap from --now is running, so the two never race.
+    if [ -n "$_had_job" ] && [ "$APPLY_NOW" != 1 ]; then start_watcher full; else start_watcher light; fi
 }
 
 uninstall_fix() {
@@ -3755,6 +3814,8 @@ show_status() {
         fi
     else
         [ -n "$(ago_week "$(upd_stat_get found)")" ] && status_note "webOS found a firmware update in the last week.  The update block removed it before it could install."
+        _sv=$(upd_server_switch)
+        [ -n "$_sv" ] && status_note "webOS's updater was switched to another update server ($_sv).  The update check stays off, so it can't check, but please report it on GitHub."
         _sw=$(upd_stat_get fixedWhat | tr , ' ')
         [ -n "$(ago_week "$(upd_stat_get fixed)")" ] && status_note "Something undid part of the update block in the last week ($_sw).  It was put back."
     fi
@@ -3924,10 +3985,10 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverSwitch":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
-        "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")"
+        "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")"
     printf '"links":%s,"eee":{"tool":%s,"state":%s},' "$(links_json)" "$(jb "$(eee_tool > /dev/null && echo 1)")" "$(js "$(eee_state)")"
     printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
@@ -4683,7 +4744,8 @@ show_report() {
     [ -n "$_ee" ] && echo "EEE:     $_ee"
     if [ "$(hook_setting BLOCK_UPDATES)" = 1 ]; then
         _rt=$(upd_stat_get tries); _rg=$(upd_gaps)
-        echo "Update block: ${_rg:+missing $_rg, }stopped ${_rt:-0} tries by IP"
+        _rs=$(upd_server_switch)
+        echo "Update block: ${_rg:+missing $_rg, }stopped ${_rt:-0} tries by IP${_rs:+, updater switched to $_rs}"
     fi
     _lt=$(links_text)
     if [ -n "$_lt" ]; then

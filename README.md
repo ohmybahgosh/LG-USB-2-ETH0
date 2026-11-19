@@ -39,7 +39,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Survives standby and unplugging.**  **Follow plug and unplug** keeps the adapter `eth0` when it's moved, puts it back on the faster driver after standby, and restarts a hung adapter.  **Wi-Fi as a backup** turns Wi-Fi on if the cable stops working.  [How it works](#how-it-works)
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 153 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 154 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
@@ -79,7 +79,7 @@ I, [OhMyBahGosh](https://github.com/ohmybahgosh), wrote v1 by hand.  From v2.0 o
 
 The fixes that mattered most came from that real-TV testing, not from the AI: standby putting the adapter back on the slow driver, webOS quietly sending traffic over Wi-Fi instead of the adapter, and the GitHub report form opening blank on a phone.  The [changelog](CHANGELOG.md) has the full story.
 
-- **Tests on every push:** 153 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
+- **Tests on every push:** 154 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
 - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches, and an update only if its checksums are signed with the release key, which never leaves the maintainer's computer ([SECURITY.md](SECURITY.md#verifying-a-download)).  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
 
@@ -735,7 +735,7 @@ A firmware update can remove root, and current firmware can't be rooted again (s
 - **The update servers the block misses**, added to `/etc/hosts`: `nsu.lge.com` (LG's current update server, which a TV still reached with the block on), `snu-dev.lge.com` and `ngfts.lge.com`.  If the Homebrew Channel's block is off, it adds that block's four servers too (`snu.lge.com`, `su.lge.com`, `su-ssl.lge.com`, `su-dev.lge.com`), the same way it does: in a writable copy of `/etc/hosts` that's gone after a reboot.  It only adds the ones that aren't there yet, in lines marked as its own, and never changes the Homebrew Channel's.
 - **The server the updater reaches by IP** (`156.147.69.32`), which no hosts file can block, with one firewall rule.
 - **Update details already found or downloaded** (in `/mnt/lg/cmn_data/swupdate`), deleted, so a waiting prompt goes away.
-- **Checked every 10 minutes.**  These TVs can go weeks in standby without a boot, so the background job checks that the update check is still off, the servers are still in `/etc/hosts` and the firewall rule is still there, and puts back anything missing.  An update webOS finds is deleted as soon as it shows up.
+- **Checked every 10 minutes, from the moment it's on.**  These TVs can go weeks in standby without a boot, so the background job checks that the update check is still off, the servers are still in `/etc/hosts` and the firewall rule is still there, and puts back anything missing.  An update webOS finds is deleted as soon as it shows up.  It also watches for webOS's updater being switched to another update server (flag files in `/mnt/lg/cmn_data/update`), and points it out.
 - **A count of what it stopped.**  The firewall rule counts the updater's tries to reach its server by IP, and the app's **Block updates harder** row says how many and when, or that it removed an update webOS found.  `status` points out anything it had to put back, and `report` shows the count.
 
 The firmware itself downloads from `su.lge.com` and `su-ssl.lge.com` (the Homebrew Channel's block covers both, and this does too when that's off).  The exact download address comes back from the update check, so with the check blocked, the updater never gets one.
