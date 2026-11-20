@@ -135,3 +135,91 @@ footer .right { margin: 0 0 0 auto; }
 /* Earlier speed tests under the result */
 .hist { margin-top: 8px; border-collapse: collapse; font-size: 22px; opacity: .85; }
 .hist td { padding: 2px 24px 2px 0; }
+
+/* Big-screen menu: tabs, and text sized to read from the couch (2.11.46) */
+#app { padding: 64px 100px; }
+header img { width: 88px; height: 88px; }
+.meta { font-size: 28px; }
+main { margin-top: 36px; }
+.card { flex: 1; margin-right: 44px; padding: 36px 42px; }
+.actions { flex: 1.15; }
+.hero b { font-size: 50px; }
+.sub { font-size: 30px; }
+table { font-size: 30px; }
+td { padding: 12px 0; }
+#notes { font-size: 26px; }
+.tabs { display: flex; margin-bottom: 22px; }
+.tab { font-size: 30px; font-weight: 700; padding: 12px 24px; border-radius: 16px; color: #93a39b; background: #16201c; margin-right: 12px; position: relative; cursor: pointer; }
+.tab.on { background: #22e584; color: #06140d; }
+.tab.gone { display: none; }
+.tab.news:after { content: ""; position: absolute; top: 8px; right: 8px; width: 14px; height: 14px; border-radius: 50%; background: #febc2e; }
+.btn.off-tab { display: none; }
+.btn { font-size: 40px; padding: 18px 34px; margin-bottom: 14px; border-radius: 22px; }
+.btn small { font-size: 27px; margin-top: 4px; }
+.tog { width: 96px; height: 54px; border-radius: 27px; }
+.tog:after { left: 6px; top: 6px; width: 42px; height: 42px; }
+.tog.on:after { right: 6px; }
+footer { bottom: 44px; left: 100px; right: 100px; font-size: 27px; }
+.panel { width: 1400px; padding: 52px 60px; }
+.panel-title { font-size: 46px; }
+.panel-body { font-size: 31px; line-height: 1.35; }
+.panel-hint { font-size: 27px; }
+.walk li { font-size: 30px; }
+.walk-h { font-size: 23px; }
+.about p { font-size: 27px; }
+.steps { font-size: 28px; }
+td:first-child { width: 38%; }
+.tab { outline: none; border: 3px solid transparent; font-size: 28px; padding: 10px 20px; }
+.tab:focus { border-color: #22e584; box-shadow: 0 0 0 6px rgba(34, 229, 132, .15); }
+.tab.on:focus { border-color: #e8efeb; }
+.tabs { flex-wrap: nowrap; }
+.tab { white-space: nowrap; font-size: 27px; padding: 10px 18px; margin-right: 10px; }
+.tabs.small .tab { font-size: 23px; padding: 10px 13px; margin-right: 8px; }
+.tabs.smaller .tab { font-size: 20px; padding: 9px 10px; margin-right: 6px; }
+.actions, .card { min-width: 0; }
+.tabs { overflow: hidden; }
+/* The open tab's rows scroll with the focus when they don't all fit */
+.rows { max-height: 690px; overflow: hidden; }
+.btn > span { flex: 1; min-width: 0; padding-right: 24px; }
+.btn small { line-height: 1.25; }
+.btn > span.tog { flex: none; padding-right: 0; }
+.rows { position: relative; }
+/* Room to scroll a row right to the top */
+.rows:after { content: ""; display: block; height: 690px; }
+/* Scroll rail: a slim track beside the rows when the open tab has more
+   rows than fit.  The thumb shows which part of the list is on screen and
+   the caps light up on the side that has more. */
+.actions { position: relative; }
+.rows { max-height: 660px; padding-right: 34px; }
+.rail { position: absolute; right: 4px; width: 8px; border-radius: 4px; background: rgba(255, 255, 255, .07); opacity: 0; transition: opacity .3s ease; pointer-events: none; }
+.rail.show { opacity: 1; }
+.rail-thumb { position: absolute; left: 0; right: 0; border-radius: 4px; background: linear-gradient(180deg, #4ff0a2, #22e584); box-shadow: 0 0 14px rgba(34, 229, 132, .55); transition: top .25s ease, height .25s ease; }
+.rail-cap { position: absolute; left: 50%; width: 10px; height: 10px; border: solid rgba(255, 255, 255, .18); border-width: 0 3px 3px 0; transition: border-color .25s ease; }
+.rail-cap.up { top: -22px; transform: translateX(-50%) rotate(-135deg); }
+.rail-cap.down { bottom: -22px; transform: translateX(-50%) rotate(45deg); }
+.rail-cap.lit { border-color: #22e584; }
+
+/* Network tab: details, link health, live traffic, check, history */
+.kv td { padding: 10px 0; }
+.dim { color: #6f7f78; }
+.walk li.bad:before { content: "✕"; color: #ff6b6b; }
+.walk li.bad { color: #ffd6d6; }
+.walk li.skip { color: #56645e; }
+.walk li.skip:before { content: "–"; color: #3b4843; }
+.walk.check li { padding-top: 8px; padding-bottom: 8px; }
+.hist.events { font-size: 26px; margin-top: 6px; }
+.hist.events td:first-child { width: auto; color: #6f7f78; padding-right: 30px; }
+.spark { display: flex; align-items: flex-end; height: 110px; margin-top: 24px; padding: 10px 12px; background: #0d1512; border-radius: 16px; }
+.spark i { flex: 1; margin-right: 4px; background: linear-gradient(180deg, #4ff0a2, #1a9e5c); border-radius: 4px 4px 0 0; min-height: 4px; transition: height .4s ease; }
+.spark i:last-child { margin-right: 0; box-shadow: 0 0 12px rgba(34, 229, 132, .6); }
+.speedhist { font-size: 27px; }
+.speedhist td { padding: 9px 22px 9px 0; border-top: 1px solid rgba(255, 255, 255, .06); white-space: nowrap; }
+.speedhist td:first-child { width: auto; color: #93a39b; }
+.speedhist tr.head td { border-top: 0; font-size: 19px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #22e584; }
+.speedhist .barcell { width: 40%; }
+.speedhist .bar { display: inline-block; vertical-align: middle; width: calc(100% - 90px); height: 14px; border-radius: 7px; background: rgba(255, 255, 255, .07); margin-right: 16px; overflow: hidden; }
+.speedhist .bar i { display: block; height: 100%; border-radius: 7px; background: linear-gradient(90deg, #1a9e5c, #4ff0a2); }
+.speedhist b { font-weight: 800; color: #e8efeb; }
+.spark i.e { height: 4px; background: rgba(255, 255, 255, .06); box-shadow: none; }
+.kv code { font-size: inherit; font-family: inherit; word-break: normal; }
+.tog.na { opacity: .3; }

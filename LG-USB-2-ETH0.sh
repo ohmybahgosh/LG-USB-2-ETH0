@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.45"
+VERSION="2.11.46"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -121,6 +121,10 @@ UPD_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.updates"
 # --block-updates: what the block has caught, kept across reboots
 # ("tries=", "last=", "found=", "fixed=", "fixedWhat="), and the firewall
 # rule's packet count this boot
+# --block-updates: what webOS's automatic updates setting was before it was
+# turned off ("on" or "off"), so turning the option off puts it back
+# shellcheck disable=SC2034 # used by updates_block, in CORE
+UPD_AUTO_MARK="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
 # shellcheck disable=SC2034 # used by upd_watch, in CORE
 UPD_STATS="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.blocked"
 # shellcheck disable=SC2034 # used by upd_watch, in CORE
@@ -138,11 +142,35 @@ IPV6_CONF="${LGU2E_ROOT}/proc/sys/net/ipv6/conf"
 IPV6_MARK="$RUN_DIR/lg-usb-2-eth0.ipv6"
 # shellcheck disable=SC2034 # used by updates_block, in CORE
 SWUPDATE_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/swupdate"
-# Where webOS's updater keeps flag files that switch it to another update
-# server (.nsuServerTypeSDP, Network or Origin).  None on a C2 on webOS 25,
-# which means LG's usual update servers.
+# Where webOS's updater keeps flag files that pick its update server
+# (.nsuServerTypeSDP, Origin, Test or Network).  Every one goes to a server
+# the block covers: SDP and Origin to snu.lge.com, Test to snu-dev.lge.com,
+# Network straight to the IP the firewall rule blocks.  The updater makes
+# the SDP one itself, so they're only listed in the report.
 # shellcheck disable=SC2034 # used by upd_server_switch, in CORE
 UPD_FLAG_DIR="${LGU2E_ROOT}/mnt/lg/cmn_data/update"
+# --block-updates' phone app block: the TV's second-screen gateway (what
+# LG's phone apps talk to) reads which update calls it offers from this
+# file when it starts.  The block puts a copy with only the read-only calls
+# over it (a bind mount, gone at the next restart, when the boot hook puts
+# it back before the gateway starts).  The mark says when it went in: boot
+# (the gateway uses it) or now (from the next TV start).
+# shellcheck disable=SC2034 # used by phone_block, in CORE
+SSG_IF="${LGU2E_ROOT}/usr/palm/services/com.webos.service.secondscreen.gateway/interfaces/com.webos.service.update.interface"
+# shellcheck disable=SC2034 # used by phone_block, in CORE
+SSG_COPY="$RUN_DIR/lg-usb-2-eth0.update.interface"
+# shellcheck disable=SC2034 # used by phone_block, in CORE
+SSG_MARK="$RUN_DIR/lg-usb-2-eth0.phone"
+# The updater's working files: a check or download (nsu-running), an update
+# under way, and a USB update someone started on purpose
+# shellcheck disable=SC2034 # used by dl_guard, in CORE
+NSU_RUNNING="${LGU2E_ROOT}/tmp/nsu-running"
+# shellcheck disable=SC2034 # used by dl_guard, in CORE
+USB_RUNNING="${LGU2E_ROOT}/tmp/usbupdate-running"
+# shellcheck disable=SC2034 # used by dl_guard, in CORE
+UPD_INPROG="${LGU2E_ROOT}/mnt/lg/cmn_data/.UpdateIsInprogress"
+# shellcheck disable=SC2034 # used by dl_guard, in CORE
+GUARD_SEEN="$RUN_DIR/lg-usb-2-eth0.guard"
 
 # === Defaults (install options) ===
 ASSUME_YES=0
@@ -160,13 +188,18 @@ WIFI_WAKE=0
 BLOCK_UPDATES=0
 IPV6_OFF=0
 EEE_OFF=0
+BLOCK_RS=0
+# With --block-updates: also stop phone apps starting an update, and stop a
+# firmware download that starts anyway.  On unless turned off.
+BLOCK_PHONE=1
+STOP_DL=1
 # The TV app's language (en or ru), for the messages the boot hook shows on
 # the TV screen.  The app hands it over (LGU2E_APP_LANG) and it's saved with
 # the settings, since the hook runs at boot without the app.
 UI_LANG=en
 # Which options were given on the command line. Anything not given keeps its
 # current setting when 'install' is run again.
-SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0 SET_V6=0 SET_EEE=0
+SET_MAC=0 SET_WAIT=0 SET_MODULE=0 SET_WATCH=0 SET_WIFI=0 SET_WAKE=0 SET_BLOCK=0 SET_RTK=0 SET_V6=0 SET_EEE=0 SET_RS=0 SET_PHONE=0 SET_GUARD=0
 JSON=0
 PHASE=""
 SERVER_ARG=""
@@ -229,6 +262,12 @@ Commands (no command opens the menu):
               List the speed test servers and how far each is, or choose
               one: speed-server auto, cloudflare, a number from the list,
               or the URL of your own LibreSpeed server
+  netinfo     Show eth0's network details (address, router, DNS, MAC, MTU)
+              and its link health (drops, errors, how long it's been up)
+  traffic     Show how fast data is going in and out of each connection
+              right now, over one second
+  netcheck    Check the connection step by step: cable, address, router,
+              DNS, internet, and that blocked LG servers stay blocked
   get-driver  Download a better driver module known to work on this exact
               kernel, if there is one, and check its checksum. With
               --file PATH, check and use a copy you downloaded yourself
@@ -263,9 +302,26 @@ Options:
   --block-updates    Block firmware updates more thoroughly, on top of the
                      Homebrew Channel's own block: turn webOS's update check
                      off, block the update servers it misses, and the one
-                     it reaches by IP.  Updates can remove root for good.
-                     After boot it checks every 10 minutes that nothing
-                     undid it, and counts what it caught
+                     it reaches by IP, and turn webOS's automatic updates
+                     off.  Updates can remove root for good.  After boot it
+                     checks every 10 minutes that nothing undid it, and
+                     counts what it caught
+  --no-block-phone-updates
+                     With --block-updates, phone apps (LG ThinQ) can't start
+                     a firmware update either: the TV's phone gateway
+                     stops offering the update call, from the next TV
+                     start.  Casting and the phone remote keep working.
+                     On unless turned off with this
+  --no-stop-downloads
+                     With --block-updates, a firmware download that starts
+                     anyway is cancelled (checked every 30 seconds, only
+                     while the updater is busy; an install or a USB update
+                     is left alone).  On unless turned off with this
+  --block-remote-support
+                     Also block LG Remote Support, off by default: during a
+                     remote support session, LG can push a firmware update
+                     that skips the update check.  While it's on, LG
+                     support can't connect to the TV
   --ipv6-off         Turn IPv6 off on the TV, for networks that hand out
                      IPv6 but don't carry it: there, every new connection
                      waits about 200 ms before it falls back to IPv4 (the
@@ -278,10 +334,12 @@ Options:
                      the kernel left on the generic driver is switched over
                      to the kernel's own r8152, when it has one
   --no-watch, --no-module, --no-mac, --no-wifi-fallback, --no-wifi-wake,
-  --no-block-updates, --no-ipv6-off, --no-eee-off
-                     Turn that setting off again (--realtek-mode turns it on)
-  --json             With status or speedtest: machine-readable output (used
-                     by the TV app)
+  --no-block-updates, --no-ipv6-off, --no-eee-off, --no-block-remote-support
+                     Turn that setting off again (--realtek-mode,
+                     --block-phone-updates and --stop-downloads turn
+                     theirs back on)
+  --json             With status, speedtest, netinfo, traffic or netcheck:
+                     machine-readable output, used by the TV app
   --phase PHASE      With speedtest: run only ping, down or up
   --check            With update: only check, don't install
 
@@ -313,6 +371,13 @@ HANG_SECS=${LGU2E_HANG_SECS:-60}
 HANG_EVERY=${LGU2E_HANG_EVERY:-1800}
 # --block-updates: seconds between checks that the block is still in place
 UPD_EVERY=${LGU2E_UPD_EVERY:-600}
+# How often the download guard looks whether the updater is busy (a file
+# check; it only asks the updater when one of its working files is there)
+GUARD_EVERY=${LGU2E_GUARD_EVERY:-30}
+# Seconds between the checks that the app is really gone (see app_removed)
+APP_GONE_SECS=${LGU2E_APP_GONE_SECS:-20}
+# How often the background job looks whether the app is still there
+APP_CHECK_EVERY=${LGU2E_APP_CHECK_EVERY:-30}
 # --wifi-wake: tries to connect the adapter again on wake, seconds apart
 WAKE_TRIES=${LGU2E_WAKE_TRIES:-10}
 WAKE_RETRY_SECS=${LGU2E_WAKE_RETRY_SECS:-3}
@@ -1551,13 +1616,63 @@ upd_set() {
 }
 upd_fw_rule() { iptables -C OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; }
 # The update servers missing from /etc/hosts
-upd_missing_hosts() {
-    for _h in $UPD_HOSTS; do
+# shellcheck disable=SC2086 # one word per host
+upd_missing_hosts() { hosts_missing $UPD_HOSTS; }
+
+# webOS's automatic updates setting (support/automaticUpdate): on, off, or
+# nothing when it can't tell.  The updater reads it along with the update
+# check switch: on, it installs an update it finds without asking.
+upd_auto_setting() {
+    luna-send -n 1 luna://com.webos.settingsservice/getSystemSettings \
+        '{"category":"support","keys":["automaticUpdate"]}' 2>/dev/null |
+        sed -nE 's/.*"automaticUpdate":[[:space:]]*"?([A-Za-z]+)"?.*/\1/p'
+}
+upd_auto_set() {
+    case "$(luna-send -n 1 luna://com.webos.settingsservice/setSystemSettings \
+        "{\"category\":\"support\",\"settings\":{\"automaticUpdate\":\"$1\"}}" 2>/dev/null)" in
+        *'"returnValue":true'*|*'"returnValue": true'*) return 0 ;;
+    esac
+    return 1
+}
+
+# hosts_append TAG HOST...: block each HOST in /etc/hosts, in lines marked TAG.
+# /etc/hosts is read-only unless something (like the Homebrew Channel's own
+# block) put a writable copy over it.  Then do the same.
+hosts_append() {
+    _ht=$1; shift
+    if ! ( : >> "$HOSTS_FILE" ) 2>/dev/null; then
+        cp "$HOSTS_FILE" "$RUN_DIR/lg-usb-2-eth0.hosts" 2>/dev/null &&
+            mount --bind "$RUN_DIR/lg-usb-2-eth0.hosts" "$HOSTS_FILE" 2>/dev/null
+    fi
+    ( : >> "$HOSTS_FILE" ) 2>/dev/null || return 1
+    {
+        echo "$_ht"
+        for _h in "$@"; do printf '0.0.0.0\t%s %s\n::\t%s %s\n' "$_h" "$_ht" "$_h" "$_ht"; done
+    } >> "$HOSTS_FILE"
+}
+# hosts_remove TAG: take the lines marked TAG out of /etc/hosts, in place
+# (it may be a bind mount that can't be replaced)
+hosts_remove() {
+    grep -q "$1" "$HOSTS_FILE" 2>/dev/null || return 0
+    # grep finding no other lines (a hosts file with only these) isn't a failure
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    { grep -v "$1" "$HOSTS_FILE" 2>/dev/null; true; } > "$RUN_DIR/lg-usb-2-eth0.hosts.new" &&
+        cat "$RUN_DIR/lg-usb-2-eth0.hosts.new" > "$HOSTS_FILE" 2>/dev/null
+    rm -f "$RUN_DIR/lg-usb-2-eth0.hosts.new"
+}
+# hosts_missing HOST...: the ones not blocked in /etc/hosts yet
+hosts_missing() {
+    for _h in "$@"; do
         grep -Eq "^[^#]*[[:space:]]$_h([[:space:]]|#|$)" "$HOSTS_FILE" 2>/dev/null || printf '%s ' "$_h"
     done
 }
 
 updates_block() {
+    _ua=$(upd_auto_setting)
+    [ -n "$_ua" ] && [ ! -f "$UPD_AUTO_MARK" ] && echo "$_ua" > "$UPD_AUTO_MARK"
+    if [ -n "$_ua" ] && [ "$_ua" != off ]; then
+        if upd_auto_set off; then echo "Turned webOS's automatic updates off."; else echo "Could not turn webOS's automatic updates off."; fi
+    fi
     _us=$(upd_setting)
     # Remember what it was, once, so turning the option off restores it
     [ -n "$_us" ] && [ ! -f "$UPD_MARK" ] && echo "$_us" > "$UPD_MARK"
@@ -1568,17 +1683,8 @@ updates_block() {
     rm -f "$SWUPDATE_DIR/Image_Update_Info.xml" "$SWUPDATE_DIR/Package_Update_Info.xml" 2>/dev/null
     _miss=$(upd_missing_hosts)
     if [ -n "$_miss" ]; then
-        # /etc/hosts is read-only unless something (like the Homebrew
-        # Channel's own block) put a writable copy over it.  Then do the same.
-        if ! ( : >> "$HOSTS_FILE" ) 2>/dev/null; then
-            cp "$HOSTS_FILE" "$RUN_DIR/lg-usb-2-eth0.hosts" 2>/dev/null &&
-                mount --bind "$RUN_DIR/lg-usb-2-eth0.hosts" "$HOSTS_FILE" 2>/dev/null
-        fi
-        if ( : >> "$HOSTS_FILE" ) 2>/dev/null; then
-            {
-                echo "$UPD_TAG"
-                for _h in $_miss; do printf '0.0.0.0\t%s %s\n::\t%s %s\n' "$_h" "$UPD_TAG" "$_h" "$UPD_TAG"; done
-            } >> "$HOSTS_FILE"
+        # shellcheck disable=SC2086 # one word per host
+        if hosts_append "$UPD_TAG" $_miss; then
             echo "Blocked update servers in $HOSTS_FILE: $_miss"
             [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] ||
                 echo "The Homebrew Channel's Block system updates is off, so its servers are blocked here too."
@@ -1589,21 +1695,23 @@ updates_block() {
     if command -v iptables >/dev/null 2>&1 && ! upd_fw_rule; then
         if iptables -I OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; then echo "Blocked $UPD_IP, which the updater reaches by IP."; else echo "Could not block $UPD_IP."; fi
     fi
+    if [ "$BLOCK_PHONE" = 1 ]; then phone_block "${1:-now}"; else phone_unblock; fi
     return 0
 }
 
 updates_unblock() {
+    if [ -f "$UPD_AUTO_MARK" ]; then
+        _wa=$(cat "$UPD_AUTO_MARK" 2>/dev/null)
+        case "$_wa" in ''|off) ;; *) upd_auto_set "$_wa" || echo "Could not turn webOS's automatic updates back on." ;; esac
+        rm -f "$UPD_AUTO_MARK"
+    fi
     if [ -f "$UPD_MARK" ]; then
         _was=$(cat "$UPD_MARK" 2>/dev/null)
         [ "$_was" = true ] && { upd_set true || echo "Could not turn webOS's update check back on."; }
         rm -f "$UPD_MARK"
     fi
-    if grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
-        # Written in place: /etc/hosts may be a bind mount that can't be replaced
-        grep -v "$UPD_TAG" "$HOSTS_FILE" > "$RUN_DIR/lg-usb-2-eth0.hosts.new" 2>/dev/null &&
-            cat "$RUN_DIR/lg-usb-2-eth0.hosts.new" > "$HOSTS_FILE" 2>/dev/null
-        rm -f "$RUN_DIR/lg-usb-2-eth0.hosts.new"
-    fi
+    hosts_remove "$UPD_TAG"
+    phone_unblock
     if command -v iptables >/dev/null 2>&1; then
         while upd_fw_rule; do iptables -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
     fi
@@ -1611,21 +1719,22 @@ updates_unblock() {
 }
 
 # What's missing from the block now: any of "check" (webOS's update check is
-# on again), "hosts", "firewall", "download" (an update was found or
-# downloaded).  Changes nothing.
+# on again), "auto" (its automatic updates are on again), "hosts",
+# "firewall", "download" (an update was found or downloaded).  Changes nothing.
 upd_gaps() {
     _ug=""
     [ "$(upd_setting)" = true ] && _ug="check"
+    case "$(upd_auto_setting)" in ''|off) ;; *) _ug="$_ug auto" ;; esac
     [ -n "$(upd_missing_hosts)" ] && _ug="$_ug hosts"
     command -v iptables >/dev/null 2>&1 && ! upd_fw_rule && _ug="$_ug firewall"
+    [ "$BLOCK_PHONE" = 1 ] && phone_open && _ug="$_ug phone"
     { [ -e "$SWUPDATE_DIR/Image_Update_Info.xml" ] || [ -e "$SWUPDATE_DIR/Package_Update_Info.xml" ]; } && _ug="$_ug download"
     echo "${_ug# }"
 }
-# The other update server webOS's updater was switched to, if any (SDP,
-# Network or Origin).  The update check switch still stops it, but its
-# servers aren't ones the hosts lines block.
+# The update server flag webOS's updater has set, if any (see UPD_FLAG_DIR):
+# for the report only, since the block covers every one
 upd_server_switch() {
-    for _uf in SDP Network Origin; do
+    for _uf in Network Test Origin SDP; do
         [ -e "$UPD_FLAG_DIR/.nsuServerType$_uf" ] && { echo "$_uf"; return 0; }
     done
     return 0
@@ -1660,12 +1769,6 @@ upd_watch() {
         fi
         updates_block
     fi
-    # Only noted, not changed: LG's own file, and other parts may read it
-    _sw=$(upd_server_switch)
-    if [ -n "$_sw" ] && [ "$_sw" != "$(upd_stat_get server)" ]; then
-        echo "=== $(date) webOS's updater was switched to another update server ($_sw).  Its update check stays off. ==="
-        upd_stat_set server "$_sw"
-    fi
     _hw=$(upd_fw_hits)
     case "$_hw" in ''|*[!0-9]*) return 0 ;; esac
     _pw=$(cat "$UPD_HITS" 2>/dev/null)
@@ -1680,6 +1783,157 @@ upd_watch() {
         echo "=== $(date) stopped the updater reaching LG by IP ($((_hw - _pw)) packets). ==="
     fi
     echo "$_hw" > "$UPD_HITS" 2>/dev/null
+    return 0
+}
+
+# --block-remote-support: LG Remote Support's servers.  During a remote
+# support session, LG's remotediag can start an update with a download
+# address it hands over itself, which skips the update check the update
+# block stops.  Found in the C2's firmware (/usr/sbin/remotediag), and the
+# same on webOS 26.  While blocked, LG support can't connect to the TV.
+RS_HOSTS="rone-tv-aic.lge.com rone-tv-cic.lge.com rone-tv-eic.lge.com rone-tv-kic.lge.com rone-tv-saic.lge.com rone-aic.lge.com rone-eic.lge.com rone-kic.lge.com rone-saic.lge.com"
+RS_IPS="165.244.62.249 165.244.99.174"
+RS_TAG="# lg-usb-2-eth0 block-remote-support"
+# shellcheck disable=SC2086 # one word per host
+rs_missing_hosts() { hosts_missing $RS_HOSTS; }
+# The remote support addresses without their firewall rule
+rs_missing_ips() {
+    command -v iptables >/dev/null 2>&1 || return 0
+    for _ri in $RS_IPS; do iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null || printf '%s ' "$_ri"; done
+}
+# Is any remote support firewall rule there?
+rs_any_rule() {
+    command -v iptables >/dev/null 2>&1 || return 1
+    for _ri in $RS_IPS; do iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null && return 0; done
+    return 1
+}
+rs_block() {
+    _rm=$(rs_missing_hosts)
+    if [ -n "$_rm" ]; then
+        # shellcheck disable=SC2086 # one word per host
+        if hosts_append "$RS_TAG" $_rm; then echo "Blocked LG Remote Support's servers in $HOSTS_FILE."; else echo "Could not add LG Remote Support's servers to $HOSTS_FILE."; fi
+    fi
+    for _ri in $(rs_missing_ips); do
+        if iptables -I OUTPUT -d "$_ri" -j DROP 2>/dev/null; then echo "Blocked $_ri, an LG Remote Support server."; else echo "Could not block $_ri."; fi
+    done
+    return 0
+}
+rs_unblock() {
+    hosts_remove "$RS_TAG"
+    if command -v iptables >/dev/null 2>&1; then
+        for _ri in $RS_IPS; do
+            while iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null; do iptables -D OUTPUT -d "$_ri" -j DROP 2>/dev/null || break; done
+        done
+    fi
+    return 0
+}
+# What's missing from the remote support block: "hosts", "firewall"
+rs_gaps() {
+    _rg=""
+    [ -n "$(rs_missing_hosts)" ] && _rg="hosts"
+    [ -n "$(rs_missing_ips)" ] && _rg="$_rg firewall"
+    echo "${_rg# }"
+}
+# The watch loop's check for it, with the update block's
+rs_watch() {
+    _rw=$(rs_gaps)
+    [ -n "$_rw" ] || return 0
+    echo "=== $(date) the LG Remote Support block was partly undone ($_rw).  Putting it back. ==="
+    rs_block
+}
+
+# A paired phone app can still ask the update service to update: the
+# gateway's file still lists a call that needs the update permission.
+# Only an LG-signed app (ThinQ) gets that permission, and it makes the TV
+# download the firmware from the phone, so hosts and firewall rules don't
+# reach it.
+phone_open() { [ -f "$SSG_IF" ] && grep -q UPDATE_FROM_REMOTE_APP "$SSG_IF"; }
+phone_ours() { [ -f "$SSG_MARK" ]; }
+# phone_block WHEN: WHEN is boot (before the gateway starts) or now (it
+# already read the file, so from the next TV start).  Skipped when the file
+# isn't there, or something (like FW Block) already put a copy over it.
+phone_block() {
+    phone_open || return 0
+    mkdir -p "$RUN_DIR" 2>/dev/null
+    # Only the read-only calls the original has, as they are there
+    {
+        printf '{\n\t"service": "com.webos.service.update",\n\t"methods": [\n'
+        _ps=""
+        for _pm in getCurrentSWInformation getVersion; do
+            grep -q "\"/$_pm\"" "$SSG_IF" || continue
+            printf '%s\t\t{"path": "/%s", "requiredPermissions": ["READ_UPDATE_INFO"]}' "$_ps" "$_pm"
+            _ps=',
+'
+        done
+        printf '\n\t]\n}\n'
+    } > "$SSG_COPY" || { echo "Could not stop phone apps from starting an update."; return 1; }
+    if [ -n "${LGU2E_NOMOUNT:-}" ]; then
+        # The tests, which can't mount: swap the file's contents instead
+        cp "$SSG_IF" "$SSG_COPY.orig" && cat "$SSG_COPY" > "$SSG_IF" || return 1
+    else
+        mount --bind "$SSG_COPY" "$SSG_IF" 2>/dev/null || { echo "Could not stop phone apps from starting an update."; return 1; }
+    fi
+    echo "${1:-now}" > "$SSG_MARK"
+    if [ "${1:-now}" = boot ]; then
+        echo "Blocked phone apps from starting a firmware update."
+    else
+        echo "Blocked phone apps from starting a firmware update, from the next TV start.  Casting and the phone remote keep working."
+    fi
+}
+phone_unblock() {
+    phone_ours || return 0
+    if [ -n "${LGU2E_NOMOUNT:-}" ]; then
+        cat "$SSG_COPY.orig" > "$SSG_IF" || return 1
+    else
+        umount "$SSG_IF" 2>/dev/null || { echo "Could not undo the phone app block."; return 1; }
+    fi
+    rm -f "$SSG_MARK" "$SSG_COPY" "$SSG_COPY.orig"
+    echo "Phone apps can start an update again from the next TV start."
+}
+# What the phone app route is now: blocked, next (blocked from the next TV
+# start), other (something else blocked it, like FW Block), open, or none
+# (this firmware has no such file)
+phone_state() {
+    if phone_ours; then
+        [ "$(cat "$SSG_MARK" 2>/dev/null)" = boot ] && echo blocked || echo next
+    elif [ ! -f "$SSG_IF" ]; then echo none
+    elif phone_open; then echo open
+    elif [ "$(cat "${LGU2E_ROOT}/tmp/webos-fw-block/phone" 2>/dev/null)" = now ]; then echo next
+    else echo other
+    fi
+}
+
+# The download guard.  The block stops every way webOS finds an update,
+# but if a download starts anyway (a route nobody knows of yet), this
+# cancels it.  It only asks the updater while one of its working files is
+# there, so the updater isn't woken up for nothing.  An install is only
+# noted (stopping one could break the TV), and a USB update, which someone
+# started on purpose, is left alone.
+upd_busy() { [ -e "$NSU_RUNNING" ] || [ -e "$UPD_INPROG" ] || [ -e "$USB_RUNNING" ]; }
+upd_status() {
+    luna-send -n 1 -w 5000 luna://com.webos.service.update/getStatus '{}' < /dev/null 2>/dev/null |
+        sed -n 's/.*"status":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+}
+dl_guard() {
+    if ! upd_busy; then rm -f "$GUARD_SEEN"; return 0; fi
+    [ -e "$USB_RUNNING" ] && return 0
+    _gs=$(upd_status)
+    case "$_gs" in
+        *download*)
+            luna-send -n 1 -w 5000 luna://com.webos.service.update/cancelUpdate '{}' < /dev/null > /dev/null 2>&1
+            rm -f "$SWUPDATE_DIR/Image_Update_Info.xml" "$SWUPDATE_DIR/Package_Update_Info.xml" 2>/dev/null
+            _gn=$(upd_stat_get cancelled)
+            case "$_gn" in ''|*[!0-9]*) _gn=0 ;; esac
+            upd_stat_set cancelled $((_gn + 1))
+            upd_stat_set lastCancel "$(date +%s)"
+            echo "=== $(date) stopped a firmware download ($_gs). ==="
+            toast dl-stopped ;;
+        install*)
+            if [ "$(cat "$GUARD_SEEN" 2>/dev/null)" != installing ]; then
+                echo installing > "$GUARD_SEEN"
+                echo "=== $(date) a firmware update is installing.  Stopping it could break the TV, so it was left alone. ==="
+            fi ;;
+    esac
     return 0
 }
 
@@ -1761,7 +2015,39 @@ eee_state() {
 # Wi-Fi as a backup for the cable.  With --block-updates: check the block is
 # still in place every UPD_EVERY seconds.  Always: note the cable link coming
 # and going, for the connection history.
+# The app's folder, when the boot hook runs the app's own copy of the
+# script (set up from the app).  Empty otherwise.
+hook_app_dir() {
+    _hl=$(readlink "$HOOK" 2>/dev/null)
+    case "$_hl" in */usr/palm/applications/"$APP_ID"/*) echo "${_hl%%/usr/palm/applications/*}/usr/palm/applications/$APP_ID" ;; esac
+}
+# webOS runs nothing when an app is removed, so the background job looks
+# for the app's folder now and then.  Gone on three checks APP_GONE_SECS
+# apart (an app update replaces it, which takes a few seconds), it undoes
+# everything, like 'uninstall', and stops.
+app_removed() {
+    [ -n "$1" ] || return 1
+    _ag=0
+    while [ "$_ag" -lt 3 ]; do
+        [ -d "$1" ] && return 1
+        _ag=$((_ag + 1))
+        [ "$_ag" -lt 3 ] && sleep "$APP_GONE_SECS"
+    done
+    return 0
+}
+app_removed_cleanup() {
+    echo "=== $(date) the app was removed, so everything it set up is undone ==="
+    stop_wake
+    conf_lock
+    rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF"
+    conf_unlock
+    undo_changes
+    purge_data
+    rm -f "$PID_FILE"
+    exit 0
+}
 watch_run() {
+    _appd=$(hook_app_dir)
     if [ "$WATCH" = 1 ]; then
         echo "Watching for the adapter (every ${WATCH_EVERY}s)."
     elif [ -n "$DRIVER" ]; then
@@ -1772,6 +2058,8 @@ watch_run() {
     fi
     [ "$IPV6_OFF" = 1 ] && echo "Keeping IPv6 off."
     [ "$BLOCK_UPDATES" = 1 ] && echo "Checking the update block every ${UPD_EVERY}s."
+    [ "$BLOCK_RS" = 1 ] && echo "Checking the LG Remote Support block every ${UPD_EVERY}s."
+    [ "$BLOCK_UPDATES" = 1 ] && [ "$STOP_DL" = 1 ] && echo "Stopping firmware downloads (checking every ${GUARD_EVERY}s)."
     _skip=""
     _last=""
     _down=0
@@ -1779,7 +2067,7 @@ watch_run() {
     _wifi_tried=""
     _wifi_on=""
     [ -f "$WIFI_MARK" ] && _wifi_on=1
-    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _pcar=""
+    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _gq=0 _ac=0 _pcar=""
     LINK_LOST="" LINK_LOST_AT=""
     { read -r _pcar < "$NET/eth0/carrier"; } 2>/dev/null
     while :; do
@@ -1795,9 +2083,23 @@ watch_run() {
             link_seen "$_lc" "${_ut%%.*}"
         fi
         _pcar=$_lc
-        if [ "$BLOCK_UPDATES" = 1 ]; then
+        if [ "$BLOCK_UPDATES" = 1 ] || [ "$BLOCK_RS" = 1 ]; then
             _uc=$((_uc + WATCH_EVERY))
-            if [ "$_uc" -ge "$UPD_EVERY" ]; then _uc=0; upd_watch; fi
+            if [ "$_uc" -ge "$UPD_EVERY" ]; then
+                _uc=0
+                [ "$BLOCK_UPDATES" = 1 ] && upd_watch
+                [ "$BLOCK_RS" = 1 ] && rs_watch
+            fi
+        fi
+        # The app removed: undo everything (a folder check every APP_CHECK_EVERY)
+        if [ -n "$_appd" ]; then
+            _ac=$((_ac + WATCH_EVERY))
+            if [ "$_ac" -ge "$APP_CHECK_EVERY" ]; then _ac=0; app_removed "$_appd" && app_removed_cleanup; fi
+        fi
+        # The download guard: a file check, and the updater asked only when busy
+        if [ "$BLOCK_UPDATES" = 1 ] && [ "$STOP_DL" = 1 ]; then
+            _gq=$((_gq + WATCH_EVERY))
+            if [ "$_gq" -ge "$GUARD_EVERY" ]; then _gq=0; dl_guard; fi
         fi
         # --ipv6-off: webOS can turn IPv6 on again when it reconnects.  One
         # read, no subprocess.
@@ -1908,6 +2210,9 @@ replug_hung() {
 # toast_text WHICH: a message for the TV screen, in the app's language
 toast_text() {
     case "$UI_LANG:$1" in
+        ru:dl-stopped) echo "остановлена загрузка обновления прошивки." ;;
+        es:dl-stopped) echo "se detuvo la descarga de una actualización de firmware." ;;
+        *:dl-stopped) echo "stopped a firmware update download." ;;
         ru:hung) echo "USB-адаптер перестал отвечать, поэтому он был перезапущен." ;;
         ru:old-kernel) echo "быстрый драйвер собран для старого ядра, поэтому после обновления прошивки он не загружен.  Откройте приложение, чтобы выбрать подходящий." ;;
         ru:not-loaded) echo "быстрый драйвер не загружен.  Подробности в приложении." ;;
@@ -1941,7 +2246,8 @@ toast() {
 
 boot_run() {
     echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
-    [ "$BLOCK_UPDATES" = 1 ] && updates_block
+    [ "$BLOCK_UPDATES" = 1 ] && updates_block boot
+    [ "$BLOCK_RS" = 1 ] && rs_block
     [ "$IPV6_OFF" = 1 ] && ipv6_off
     # Not $(load_module): that would run it in a subshell
     _lmf=${RUN_DIR:-/tmp}/lg-usb-2-eth0.boot
@@ -1977,7 +2283,7 @@ boot_run() {
     fi
     [ "$IPV6_OFF" = 1 ] && ipv6_off
     [ "$EEE_OFF" = 1 ] && eee_off
-    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ]; then watch_run; fi
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$BLOCK_RS" = 1 ] || [ "$EEE_OFF" = 1 ]; then watch_run; fi
     return 0
 }
 CORE_EOF
@@ -2333,10 +2639,10 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 5.4.268-223.29.okapi.pine.4 k8hpp ax88179_178a.ko 42e7c03cee10cb0cece885806176cda8a6c2382e7487bae02dd1325135911b9e
 4.4.84-636.glacier.26 lm18a r8152_oot.ko 99c81dd48fb3feb3cc0d289a28e3d606dc8631106fcc00c3fb141117d3507321
 4.4.84-723.kcl4tv.20 k7lp r8152_oot.ko ec89ac2a0da869e2a784bca7c9304dc69a229f9cd8ff3f5673db82ee943e0015
-5.4.268-294.24.papikonda.2 k24 r8152_oot.ko cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6"
+5.4.268-294.24.papikonda.2 k24 r8152_oot.ko cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6
+5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9"
 
-EXPERIMENTAL_DRIVERS="5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
-5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
+EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
 4.4.84-612.40.jimna.1 k6lp r8152.ko 388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e
 4.4.84-612.40.jimna.1 k6lp ax88179_178a.ko 0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22
 4.4.84-612.21.6.jardine.2 k6lp r8152.ko f4c84da8cf2cf24ec50daede4ff82f36112d745e59a3d3eef65de9a5edbc7c87
@@ -3068,6 +3374,9 @@ settings_ok() {
     case "$BLOCK_UPDATES" in 0|1) ;; *) return 1 ;; esac
     case "$IPV6_OFF" in 0|1) ;; *) return 1 ;; esac
     case "$EEE_OFF" in 0|1) ;; *) return 1 ;; esac
+    case "$BLOCK_RS" in 0|1) ;; *) return 1 ;; esac
+    case "$BLOCK_PHONE" in 0|1) ;; *) return 1 ;; esac
+    case "$STOP_DL" in 0|1) ;; *) return 1 ;; esac
     case "$REALTEK_MODE" in 0|1) ;; *) return 1 ;; esac
     case "$UI_LANG" in en|ru|es) ;; *) return 1 ;; esac
     case "$PARK_NAME" in eth[0-9]) ;; *) return 1 ;; esac
@@ -3090,6 +3399,9 @@ load_settings() {
     if [ "$SET_BLOCK" = 0 ]; then _v=$(hook_setting BLOCK_UPDATES); [ -n "$_v" ] && BLOCK_UPDATES=$_v; fi
     if [ "$SET_V6" = 0 ]; then _v=$(hook_setting IPV6_OFF); [ -n "$_v" ] && IPV6_OFF=$_v; fi
     if [ "$SET_EEE" = 0 ]; then _v=$(hook_setting EEE_OFF); [ -n "$_v" ] && EEE_OFF=$_v; fi
+    if [ "$SET_RS" = 0 ]; then _v=$(hook_setting BLOCK_RS); [ -n "$_v" ] && BLOCK_RS=$_v; fi
+    if [ "$SET_PHONE" = 0 ]; then _v=$(hook_setting BLOCK_PHONE); [ -n "$_v" ] && BLOCK_PHONE=$_v; fi
+    if [ "$SET_GUARD" = 0 ]; then _v=$(hook_setting STOP_DL); [ -n "$_v" ] && STOP_DL=$_v; fi
     if [ "$SET_RTK" = 0 ]; then _v=$(hook_setting REALTEK_MODE); [ -n "$_v" ] && REALTEK_MODE=$_v; fi
     _v=$(hook_setting PARK_NAME); [ -n "$_v" ] && PARK_NAME=$_v
     _v=$(hook_setting UI_LANG); case "$_v" in en|ru|es) UI_LANG=$_v ;; esac
@@ -3272,6 +3584,9 @@ write_hook() {
         echo "BLOCK_UPDATES=\"$BLOCK_UPDATES\""
         echo "IPV6_OFF=\"$IPV6_OFF\""
         echo "EEE_OFF=\"$EEE_OFF\""
+        echo "BLOCK_RS=\"$BLOCK_RS\""
+        echo "BLOCK_PHONE=\"$BLOCK_PHONE\""
+        echo "STOP_DL=\"$STOP_DL\""
         echo "REALTEK_MODE=\"$REALTEK_MODE\""
         echo "UI_LANG=\"$UI_LANG\""
         echo "KERNEL=\"$(uname -r | tr -cd 'A-Za-z0-9._+-')\""
@@ -3315,7 +3630,7 @@ boot_main() {
 watch_restart() {
     echo "=== $(date) background job started again with the new settings ==="
     if [ "$1" = light ]; then WATCH=0; DRIVER=""; WIFI_FALLBACK=0; fi
-    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ]; then
+    if [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$BLOCK_RS" = 1 ] || [ "$EEE_OFF" = 1 ]; then
         watch_run
     fi
     return 0
@@ -3325,7 +3640,7 @@ watch_restart() {
 # hook is on and a setting needs it.  WHICH is full or light, as above.
 start_watcher() {
     [ "$(hook_state)" = enabled ] && [ -L "$HOOK" ] || return 0
-    [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$EEE_OFF" = 1 ] || return 0
+    [ "$WATCH" = 1 ] || [ -n "$DRIVER" ] || [ "$WIFI_FALLBACK" = 1 ] || [ "$IPV6_OFF" = 1 ] || [ "$BLOCK_UPDATES" = 1 ] || [ "$BLOCK_RS" = 1 ] || [ "$EEE_OFF" = 1 ] || return 0
     if command -v setsid >/dev/null 2>&1; then
         LGU2E_WATCH_ONLY=$1 setsid sh "$HOOK" < /dev/null > /dev/null 2>&1
     else
@@ -3421,6 +3736,9 @@ install_fix() {
     [ "$WIFI_FALLBACK" = 1 ] && echo "  -  If eth0 loses its cable link for ${WIFI_GRACE}s while Wi-Fi is off, turn Wi-Fi on, and off again once the cable works"
     [ "$WIFI_WAKE" = 1 ] && echo "  -  Before standby, disconnect only the adapter's network session so Wi-Fi stays ready for Wake on LAN, and connect it again on wake"
     [ "$BLOCK_UPDATES" = 1 ] && echo "  -  Block firmware updates more thoroughly, on top of the Homebrew Channel's own block (starts now)"
+    [ "$BLOCK_UPDATES" = 1 ] && [ "$BLOCK_PHONE" = 1 ] && echo "  -  Stop phone apps (LG ThinQ) starting a firmware update (from the next TV start)"
+    [ "$BLOCK_UPDATES" = 1 ] && [ "$STOP_DL" = 1 ] && echo "  -  Stop a firmware download that starts anyway"
+    [ "$BLOCK_RS" = 1 ] && echo "  -  Block LG Remote Support, so LG can't push an update during a support session (starts now; LG support can't connect while it's on)"
     [ "$IPV6_OFF" = 1 ] && echo "  -  Turn IPv6 off and keep it off, so connections don't wait for a broken IPv6 (starts now)"
     [ "$EEE_OFF" = 1 ] && echo "  -  Turn Energy Efficient Ethernet off on the adapter, whenever its link comes up (starts now)"
     echo "It writes $CONF and the link $HOOK, and nothing else."
@@ -3446,9 +3764,15 @@ install_fix() {
     fi
     if [ "$BLOCK_UPDATES" = 1 ]; then
         updates_block
-    elif [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
+    elif [ -f "$UPD_MARK" ] || [ -f "$UPD_AUTO_MARK" ] || [ -f "$SSG_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
         updates_unblock
         echo "Update blocking is off again.  The Homebrew Channel's own block is unchanged."
+    fi
+    if [ "$BLOCK_RS" = 1 ]; then
+        rs_block
+    elif grep -q "$RS_TAG" "$HOSTS_FILE" 2>/dev/null || rs_any_rule; then
+        rs_unblock
+        echo "LG Remote Support isn't blocked anymore."
     fi
     if [ "$EEE_OFF" = 1 ]; then
         if eee_tool > /dev/null; then
@@ -3476,6 +3800,45 @@ install_fix() {
     if [ -n "$_had_job" ] && [ "$APPLY_NOW" != 1 ]; then start_watcher full; else start_watcher light; fi
 }
 
+# Put back everything the options changed on the TV.  Used by uninstall and
+# when the app is removed.
+undo_changes() {
+    [ -f "$WAKE_MARK" ] && { wake_restore 1 || rm -f "$WAKE_MARK"; }
+    if [ -f "$WIFI_MARK" ]; then
+        rm -f "$WIFI_MARK"
+        warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
+    fi
+    if [ -f "$UPD_MARK" ] || [ -f "$UPD_AUTO_MARK" ] || [ -f "$SSG_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null || { command -v iptables >/dev/null 2>&1 && upd_fw_rule; }; then
+        updates_unblock
+        echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
+    fi
+    if grep -q "$RS_TAG" "$HOSTS_FILE" 2>/dev/null || rs_any_rule; then
+        rs_unblock
+        echo "Undid --block-remote-support."
+    fi
+    if [ -f "$IPV6_MARK" ]; then
+        ipv6_restore
+        echo "Undid --ipv6-off: IPv6 is back to how it was."
+    fi
+    return 0
+}
+# Remove every file the script keeps: history, counts, the log, downloaded
+# drivers and its own copy.  Nothing of it is left on the TV.
+purge_data() {
+    rm -f "$SPEED_HIST" "$SPEED_CHOICE" "$UPD_STATS" "$UPD_HITS" "$LINK_LOG" "$DRVTEST_FILE" \
+        "$UPD_MARK" "$UPD_AUTO_MARK" "$LOG_FILE.1" 2>/dev/null
+    rm -rf "$DRIVER_DIR" 2>/dev/null
+    rm -f "$SCRIPT_HOME/LG-USB-2-ETH0.sh" "$SCRIPT_HOME/LG-USB-2-ETH0.sh.new" 2>/dev/null
+    rmdir "$SCRIPT_HOME" 2>/dev/null
+    # The run folder too, but not the job's own PID file while it runs
+    for _pf in "$RUN_DIR"/*; do
+        [ -e "$_pf" ] || continue
+        case "$_pf" in "$PID_FILE") continue ;; esac
+        rm -rf "$_pf"
+    done
+    rm -f "$LOG_FILE"
+    return 0
+}
 uninstall_fix() {
     preflight
     if [ "$(hook_state)" = none ]; then
@@ -3489,20 +3852,8 @@ uninstall_fix() {
         conf_unlock
         success "Boot hook removed."
     fi
-    rm -f "$SPEED_HIST" "$SPEED_CHOICE"
-    [ -f "$WAKE_MARK" ] && { wake_restore 1 || rm -f "$WAKE_MARK"; }
-    if [ -f "$WIFI_MARK" ]; then
-        rm -f "$WIFI_MARK"
-        warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
-    fi
-    if [ -f "$UPD_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null; then
-        updates_unblock
-        echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
-    fi
-    if [ -f "$IPV6_MARK" ]; then
-        ipv6_restore
-        echo "Undid --ipv6-off: IPv6 is back to how it was."
-    fi
+    undo_changes
+    purge_data
     _bi=$(find_builtin_nic)
     if [ "$APPLY_NOW" = 1 ]; then
         run_detached swap_out
@@ -3610,8 +3961,11 @@ show_status() {
             [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _s="$_s, Wi-Fi as a backup (--wifi-fallback)"
             [ "$(hook_setting WIFI_WAKE)" = 1 ] && _s="$_s, Wi-Fi wake in standby (--wifi-wake)"
             [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _s="$_s, blocks firmware updates (--block-updates)"
+            [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && [ "$(hook_setting BLOCK_PHONE)" = 0 ] && _s="$_s, but not from phone apps (--no-block-phone-updates)"
+            [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && [ "$(hook_setting STOP_DL)" = 0 ] && _s="$_s, doesn't stop downloads (--no-stop-downloads)"
             [ "$(hook_setting IPV6_OFF)" = 1 ] && _s="$_s, IPv6 off (--ipv6-off)"
             [ "$(hook_setting EEE_OFF)" = 1 ] && _s="$_s, EEE off (--eee-off)"
+            [ "$(hook_setting BLOCK_RS)" = 1 ] && _s="$_s, blocks LG Remote Support (--block-remote-support)"
             echo "$_s"
             _w=$(watcher_pid) && echo "  Background job running (PID $_w)" ;;
         legacy)
@@ -3814,8 +4168,7 @@ show_status() {
         fi
     else
         [ -n "$(ago_week "$(upd_stat_get found)")" ] && status_note "webOS found a firmware update in the last week.  The update block removed it before it could install."
-        _sv=$(upd_server_switch)
-        [ -n "$_sv" ] && status_note "webOS's updater was switched to another update server ($_sv).  The update check stays off, so it can't check, but please report it on GitHub."
+        [ -n "$(ago_week "$(upd_stat_get lastCancel)")" ] && status_note "A firmware download started in the last week, and the update block stopped it."
         _sw=$(upd_stat_get fixedWhat | tr , ' ')
         [ -n "$(ago_week "$(upd_stat_get fixed)")" ] && status_note "Something undid part of the update block in the last week ($_sw).  It was put back."
     fi
@@ -3985,17 +4338,20 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverSwitch":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
-        "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")"
+        "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")" "$(js "$(upd_auto_setting)")" \
+        "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")"
+    printf '"remoteSupport":{"missingHosts":%s,"missingIps":%s},' "$(js "$(rs_missing_hosts | sed 's/ $//')")" "$(js "$(rs_missing_ips | sed 's/ $//')")"
     printf '"links":%s,"eee":{"tool":%s,"state":%s},' "$(links_json)" "$(jb "$(eee_tool > /dev/null && echo 1)")" "$(js "$(eee_state)")"
-    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
+    printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"blockRemoteSupport":%s,"blockPhone":%s,"stopDownloads":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
         "$(js "$(hook_state)")" "$(js "$(readlink "$HOOK" 2>/dev/null)")" "$(js "$(hook_setting WAIT_SECS)")" \
         "$(js "$(hook_setting PIN_MAC)")" "$(js "$(hook_setting MODULE)")" "$(js "$(hook_setting DRIVER)")" \
         "$(jb "$(hook_setting WATCH)")" "$(jb "$(hook_setting WIFI_FALLBACK)")" "$(jb "$([ -f "$WIFI_MARK" ] && echo 1)")" \
         "$(jb "$(hook_setting WIFI_WAKE)")" "$(jb "$([ -f "$WAKE_MARK" ] && echo 1)")" "$(jb "$(hook_setting BLOCK_UPDATES)")" "$(jb "$(hook_setting IPV6_OFF)")" \
-        "$(jb "$(hook_setting EEE_OFF)")" "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
+        "$(jb "$(hook_setting EEE_OFF)")" "$(jb "$(hook_setting BLOCK_RS)")" "$(jb "$([ "$(hook_setting BLOCK_PHONE)" != 0 ] && echo 1)")" "$(jb "$([ "$(hook_setting STOP_DL)" != 0 ] && echo 1)")" \
+        "$(jb "$([ "$(hook_setting REALTEK_MODE)" != 0 ] && echo 1)")" \
         "$(jb "$([ -n "$_jpid" ] && echo 1)")" "$(js "$_jpid")"
     printf '"kernelAtSetup":%s,"sigEnforced":%s,' "$(js "$(hook_setting KERNEL)")" "$(jb "$(sig_enforced && echo 1)")"
     printf '"realtek":{"r8152":%s,"result":%s},' \
@@ -4043,6 +4399,9 @@ show_json() {
 # about 16 KB), Auto uses the closest LibreSpeed server instead, and any of
 # them can be picked with speed-server.
 SPEED_URL=${LGU2E_SPEED_URL:-https://speed.cloudflare.com}
+# The connection check's first try at the internet (answers 204, no body)
+NET_CHECK_URL=${LGU2E_NET_CHECK_URL:-http://connectivitycheck.gstatic.com/generate_204}
+NET_CHECK_NAME=www.google.com
 SPEED_SECS=${LGU2E_SPEED_SECS:-6}
 SPEED_STREAMS=4
 SPEED_CHUNK=25000000
@@ -4429,6 +4788,297 @@ speed_server_set() {
 # with the release's copy.  Either way the download is checked against the
 # release's SHA-256 first.
 
+# === Network details, live traffic and the connection check ===
+# For the app's Network tab, and over SSH: netinfo, traffic, netcheck.
+
+# The interface they look at: eth0, else whatever the default route uses
+net_iface() {
+    if [ -e "$NET/eth0" ]; then echo eth0; else def_iface; fi
+}
+# net_gw IF: IF's router, from the routing table (else webOS's own record)
+net_gw() {
+    _ng=$(ip route 2>/dev/null | awk -v d="$1" '/^default via/ { for (i = 2; i < NF; i++) if ($i == "dev" && $(i + 1) == d) { print $3; exit } }')
+    [ -n "$_ng" ] || _ng=$(drv_gateway "$1")
+    echo "$_ng"
+}
+# net_cm IF: webOS's connection manager's details for IF's service
+net_cm() {
+    _ns=$(cm_service ethernet "$(sysval "$NET/$1/address")") || return 0
+    connmanctl services "$_ns" 2>/dev/null
+}
+# net_dns IF: the DNS servers IF got, one a line.  The TV's resolv.conf
+# only has its own local proxy (127.0.0.1), so the connection manager's
+# list comes first.
+net_dns() {
+    _nd=$(net_cm "$1" | sed -n 's/^ *Nameservers = \[ *\(.*[^ ]\) *\]$/\1/p' | head -n 1 | tr ',' ' ')
+    if [ -z "$_nd" ]; then
+        _nd=$(awk '$1 == "nameserver" && $2 !~ /^(127\.|::1$)/ { print $2 }' "${LGU2E_ROOT}/etc/resolv.conf" 2>/dev/null)
+    fi
+    for _n in $_nd; do echo "$_n"; done
+}
+# net_method IF: dhcp, manual (a fixed address) or nothing when unknown
+net_method() {
+    net_cm "$1" | sed -n 's/^ *IPv4 = \[ *Method=\([a-z]*\).*/\1/p' | head -n 1
+}
+net_ipv6() { ip -o -6 addr show dev "$1" scope global 2>/dev/null | awk '{ print $4 }'; }
+# The time the TV started, in seconds since 1970
+boot_at() { awk -v now="$(date +%s)" '{ printf "%d", now - $1; exit }' /proc/uptime 2>/dev/null; }
+# net_since: when eth0's cable link last came up, if it's up now: the last
+# time the link log saw it come back, or the TV starting, whichever is later
+net_since() {
+    [ "$(sysval "$NET/$1/carrier")" = 1 ] || return 0
+    _nb=$(boot_at)
+    _nl=$(awk '$1 ~ /^[0-9]+$/ && $2 ~ /^(back|plugged|generic)$/ { t = $1 } END { print t + 0 }' "$LINK_LOG" 2>/dev/null)
+    if [ -n "$_nl" ] && [ "${_nb:-0}" -lt "$_nl" ]; then echo "$_nl"; else echo "$_nb"; fi
+}
+# How many times the cable link dropped in the last SECONDS (not in standby)
+link_drops() {
+    [ -s "$LINK_LOG" ] || { echo 0; return 0; }
+    awk -v since=$(( $(date +%s) - $1 )) '$2 == "lost" && $1 >= since { c++ } END { print c + 0 }' "$LINK_LOG"
+}
+# A byte count for people: 1.2 GB, 340 MB, 12 KB
+human_bytes() {
+    awk -v b="$1" 'BEGIN { if (b >= 1e9) printf "%.1f GB", b / 1e9; else if (b >= 1e6) printf "%.0f MB", b / 1e6; else printf "%.0f KB", b / 1e3 }'
+}
+# A number for JSON, 0 when the file isn't there
+stat_n() { _sv=$(sysval "$NET/$1/statistics/$2"); case "$_sv" in ''|*[!0-9]*) echo 0 ;; *) echo "$_sv" ;; esac; }
+
+net_info() {
+    _ni=$(net_iface)
+    [ -n "$_ni" ] && [ -e "$NET/$_ni" ] || error_exit "No eth0, and no connection to look at."
+    _nip=$(iface_ipv4 "$_ni")
+    _ngw=$(net_gw "$_ni")
+    _ndns=$(net_dns "$_ni")
+    _nv6=$(net_ipv6 "$_ni")
+    _nmtu=$(sysval "$NET/$_ni/mtu")
+    _nmeth=$(net_method "$_ni")
+    _nsince=$(net_since "$_ni")
+    _ncc=$(sysval "$NET/$_ni/carrier_changes")
+    _nd1=$(link_drops 86400)
+    _nd7=$(link_drops 604800)
+    _nee=""
+    [ "$_ni" = eth0 ] && _nee=$(eee_state)
+    if [ "$JSON" = 1 ]; then
+        _nsp=$(sysval "$NET/$_ni/speed"); case "$_nsp" in ''|-1|*[!0-9]*) _nsp=0 ;; esac
+        printf '{"interface":%s,"mac":%s,"ipv4":%s,"gateway":%s,"dns":%s,"ipv6":%s,"mtu":%s,"method":%s,"speed":%s,"duplex":%s,"defaultRoute":%s,' \
+            "$(js "$_ni")" "$(js "$(nic_mac "$_ni")")" "$(js "$_nip")" "$(js "$_ngw")" "$(jarr "$_ndns")" "$(jarr "$_nv6")" \
+            "$(jn "$_nmtu")" "$(js "$_nmeth")" "$_nsp" "$(js "$(nic_duplex "$_ni")")" "$(js "$(def_iface)")"
+        printf '"health":{"carrier":%s,"upSince":%s,"bootAt":%s,"carrierChanges":%s,"dropsDay":%s,"dropsWeek":%s,"eee":%s,' \
+            "$(jb "$([ "$(sysval "$NET/$_ni/carrier")" = 1 ] && echo 1)")" "$(jn "$_nsince")" "$(jn "$(boot_at)")" "$(jn "$_ncc")" "$_nd1" "$_nd7" "$(js "$_nee")"
+        printf '"rxPackets":%s,"txPackets":%s,"rxErrors":%s,"txErrors":%s,"rxDropped":%s,"txDropped":%s,"rxCrc":%s,"rxBytes":%s,"txBytes":%s}}\n' \
+            "$(stat_n "$_ni" rx_packets)" "$(stat_n "$_ni" tx_packets)" "$(stat_n "$_ni" rx_errors)" "$(stat_n "$_ni" tx_errors)" \
+            "$(stat_n "$_ni" rx_dropped)" "$(stat_n "$_ni" tx_dropped)" "$(stat_n "$_ni" rx_crc_errors)" \
+            "$(stat_n "$_ni" rx_bytes)" "$(stat_n "$_ni" tx_bytes)"
+        return 0
+    fi
+    echo "Network details for $_ni"
+    echo "  MAC address:  $(nic_mac "$_ni")"
+    echo "  IPv4:         ${_nip:-none}${_nmeth:+ ($_nmeth)}"
+    echo "  Router:       ${_ngw:-none}"
+    echo "  DNS:          $(printf '%s' "${_ndns:-none}" | tr '\n' ' ' | sed 's/ /, /g')"
+    echo "  IPv6:         $(printf '%s' "${_nv6:-none}" | tr '\n' ' ' | sed 's/ /, /g')"
+    echo "  MTU:          ${_nmtu:-?}"
+    echo "  Traffic goes: $(def_iface | grep . || echo nowhere)"
+    echo "Link health"
+    if [ -n "$_nsince" ]; then
+        echo "  Link up:      since $(date -d "@$_nsince" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_nsince")"
+    else
+        echo "  Link up:      no, no cable link"
+    fi
+    echo "  Drops:        $_nd1 in the last day, $_nd7 in the last week"
+    echo "  Errors:       $(stat_n "$_ni" rx_errors) in, $(stat_n "$_ni" tx_errors) out ($(stat_n "$_ni" rx_crc_errors) bad checksums)"
+    echo "  Dropped:      $(stat_n "$_ni" rx_dropped) in, $(stat_n "$_ni" tx_dropped) out"
+    echo "  Packets:      $(stat_n "$_ni" rx_packets) in, $(stat_n "$_ni" tx_packets) out"
+    [ -n "$_nee" ] && echo "  EEE:          $_nee"
+    return 0
+}
+
+# The interfaces worth watching: Ethernet, Wi-Fi and USB ones with a link
+traffic_ifaces() {
+    for _p in "$NET"/*; do
+        _n=${_p##*/}
+        case "$_n" in eth*|wlan*|usb*) ;; *) continue ;; esac
+        [ -e "$_p" ] && [ "$(sysval "$_p/carrier")" = 1 ] && echo "$_n"
+    done
+    return 0
+}
+# Bytes in and out for each interface, a second apart, as Mbit/s
+traffic() {
+    _tl=$(traffic_ifaces)
+    [ -n "$_tl" ] || error_exit "No network connection is up."
+    _ts=${LGU2E_TRAFFIC_SECS:-1}
+    _t1=""
+    for _n in $_tl; do _t1="$_t1 $_n $(stat_n "$_n" rx_bytes) $(stat_n "$_n" tx_bytes)"; done
+    sleep "$_ts"
+    _t2=""
+    for _n in $_tl; do _t2="$_t2 $_n $(stat_n "$_n" rx_bytes) $(stat_n "$_n" tx_bytes)"; done
+    _tr=$(def_iface)
+    echo "$_t1" "|" "$_t2" | awk -v s="$_ts" -v j="$JSON" -v r="$_tr" '
+        function h(b) { return b >= 1e9 ? sprintf("%.1f GB", b / 1e9) : (b >= 1e6 ? sprintf("%.0f MB", b / 1e6) : sprintf("%.0f KB", b / 1e3)) }
+        { second = 0; c = 0
+          for (i = 1; i <= NF; i++) {
+            if ($i == "|") { second = 1; continue }
+            if (!second) { n[++c] = $i; a[$i] = $(i + 1); b[$i] = $(i + 2); i += 2 }
+            else { rx[$i] = $(i + 1); tx[$i] = $(i + 2); i += 2 } } }
+        END {
+            if (j == 1) printf "{\"secs\":%s,\"defaultRoute\":\"%s\",\"interfaces\":[", s, r
+            for (k = 1; k <= c; k++) {
+                m = n[k]; d = rx[m] - a[m]; u = tx[m] - b[m]; if (d < 0) d = 0; if (u < 0) u = 0
+                dm = d * 8 / s / 1e6; um = u * 8 / s / 1e6
+                if (j == 1) printf "%s{\"name\":\"%s\",\"rxMbps\":%.2f,\"txMbps\":%.2f,\"rxBytes\":%.0f,\"txBytes\":%.0f}", (k > 1 ? "," : ""), m, dm, um, rx[m], tx[m]
+                else printf "%-6s %7.2f Mbit/s down, %7.2f up   (%s down, %s up since boot)%s\n", m, dm, um, h(rx[m]), h(tx[m]), (m == r ? "  <- traffic goes here" : "")
+            }
+            if (j == 1) printf "]}\n"
+        }'
+}
+
+# One step of the connection check: id, result (ok, fail, warn or skip),
+# what it found (an address, a speed, a list) and a time in ms.  Plain
+# values, so the app can say each in its own language.
+net_step() {
+    _cs="$_cs$1	$2	${3:--}	${4:--}
+"
+}
+# Round a time in ms: under 1 is 0.x, else a whole number
+net_ms() { awk -v v="$1" 'BEGIN { if (v == "") exit; if (v < 1) printf "%.1f", v; else printf "%.0f", v }'; }
+net_check() {
+    _cs=""
+    _ci=eth0
+    _cskip=""
+    if [ ! -e "$NET/$_ci" ]; then
+        net_step cable fail
+        _cskip=1
+    elif [ "$(sysval "$NET/$_ci/carrier")" = 1 ]; then
+        _csp=$(sysval "$NET/$_ci/speed"); case "$_csp" in ''|-1|*[!0-9]*) _csp="" ;; esac
+        net_step cable ok "$_csp"
+    else
+        net_step cable fail
+        _cskip=1
+    fi
+    if [ -n "$_cskip" ]; then
+        net_step address skip
+    else
+        _cip=$(iface_ipv4 "$_ci")
+        case "$_cip" in
+            '') net_step address fail; _cskip=1 ;;
+            169.254.*) net_step address fail "${_cip%/*}"; _cskip=1 ;;
+            *) net_step address ok "${_cip%/*}" ;;
+        esac
+    fi
+    if [ -n "$_cskip" ]; then
+        net_step router skip; net_step dns skip; net_step internet skip
+    else
+        _cgw=$(net_gw "$_ci")
+        if [ -z "$_cgw" ]; then
+            net_step router fail
+        else
+            _cms=$(ping -c 2 -W 2 "$_cgw" 2>/dev/null | sed -n 's/.*time=\([0-9.]*\) *ms.*/\1/p' | sort -n | head -n 1)
+            if [ -n "$_cms" ] || ping -c 1 -W 2 "$_cgw" >/dev/null 2>&1 || drv_neigh_ok "$_ci" "$_cgw"; then
+                net_step router ok "$_cgw" "$(net_ms "$_cms")"
+            else
+                net_step router fail "$_cgw"
+            fi
+        fi
+        # An IPv4 address if there's one (glibc's getent), else any
+        _cres=""
+        if command -v getent >/dev/null 2>&1; then
+            _cres=$(timeout 6 getent ahostsv4 "$NET_CHECK_NAME" 2>/dev/null | awk '{ print $1; exit }')
+            [ -n "$_cres" ] || _cres=$(timeout 6 getent hosts "$NET_CHECK_NAME" 2>/dev/null | awk '{ print $1; exit }')
+        else
+            _cres=$(timeout 6 nslookup "$NET_CHECK_NAME" 2>/dev/null | awk '/^Name:/ { n = 1; next } n && /^Address/ { sub(/^Address[^:]*: */, ""); print $1; exit }')
+        fi
+        if [ -n "$_cres" ]; then
+            net_step dns ok "$_cres"
+        else
+            net_step dns fail "$(net_dns "$_ci" | tr '\n' ' ' | sed 's/ $//; s/ /,/g')"
+        fi
+        _cnet=$(curl -s -o /dev/null --max-time 6 -w '%{http_code} %{time_total}' "$NET_CHECK_URL" 2>/dev/null)
+        case "$_cnet" in
+            204*) ;;
+            *) _cnet=$(curl -s -o /dev/null --max-time 6 -w '%{http_code} %{time_total}' "$SPEED_URL/__down?bytes=0" 2>/dev/null)
+               case "$_cnet" in 200*) ;; *) _cnet="" ;; esac ;;
+        esac
+        if [ -n "$_cnet" ]; then
+            net_step internet ok "" "$(net_ms "$(echo "$_cnet" | awk '{ print $2 * 1000 }')")"
+        else
+            net_step internet fail
+        fi
+    fi
+    _cr=$(def_iface)
+    if [ "$_cr" = "$_ci" ]; then net_step route ok "$_ci"
+    elif [ -n "$_cr" ]; then net_step route warn "$_cr"
+    else net_step route fail
+    fi
+    if [ "$(hook_state)" = enabled ]; then
+        if [ "$(hook_setting BLOCK_UPDATES)" = 1 ]; then
+            _cg=$(upd_gaps | tr ' ' '\n' | grep -vx phone | tr '\n' ' ' | sed 's/ *$//')
+            if [ -z "$_cg" ]; then net_step updates ok; else net_step updates fail "$(echo "$_cg" | tr ' ' ',')"; fi
+        fi
+        if [ "$BLOCK_PHONE" = 1 ]; then
+            case "$(phone_state)" in
+                blocked|other) net_step phone ok ;;
+                next) net_step phone warn ;;
+                open) net_step phone fail ;;
+            esac
+        fi
+        if [ "$(hook_setting BLOCK_RS)" = 1 ]; then
+            _cg=$(rs_gaps)
+            if [ -z "$_cg" ]; then net_step remote ok; else net_step remote fail "$(echo "$_cg" | tr ' ' ',')"; fi
+        fi
+    fi
+    if [ "$JSON" = 1 ]; then
+        printf '{"steps":['
+        _cf=1
+        printf '%s' "$_cs" | while IFS='	' read -r _sid _sok _sv _sms; do
+            [ -n "$_sid" ] || continue
+            [ "$_cf" = 1 ] || printf ','
+            _cf=0
+            [ "$_sv" = - ] && _sv=""
+            [ "$_sms" = - ] && _sms=""
+            printf '{"id":%s,"result":%s,"value":%s,"ms":%s}' "$(js "$_sid")" "$(js "$_sok")" "$(js "$_sv")" "$(jn "$_sms")"
+        done
+        printf ']}\n'
+        return 0
+    fi
+    echo "Connection check"
+    printf '%s' "$_cs" | while IFS='	' read -r _sid _sok _sv _sms; do
+        [ -n "$_sid" ] || continue
+        [ "$_sv" = - ] && _sv=""
+        [ "$_sms" = - ] && _sms=""
+        case "$_sid.$_sok" in
+            cable.ok) _st="Cable link${_sv:+: $_sv Mbit/s}" ;;
+            cable.fail) _st="No cable link: check the cable at both ends, or try another router port" ;;
+            address.ok) _st="Address: $_sv" ;;
+            address.fail) _st="No address from the router${_sv:+ (only a self-made $_sv)}: its DHCP didn't answer" ;;
+            router.ok) _st="Router $_sv answers${_sms:+, $_sms ms}" ;;
+            router.fail) if [ -n "$_sv" ]; then _st="Router $_sv doesn't answer"; else _st="No router (gateway) for eth0"; fi ;;
+            dns.ok) _st="DNS: $NET_CHECK_NAME is $_sv" ;;
+            dns.fail) _st="Names don't resolve (DNS: ${_sv:-none})" ;;
+            internet.ok) _st="Internet works${_sms:+, $_sms ms}" ;;
+            internet.fail) _st="Couldn't reach Google or Cloudflare" ;;
+            route.ok) _st="Traffic goes out $_sv" ;;
+            route.warn) _st="Traffic goes out $_sv, not eth0" ;;
+            route.fail) _st="There's no default route" ;;
+            updates.ok) _st="LG's update servers are blocked" ;;
+            updates.fail) _st="The update block has gaps: $_sv" ;;
+            phone.ok) _st="Phone apps can't start an update" ;;
+            phone.warn) _st="Phone apps are blocked from the next TV start" ;;
+            phone.fail) _st="Phone apps can still start an update" ;;
+            remote.ok) _st="LG Remote Support is blocked" ;;
+            remote.fail) _st="The Remote Support block has gaps: $_sv" ;;
+            *.skip) _st="$_sid: skipped" ;;
+            *) _st="$_sid $_sok $_sv" ;;
+        esac
+        case "$_sok" in
+            ok) log "$GREEN" "  ok    $_st" ;;
+            warn) log "$YELLOW" "  warn  $_st" ;;
+            skip) echo "  -     $_st" ;;
+            *) log "$RED" "  FAIL  $_st" ;;
+        esac
+    done
+    return 0
+}
+
 # app or script
 install_kind() {
     case "$(self_path)" in */usr/palm/applications/"$APP_ID"/*) echo app ;; *) echo script ;; esac
@@ -4679,8 +5329,11 @@ show_report() {
         [ "$(hook_setting WIFI_FALLBACK)" = 1 ] && _h="$_h, wifi-fallback"
         [ "$(hook_setting WIFI_WAKE)" = 1 ] && _h="$_h, wifi-wake"
         [ "$(hook_setting BLOCK_UPDATES)" = 1 ] && _h="$_h, block-updates"
+        [ "$(hook_setting BLOCK_PHONE)" = 0 ] && _h="$_h, no-block-phone-updates"
+        [ "$(hook_setting STOP_DL)" = 0 ] && _h="$_h, no-stop-downloads"
         [ "$(hook_setting IPV6_OFF)" = 1 ] && _h="$_h, ipv6-off"
         [ "$(hook_setting EEE_OFF)" = 1 ] && _h="$_h, eee-off"
+        [ "$(hook_setting BLOCK_RS)" = 1 ] && _h="$_h, block-remote-support"
         [ "$(hook_setting REALTEK_MODE)" = 0 ] && _h="$_h, no-realtek-mode"
         _hk=$(hook_setting KERNEL)
         [ -n "$_hk" ] && [ "$_hk" != "$(uname -r)" ] && _h="$_h, set up on kernel $_hk"
@@ -4745,7 +5398,11 @@ show_report() {
     if [ "$(hook_setting BLOCK_UPDATES)" = 1 ]; then
         _rt=$(upd_stat_get tries); _rg=$(upd_gaps)
         _rs=$(upd_server_switch)
-        echo "Update block: ${_rg:+missing $_rg, }stopped ${_rt:-0} tries by IP${_rs:+, updater switched to $_rs}"
+        echo "Update block: ${_rg:+missing $_rg, }stopped ${_rt:-0} tries by IP, $(upd_stat_get cancelled | grep . || echo 0) downloads, phone apps $(phone_state | sed 's/^none$/not needed (no update calls on this TV)/')${_rs:+, updater server flag $_rs}"
+    fi
+    if [ "$(hook_setting BLOCK_RS)" = 1 ]; then
+        _rr=$(rs_gaps)
+        echo "Remote Support block: ${_rr:-in place}"
     fi
     _lt=$(links_text)
     if [ -n "$_lt" ]; then
@@ -4842,6 +5499,12 @@ while [ $# -gt 0 ]; do
         --no-ipv6-off) IPV6_OFF=0; SET_V6=1 ;;
         --eee-off) EEE_OFF=1; SET_EEE=1 ;;
         --no-eee-off) EEE_OFF=0; SET_EEE=1 ;;
+        --block-remote-support) BLOCK_RS=1; SET_RS=1 ;;
+        --no-block-remote-support) BLOCK_RS=0; SET_RS=1 ;;
+        --block-phone-updates) BLOCK_PHONE=1; SET_PHONE=1 ;;
+        --no-block-phone-updates) BLOCK_PHONE=0; SET_PHONE=1 ;;
+        --stop-downloads) STOP_DL=1; SET_GUARD=1 ;;
+        --no-stop-downloads) STOP_DL=0; SET_GUARD=1 ;;
         --realtek-mode) REALTEK_MODE=1; SET_RTK=1 ;;
         --no-realtek-mode) REALTEK_MODE=0; SET_RTK=1 ;;
         --no-module) MODULE=""; DRIVER=""; MODULE_SHA=""; SET_MODULE=1 ;;
@@ -4861,7 +5524,7 @@ while [ $# -gt 0 ]; do
             case "$DRIVER" in ''|*[!A-Za-z0-9_]*) error_exit "--driver needs a driver name like r8152_oot" ;; esac ;;
         -h|--help|help) usage; exit 0 ;;
         -V|--version|version) echo "LG-USB-2-ETH0 v$VERSION"; exit 0 ;;
-        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|speed-server|update|app-access) CMD=$1 ;;
+        install|uninstall|enable|disable|apply|revert|reset|status|doctor|report|get-driver|test-driver|speedtest|speed-server|netinfo|traffic|netcheck|update|app-access) CMD=$1 ;;
         *)
             # speed-server's choice
             if [ "$CMD" = speed-server ] && [ -z "$SERVER_ARG" ]; then SERVER_ARG=$1
@@ -4871,6 +5534,7 @@ while [ $# -gt 0 ]; do
 done
 
 app_lang_sync
+case "$CMD" in status|doctor|report|netcheck) load_settings ;; esac
 case "$CMD" in
     install) install_fix ;;
     uninstall) uninstall_fix ;;
@@ -4884,6 +5548,9 @@ case "$CMD" in
     test-driver) test_driver ;;
     speedtest) speed_test ;;
     speed-server) speed_server ;;
+    netinfo) net_info ;;
+    traffic) traffic ;;
+    netcheck) net_check ;;
     update) if [ "$CHECK_ONLY" = 1 ]; then update_check; else update_now; fi ;;
     app-access) app_access ;;
     "") main_menu ;;

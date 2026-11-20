@@ -24,22 +24,38 @@
 
 LG TVs ship with a 100 Mbit/s wired port.  A gigabit USB adapter is two to three times faster on the same TV, even on the USB 2.0 ports many models have (a 2022 C2 included).  But webOS names it `eth1`, and parts of webOS only look at `eth0`.  So the settings screen says "Not Connected" while the internet works, and some streaming apps refuse to play.
 
-LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under another name, so webOS and its apps treat the adapter as the TV's wired connection.  A small boot hook does it again at every start.  Use the TV app from the Homebrew Channel, with no SSH needed, or the same script over SSH.  It can also find, check and install a better driver for your adapter, test new ones built for your TV, keep the TV wakeable over the network, and block firmware updates harder.
+LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under another name, so webOS and its apps treat the adapter as the TV's wired connection.  A small boot hook does it again at every start.  Use the TV app from the Homebrew Channel, with no SSH needed, or the same script over SSH.  It can also find, check and install a better driver for your adapter, test new ones built for your TV, keep the TV wakeable over the network, and block firmware updates more completely than anything else we know of.
+
+> [!IMPORTANT]
+> **The most complete firmware update block for rooted LG TVs.**  A firmware update can take root away for good, so **Block updates harder** closes every way LG can update the TV that we found in nine firmwares, from 2018 models to webOS 26:
+>
+> | LG's way in | What the block does |
+> |---|---|
+> | The updater's own check, early in boot too | Turns webOS's update check and automatic updates off |
+> | LG's update servers | Blocks all seven, including the ones the Homebrew Channel's block misses |
+> | The address the updater reaches with no name | A firewall rule |
+> | A phone app (LG ThinQ) pushing an update from the phone | The TV's phone connection stops offering it |
+> | An update already found | Deleted before it can install |
+> | A download that starts anyway | Cancelled within 30 seconds, with a message on the TV |
+> | LG Remote Support pushing an update | Optional: blocks LG's support servers |
+>
+> It checks every 10 minutes that nothing undid it, counts what it stopped, and **Check connection** shows each part at a glance.  One press undoes all of it, and removing the app does too.  [Blocking updates](#blocking-updates)
 
 ## Standout features
 
 - **A TV app, no SSH needed.**  Everything is a switch on the remote, through the [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel), in English, Russian or Spanish.  The same script runs underneath, so SSH works too.  [The TV app](#the-tv-app)
+- **The most complete firmware update block.**  Every route we found in nine firmwares: the update check, all seven update servers, the updater's fallback address, LG's phone app, a download that starts anyway, and optionally LG Remote Support.  Checked every 10 minutes, and the app shows what it stopped.  [Blocking updates](#blocking-updates)
 - **The adapter becomes the TV's real `eth0`.**  The settings screen shows the wired connection, and streaming apps that refuse `eth1` play again.  A small boot hook does it at every start, and one press undoes it.  [What it fixes](#what-it-fixes)
 - **Two to three times the built-in port.**  272 Mbit/s down and 287 up on a 2022 C2's USB 2.0 port, against about 95 on LG's 100 Mbit/s port.  [Real speeds](#real-speeds)
 - **A faster driver, found for your exact kernel.**  **Faster driver** only shows up when a Realtek or ASIX driver is known for your TV's kernel and a supported adapter is plugged in, then downloads it, checks its SHA-256 and sets it up in one go.  [Drivers](#a-faster-driver)
 - **Test new drivers from the couch.**  Drivers for many more TVs are built here from LG's own kernel source.  **Test a new driver** loads one until the next restart, checks the adapter gets online, and shows a QR code that opens a filled-in test report.  [Waiting for testers](#more-drivers-on-the-way)
 - **Realtek mode.**  An RTL8152 or RTL8153 left on the slow generic driver is switched to its Realtek configuration, so the TV's own `r8152` takes it on kernels that have it built in, with no download at all.  [Drivers](#drivers)
 - **Turn the TV on over the network.**  **Wi-Fi wake in standby** keeps Wake on LAN, Turn on via Wi-Fi, the ThinQ app and Home Assistant working with an adapter in, and keeps your traffic on the cable.  [Waking the TV over Wi-Fi](#waking-the-tv-over-wi-fi)
-- **Block updates harder.**  Closes the gaps people found in the Homebrew Channel's update block, so a firmware update that could take root away has a much harder time getting through.  It checks every 10 minutes that nothing undid it, and the app shows how many times it stopped LG's updater.  [Blocking updates](#blocking-updates)
 - **Survives standby and unplugging.**  **Follow plug and unplug** keeps the adapter `eth0` when it's moved, puts it back on the faster driver after standby, and restarts a hung adapter.  **Wi-Fi as a backup** turns Wi-Fi on if the cable stops working.  [How it works](#how-it-works)
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
+- **Network tools.**  **Check connection** tests the cable, address, router, DNS and internet one step at a time and says where it breaks.  **Live traffic**, **Network details**, **Link health** and **Speed test history** show the rest.  [The TV app](#the-tv-app)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 154 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 163 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
@@ -79,7 +95,7 @@ I, [OhMyBahGosh](https://github.com/ohmybahgosh), wrote v1 by hand.  From v2.0 o
 
 The fixes that mattered most came from that real-TV testing, not from the AI: standby putting the adapter back on the slow driver, webOS quietly sending traffic over Wi-Fi instead of the adapter, and the GitHub report form opening blank on a phone.  The [changelog](CHANGELOG.md) has the full story.
 
-- **Tests on every push:** 154 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
+- **Tests on every push:** 155 [tests](tests/run.sh) run the script against a fake `/sys` under busybox `sh` (the TV's shell), dash and bash, along with ShellCheck, a build of the TV app, and a check of the issue forms.  The CI badge above shows the latest run.
 - **Checked downloads:** driver modules and updates come from fixed releases or commits and are kept only if their SHA-256 matches, and an update only if its checksums are signed with the release key, which never leaves the maintainer's computer ([SECURITY.md](SECURITY.md#verifying-a-download)).  A driver is only loaded on the exact kernel it was built for, and only offered for adapters it supports.
 - **Hard to break the TV:** no system files are touched, the boot hook is a link that stops running if the app is removed, every change has a fallback, and a reboot without the hook always starts clean.
 
@@ -218,7 +234,7 @@ This sample comes from the test suite, with example TV details filled in.  Your 
 
 It adds one boot hook, a link at `/var/lib/webosbrew/init.d/S01fix-eth`, keeps its settings in `/var/lib/webosbrew/lg-usb-2-eth0.conf`, and only renames network interfaces.  No system files are touched, and network settings only if you turn on the Wi-Fi backup or Block updates harder.  With no adapter plugged in, the hook changes nothing, and a reboot without it always starts clean.
 
-To undo everything, press **Turn everything off** in the TV app (do this before you remove the app), or run `sh LG-USB-2-ETH0.sh uninstall --now`.
+To undo everything, press **Turn everything off** in the TV app, or run `sh LG-USB-2-ETH0.sh uninstall --now`.  It removes the boot hook, puts back every setting it changed (webOS's update check and automatic updates, IPv6, Wi-Fi wake), takes its lines out of `/etc/hosts`, its firewall rules and the phone app block off, and deletes every file it kept (settings, log, history, counts, downloaded drivers).  If you remove the app without doing that first, the background job notices the app is gone within about a minute and does the same, as long as it's running (it always is while Block updates harder is on).
 
 ## The TV app
 
@@ -229,14 +245,20 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
 </p>
 
 - **Status at a glance:** whether the adapter is `eth0`, its driver, link speed, USB bus, address, Wi-Fi, and any problems found, like a cable that only connects at 100 Mbit/s.
-- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Wi-Fi wake in standby**, **Block updates harder** and **Switch now**, as on/off switches.
+- **Run at every boot**, **Follow plug and unplug**, **Wi-Fi as a backup**, **Wi-Fi wake in standby**, **Block updates harder**, **Block phone app updates**, **Stop firmware downloads**, **Block LG Remote Support** and **Switch now**, as on/off switches.
 - **Faster driver:** only shows up when a driver is known for your TV's exact kernel and an adapter it supports is plugged in.  It downloads, checks and sets up the driver in one go.
 - **Test a new driver:** only on TVs whose kernel has a driver waiting for testers.  One press downloads and checks it, loads it until the next restart, moves the adapter to it, checks it gets online, and shows a QR code that opens a filled-in test report.
+- **Check connection:** tests the cable, the address, the router, DNS and the internet one step at a time, and says in plain words where it breaks and what to try.  It also says whether apps use `eth0`, and, with the blocks on, that LG's update and remote support servers are still blocked.
+- **Network details:** the address and where it came from, the router, DNS servers, IPv6, MAC address and MTU, with a tip to reserve the address on your router.
+- **Live traffic:** how fast data is moving through the adapter and Wi-Fi right now, with a graph that updates every second.  Handy for checking a stream really uses the adapter.
+- **Link health:** how long the cable link has been up, how often it dropped in the last day and week, its error counts, and the recent changes.  It shows whether turning off Energy Efficient Ethernet helped.
 - **Speed test:** download, upload and latency through the TV's current connection, against Cloudflare's nearest server.
+- **Speed test history:** your earlier results with the driver each ran on, each as a bar against what the connection can carry (about 300 Mbit/s on USB 2.0), so a driver or firmware change shows.
 - **Speed test server:** Auto (the default) uses Cloudflare, and where Cloudflare is blocked or throttled (like in Russia, which cuts connections to it after 16 KB), the closest of 18 public [LibreSpeed](https://librespeed.org) servers instead.  The row opens a list, closest first with how far each one is, to pick Cloudflare or one server for every test.  Cloudflare usually measures the highest: the others are for when it's blocked or slow where you are, and can read lower.  If your internet only reaches the outside world through a proxy or VPN, the test measures that too.
 - **Report for GitHub:** a QR code that opens a compatibility report on your phone with your TV, adapter, speed and the full report already filled in (MAC addresses hidden).
 - **Updates:** tells you when a new version is out.  If you installed through the Homebrew Channel repo, the update comes from there.  Otherwise the app downloads it, checks its SHA-256, and installs it itself.  Either way, the new version opens with a short list of what's new.
 - **Turn everything off:** removes the boot hook and gives `eth0` back to the built-in port.
+- **Every switch asks first:** turning any of them on or off shows what it does and how to undo it, and goes ahead only on OK.
 - **Language:** the app follows the TV's menu language, English, Russian or Spanish for now, and the Language row picks one by hand.  That covers the app's screens, the problems and tips on the status screen, the What's new screen after an update, and the messages the boot hook shows on the TV.  The script's output after an action, the log, and anything over SSH stay in English.  More languages are welcome: see [Translating the app](#translating-the-app).  Screenshots in [Russian](assets/screenshots/ru/) and [Spanish](assets/screenshots/es/).
 
 <details>
@@ -252,6 +274,14 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
   <tr>
     <td align="center"><b>Status at a glance</b></td>
     <td align="center"><b>Speed test</b></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/app-block.png" alt="The Block updates tab: Block updates harder on, with the update check and automatic updates off and every LG update server blocked, Block phone app updates, Stop firmware downloads and the optional Block LG Remote Support, each with what it does" /></td>
+    <td width="50%"><img src="assets/screenshots/app-netcheck.png" alt="Check connection: all good.  Cable link at 1000 Mbit/s, address from the router, the router answers, names resolve, the internet works, apps use eth0, and LG's update servers are blocked" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>The most complete update block</b></td>
+    <td align="center"><b>Check connection</b></td>
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/app-realtek.png" alt="A 2019 C9 with an RTL8153 adapter: Realtek mode is on, and the adapter is on the TV's own r8152 driver" /></td>
@@ -270,7 +300,7 @@ It runs the same script underneath, as root through the Homebrew Channel.  It wo
     <td align="center"><b>Its result, ready to send</b></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/app-update.png" alt="Update row at the top of the menu: Update to the latest version, with the version you have, downloads and installs" /></td>
+    <td width="50%"><img src="assets/screenshots/app-update.png" alt="The More tab with the Update row: Update to the latest version, with the version you have, downloads and installs" /></td>
     <td width="50%"><img src="assets/screenshots/app-upgrade-1.png" alt="Upgrading from v1: the app found the old boot hook and walks through replacing it, step by step" /></td>
   </tr>
   <tr>
@@ -342,6 +372,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | RTL8153 adapter ([#47](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/47), [Amazon](https://www.amazon.com/dp/B07YH8RQ3F)) | Realtek RTL8153 (`0bda:8153`) | 2021 UP7670 (50UP7670PUC), webOS 6, USB 2.0 port | Works with `r8152_oot` from **Faster driver**, built here for that TV's kernel.  209 to 246 Mbit/s down, 83 to 127 up over three tests |
 | ASIX AX88179 adapter ([#51](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/51)) | ASIX AX88179/178A (`0b95:1790`) | 2021 C1 (OLED65C1PUB), webOS 6, USB 2.0 port | Works out of the box on the TV's own `ax88179_178a` driver.  344 Mbit/s down, 248 up, 6 ms, and settings show the wired connection |
 | RTL8153 adapter ([#52](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/52)) | Realtek RTL8153 (`0bda:8153`) | 2024 B4 (OLED48B4PUA), webOS 25, USB 2.0 port | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  309 Mbit/s down, 290 up, 17 ms |
+| RTL8153 adapter ([#53](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/53)) | Realtek RTL8153 (`0bda:8153`) | 2022 G2 (OLED65G26LA), webOS 25 | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  `eth0` at 1000 Mbit/s |
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
@@ -438,7 +469,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**351 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**350 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -458,7 +489,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 351 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
+<summary><b>All 350 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
 
 <br>
 
@@ -470,6 +501,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 
 | Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
 |---|---|:-:|:-:|---|
+| `5.4.268-329.ptl4tv.2` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.2) | yes |  |  |
 | `5.4.268-294.24.papikonda.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24) | yes |  |  |
 
 **Reported working, now offered by get-driver: webOS 24**
@@ -516,7 +548,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 |---|---|:-:|:-:|---|
 | `5.4.268-966.15.ptl4tv.8` | [LM21ANN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-966.15.ptl4tv.8) | yes | yes | Aquantia AQC111, Davicom DM9601 |
 | `5.4.268-329.ptl4tv.5` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.5) |  |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
-| `5.4.268-329.ptl4tv.2` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.2) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
+| `5.4.268-329.ptl4tv.2` | [LG chips](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-329.ptl4tv.2) |  |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-294.ptl4tv.24` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.ptl4tv.24-k25lp) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-294.24.papikonda.2` | [K24N](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24n), [K25Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k25lp), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k8lpn2), [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.24.papikonda.2-k24) | yes |  | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
 | `5.4.268-294.17.paparoa.pine.2` | [K24](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k24), [K8Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hp), [K8Hpp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8hpp), [K8LpN](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn), [K8LpN2](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.268-294.17.paparoa.pine.2-k8lpn2) | yes | yes | Aquantia AQC111, Davicom DM9601, Microchip LAN78xx |
@@ -680,6 +712,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2024 G4 (OLED65G48LW), kernel `5.4.268-329.ptl4tv.5` | An ASIX AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  Settings show the wired connection and apps play.  292 Mbit/s down over USB 2.0. | [#2](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/2) |
 | webOS 25 (10.3.1, firmware 33.31.68) on a 2025 G5 (OLED83G54LW), kernel `5.4.268-329.ptl4tv.5`, O24N chip | An RTL8153 adapter (`0bda:8153`) works with `r8152_oot` from `get-driver`, and LG-USB-2-ETH0 makes it `eth0`.  308 Mbit/s down, 324 up, 5 ms, and settings show the wired connection and apps play. | [#50](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/50) |
 | webOS 25 (firmware 33.31.68) on a 2024 B4 (OLED48B4PUA), kernel `5.4.268-294.24.papikonda.2`, K24 chip | An RTL8153 adapter (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer.  309 Mbit/s down, 290 up, 17 ms over USB 2.0. | [#52](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/52) |
+| webOS 25 (firmware 33.23.05) on a 2022 G2 (OLED65G26LA), kernel `5.4.268-329.ptl4tv.2`, O22 chip | An RTL8153 adapter (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer, and LG-USB-2-ETH0 makes it `eth0` at 1000 Mbit/s. | [#53](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/53) |
 | webOS 25 on a 2025 B5 (OLED55B56LA), kernel `5.4.268-294.24.papikonda.2` | No ASIX driver: an AX88179A wasn't detected at all.  dd3git's `ax88179_178a` build fixes that, and `get-driver` offers it.  A Realtek build is [waiting for testers](#more-drivers-on-the-way).  Not yet tested with LG-USB-2-ETH0, so a report helps. | [LG developer forum](https://forum.webostv.developer.lge.com/t/feature-request-usb-gigabit-ethernet-adapter-support-on-webos-25/28185), [dd3git/lg-webos-ax88179-driver](https://github.com/dd3git/lg-webos-ax88179-driver) |
 | webOS 26 (11.2.0, firmware 43.21.98) on a 2026 G6 (OLED65G64LW), kernel `6.12.44-352` | A Realtek RTL8153 adapter (`0bda:8153`) works on the TV's own `r8152` driver, and LG-USB-2-ETH0 makes it `eth0` with `--watch`.  Settings show the wired connection and apps play.  247 Mbit/s down, 312 up over USB 2.0. | [#11](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/11) |
 | webOS 26 (11.2.0, firmware 43.21.79) on a 2026 C6 (OLED77C6RLA), kernel `6.12.44-352` | An AX88179 adapter (`0b95:1790`) works on the TV's own `cdc_ncm` driver, 322 Mbit/s down and 293 up, and an RTL8153 (`0bda:8153`) on its own `r8152`, 309 down and 302 up, both over USB 2.0. | [#30](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/30), [#31](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/31) |
@@ -727,7 +760,7 @@ webOS 4.0 and 4.5 TVs can be rooted with [faultmanager-autoroot](https://github.
 
 ## Blocking updates
 
-A firmware update can remove root, and current firmware can't be rooted again (see the warning at the top).  The Homebrew Channel's **Block system updates** is the first line: it points four of LG's update servers at nothing in `/etc/hosts`.  People in [Homebrew Channel issue #96](https://github.com/webosbrew/webos-homebrew-channel/issues/96) found what it misses, and **Block updates harder** (`--block-updates`) adds that on top.  It does this right away and again at every boot, and turning it off undoes all of it.  Tested on a C2 with webOS 25.
+A firmware update can remove root, and current firmware can't be rooted again (see the warning at the top).  The Homebrew Channel's **Block system updates** is the first line: it points four of LG's update servers at nothing in `/etc/hosts`.  People in [Homebrew Channel issue #96](https://github.com/webosbrew/webos-homebrew-channel/issues/96) found what it misses, and **Block updates harder** (`--block-updates`) adds that on top, covering every way LG can update the TV that we found by taking apart nine firmwares, from 2018 models to webOS 26, and running LG's own updater in a sandbox.  It does this right away and again at every boot, and turning it off undoes all of it.  Tested on a C2 with webOS 25.
 
 <details>
 <summary>What it blocks, and how</summary>
@@ -735,15 +768,22 @@ A firmware update can remove root, and current firmware can't be rooted again (s
 <br>
 
 - **webOS's own update check, turned off.**  A hidden webOS setting (`softwareUpdateEnable` in the `support` category) stops the updater's check, including the one it makes early in boot, before the Homebrew Channel's block is in place.  It's the same switch [Homebrew Channel PR #264](https://github.com/webosbrew/webos-homebrew-channel/pull/264) turns off.
+- **webOS's automatic updates, turned off.**  The updater also reads a second setting (`automaticUpdate`, the same as **Automatic software updates** in the TV's settings): on, it installs an update it finds without asking.  Turning the option off puts it back how it was.
 - **The update servers the block misses**, added to `/etc/hosts`: `nsu.lge.com` (LG's current update server, which a TV still reached with the block on), `snu-dev.lge.com` and `ngfts.lge.com`.  If the Homebrew Channel's block is off, it adds that block's four servers too (`snu.lge.com`, `su.lge.com`, `su-ssl.lge.com`, `su-dev.lge.com`), the same way it does: in a writable copy of `/etc/hosts` that's gone after a reboot.  It only adds the ones that aren't there yet, in lines marked as its own, and never changes the Homebrew Channel's.
 - **The server the updater reaches by IP** (`156.147.69.32`), which no hosts file can block, with one firewall rule.
 - **Update details already found or downloaded** (in `/mnt/lg/cmn_data/swupdate`), deleted, so a waiting prompt goes away.
-- **Checked every 10 minutes, from the moment it's on.**  These TVs can go weeks in standby without a boot, so the background job checks that the update check is still off, the servers are still in `/etc/hosts` and the firewall rule is still there, and puts back anything missing.  An update webOS finds is deleted as soon as it shows up.  It also watches for webOS's updater being switched to another update server (flag files in `/mnt/lg/cmn_data/update`), and points it out.
+- **Phone apps, blocked too** (**Block phone app updates**, on with the block unless you turn it off with `--no-block-phone-updates`).  LG's phone app (LG ThinQ) can tell the TV to download a firmware update straight from the phone, through the TV's phone connection (its second-screen gateway), which gets past every server block.  The gateway reads which update calls it offers from a file when the TV starts, so the block puts a copy over it with only the read-only calls (a bind mount, nothing changed on disk), from the next TV start, and again at every boot before the gateway starts.  Casting, the phone remote and every other phone feature keep working.  If something else, like FW Block, already did it, it's left alone.
+- **A download that starts anyway, stopped** (**Stop firmware downloads**, on with the block unless you turn it off with `--no-stop-downloads`).  A last line of defense for a route nobody knows of yet: every 30 seconds, only while one of the updater's working files says it's busy, it asks the updater what it's doing, and cancels a download, with a message on the TV.  An install already under way is never stopped (that could break the TV), and neither is a USB update you started yourself.
+- **Checked every 10 minutes, from the moment it's on.**  These TVs can go weeks in standby without a boot, so the background job checks that the update check is still off, the servers are still in `/etc/hosts` and the firewall rule is still there, and puts back anything missing.  An update webOS finds is deleted as soon as it shows up.  The updater keeps flag files in `/mnt/lg/cmn_data/update` that pick its update server, and every one goes to a server this blocks (`snu.lge.com`, `snu-dev.lge.com` or the IP), so they're only listed in `report`.
 - **A count of what it stopped.**  The firewall rule counts the updater's tries to reach its server by IP, and the app's **Block updates harder** row says how many and when, or that it removed an update webOS found.  `status` points out anything it had to put back, and `report` shows the count.
 
 The firmware itself downloads from `su.lge.com` and `su-ssl.lge.com` (the Homebrew Channel's block covers both, and this does too when that's off).  The exact download address comes back from the update check, so with the check blocked, the updater never gets one.
 
 Turning it off puts the update check back how it was and takes its hosts lines and firewall rule off.  The Homebrew Channel's own setting stays as you left it either way.  With both on, they cover the same servers, which does no harm.  `status` points out when nothing blocks updates, or when only the Homebrew Channel's block does.
+
+**Block LG Remote Support** (`--block-remote-support`) is a separate, optional switch, off by default.  During an LG Remote Support session, LG's staff can start a firmware update with a download address they hand over, which skips the update check everything above stops.  It blocks LG's remote support servers (`rone-tv-*.lge.com`, `rone-*.lge.com` and two addresses the TV reaches by IP) the same way, checked every 10 minutes too.  While it's on, LG support can't connect to your TV, so turn it off first if you ever need them to.
+
+One thing no setting can cover, so don't do it on a rooted TV: start an LG Remote Support session with the block off.  Updating the TV from a USB stick is left alone on purpose, since you start that yourself.
 
 It doesn't touch webOS's update service itself.  Overriding that, as some people in the issue have, goes deeper into the system than this script should.  If you can, also block the servers above on your router or Pi-hole: that covers the TV before it has even started.
 
@@ -823,7 +863,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | Command | What it does |
 |---------|--------------|
 | `install` | Writes the boot hook.  Add `--now` to switch right away too. |
-| `uninstall` | Removes the boot hook.  Add `--now` to give `eth0` back to the built-in port right away. |
+| `uninstall` | Removes the boot hook, undoes every option, and deletes every file the script kept.  Add `--now` to give `eth0` back to the built-in port right away. |
 | `apply` | Swaps the adapter in now, without touching the hook. |
 | `revert` | Gives `eth0` back to the built-in port now.  (`reset` works too.) |
 | `disable` / `enable` | Keeps the hook but stops it running at boot, or turns it back on. |
@@ -832,6 +872,9 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | `get-driver` | Downloads a driver module known to work on your exact kernel, if there is one, and checks its checksum.  With `--file PATH`, checks and uses a copy you downloaded yourself.  See [A faster driver](#a-faster-driver). |
 | `test-driver` | Tries a new driver built for your exact kernel that hasn't run on a TV yet, if there is one: downloads and checks it, loads it until the next restart only, moves the adapter to it, checks it gets online, and shows a report to send.  `--last` shows the last test's report again, including after a test that froze the TV.  See [More drivers on the way](#more-drivers-on-the-way). |
 | `speedtest` | Latency, download and upload through the TV's current connection, against Cloudflare's nearest server, or the closest LibreSpeed server where Cloudflare is blocked.  Where IPv6 is broken on the network, it runs over IPv4 and says so.  Four streams for about six seconds each way, so it uses a few hundred MB.  The last result shows up in `report` and the app. |
+| `netcheck` | Checks the connection step by step: cable link, address, router, DNS, internet, which interface apps use, and, with `--block-updates` or `--block-remote-support` on, that those servers are still blocked. |
+| `netinfo` | `eth0`'s address, router, DNS servers, IPv6, MAC address and MTU, and its link health: how long it's been up, drops in the last day and week, and error counts. |
+| `traffic` | How fast data is going in and out of each connection right now, measured over one second, and how much since the TV started. |
 | `speed-server` | Lists the speed test servers and how far each one is.  `speed-server auto` (the default), `speed-server cloudflare`, a number from the list, or the URL of your own [LibreSpeed](https://github.com/librespeed/speedtest) server picks the one every test uses. |
 | `update` | Checks for a newer release and installs it, once the release's signature checks out and the download matches its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
 | `app-access` | webOS 26 only, when the app says it can't reach the TV as root: lets the app use the Homebrew Channel again by adding it to the Homebrew Channel's permission group.  Changes only this app's own permissions file, and only when you run it.  Not needed once the Homebrew Channel ships its own fix.  See [webOS 26 setup](docs/webos-26-setup.md). |
@@ -853,11 +896,14 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | `--wifi-fallback` | Wi-Fi as a backup.  If `eth0` loses its cable link for a minute while Wi-Fi is off, turn Wi-Fi on, so the TV joins a network it already knows.  Once the cable works again for 30 seconds, turn Wi-Fi back off, so traffic returns to the adapter.  It only turns Wi-Fi off if it turned it on.  Starts from the next boot. |
 | `--wifi-wake` | Keep **Turn on via Wi-Fi** working in standby.  On some TVs (an LG G6 on webOS 26, discussion #19), the TV drops off Wi-Fi in standby while the adapter is the main connection, so it can't be woken over the network.  Just before standby, this disconnects only the adapter's network session in webOS's connection manager (the adapter stays plugged in and stays `eth0`), so Wi-Fi stays ready for wake, and on wake connects it again and puts it back ahead of Wi-Fi.  It turns Wi-Fi on and joins the network the TV already knows if webOS left Wi-Fi off, which a C2 does at boot with the cable connected, and keeps the adapter first for traffic, checking every 10 seconds that Wi-Fi hasn't taken over.  Only when **Turn on via Wi-Fi** is on.  Starts right away, and at every boot.  See [Waking the TV over Wi-Fi](#waking-the-tv-over-wi-fi) and [docs/wifi-wake.md](docs/wifi-wake.md). |
 | `--block-updates` | Block firmware updates more thoroughly, on top of the Homebrew Channel's own block.  See [Blocking updates](#blocking-updates).  Starts right away, and again at every boot. |
+| `--no-block-phone-updates` | With `--block-updates`, leave the phone app route open: LG's phone app can start an update again from the next TV start.  `--block-phone-updates` turns it back on.  **Block phone app updates** in the app. |
+| `--no-stop-downloads` | With `--block-updates`, don't cancel a firmware download that starts anyway.  `--stop-downloads` turns it back on.  **Stop firmware downloads** in the app. |
+| `--block-remote-support` | Also block LG Remote Support, so LG can't push an update during a support session.  Off by default: while it's on, LG support can't connect to the TV.  See [Blocking updates](#blocking-updates).  **Block LG Remote Support** in the app. |
 | `--no-realtek-mode` | Leave Realtek adapters on the generic driver.  By default, an RTL8152 or RTL8153 adapter the kernel left in its standard mode is switched to its Realtek mode, so the TV's own `r8152` takes it.  `--realtek-mode` turns it back on. |
 | `--ipv6-off` | Turn IPv6 off on the TV, for networks that give it IPv6 but don't carry it.  There, every new connection waits about 200 ms before it falls back to IPv4, and the speed test says so.  Starts right away, again at every boot, and stays off if webOS turns it back on.  Turning it off puts IPv6 back how it was.  **Turn off IPv6** in the app. |
 | `--eee-off` | Turn off Energy Efficient Ethernet on the adapter whenever its link comes up.  EEE is a common cause of a link that drops for a few seconds on some adapters and routers.  Needs `ethtool`, which webOS doesn't have (with Entware: `opkg install ethtool`), and a driver that allows it.  **Turn off Energy Efficient Ethernet** in the app, shown where `ethtool` is there. |
-| `--no-watch`, `--no-module`, `--no-mac`, `--no-wifi-fallback`, `--no-wifi-wake`, `--no-block-updates`, `--no-ipv6-off`, `--no-eee-off` | Turn that setting off again. |
-| `--json` | With `status`, `speedtest` or `update --check`: machine-readable output.  The TV app uses it. |
+| `--no-watch`, `--no-module`, `--no-mac`, `--no-wifi-fallback`, `--no-wifi-wake`, `--no-block-updates`, `--no-ipv6-off`, `--no-eee-off`, `--no-block-remote-support` | Turn that setting off again. |
+| `--json` | With `status`, `speedtest`, `netcheck`, `netinfo`, `traffic` or `update --check`: machine-readable output.  The TV app uses it. |
 
 The options you install with are saved in `/var/lib/webosbrew/lg-usb-2-eth0.conf`.  Run `install` again to change any of them; the ones you don't give are kept.
 

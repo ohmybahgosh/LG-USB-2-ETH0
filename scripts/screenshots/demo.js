@@ -9,13 +9,13 @@
 (function () {
   var p = new URLSearchParams(location.search);
   // The newest release, and the version the screenshots run
-  var LATEST = '2.11.45';
+  var LATEST = '2.11.46';
   var ver = p.get('ver') || LATEST;
   var withSpeed = p.get('speed') !== '0';
   var status = {
     version: ver, model: 'OLED65C2PUA', webos: 'webOS 25', webosRelease: '10.3.1', firmware: '33.30.65', kernel: '5.4.268-329.ptl4tv.5',
     hook: { state: 'enabled', link: '', wait: '120', mac: '', module: '/home/root/lg-usb-2-eth0/r8152_oot.ko', driver: 'r8152_oot', watch: true, wifiFallback: true, wifiFallbackOn: false, blockUpdates: true, running: true, pid: '1234' },
-    updates: { check: 'false', hbcBlock: true, missingHosts: '', firewall: true },
+    updates: { check: 'false', hbcBlock: true, missingHosts: '', firewall: true, auto: 'off', phone: 'blocked', tries: 4, lastTry: Math.floor(Date.now() / 1000) - 86400 * 3, cancelled: 0 },
     adapter: { name: 'eth0', driver: 'r8152_oot', mac: '', carrier: true, speed: 1000, duplex: 'full', ip: '192.168.1.42/24', id: '0bda:8156', chip: 'Realtek RTL8156', bus: 'USB 2.0' },
     adapterIsEth0: true,
     builtin: { name: 'eth2', driver: 'lg1k_eth', mac: '', carrier: false, speed: 0, ip: '' },
@@ -73,6 +73,25 @@
     else if (/--phase down/.test(args)) { out = JSON.stringify({ downMbps: 272 }); d = speedDelay; }
     else if (/--phase up/.test(args)) { out = JSON.stringify({ upMbps: 287 }); d = speedDelay; }
     else if (/^report/.test(args)) { out = report; }
+    // The Network tab's details, link health, live traffic and check
+    else if (/^netinfo/.test(args)) {
+      out = JSON.stringify({ interface: 'eth0', mac: '00:e0:4c:68:00:01', ipv4: '192.168.1.42/24', gateway: '192.168.1.1', dns: ['192.168.1.1'], ipv6: [],
+        mtu: 1500, method: 'dhcp', speed: 1000, duplex: 'full', defaultRoute: 'eth0',
+        health: { carrier: true, upSince: Math.floor(Date.now() / 1000) - 273600, bootAt: Math.floor(Date.now() / 1000) - 273700, carrierChanges: 1, dropsDay: 0, dropsWeek: 0, eee: '',
+          rxPackets: 48211934, txPackets: 9120443, rxErrors: 0, txErrors: 0, rxDropped: 0, txDropped: 0, rxCrc: 0, rxBytes: 61200000000, txBytes: 1900000000 } });
+    }
+    else if (/^traffic/.test(args)) {
+      var down = 38 + Math.random() * 14;
+      out = JSON.stringify({ secs: 1, defaultRoute: 'eth0', interfaces: [{ name: 'eth0', rxMbps: down, txMbps: 0.6 + Math.random() * 0.4, rxBytes: 61200000000, txBytes: 1900000000 }] });
+      d = 1000;
+    }
+    else if (/^netcheck/.test(args)) {
+      out = JSON.stringify({ steps: [{ id: 'cable', result: 'ok', value: '1000', ms: null }, { id: 'address', result: 'ok', value: '192.168.1.42', ms: null },
+        { id: 'router', result: 'ok', value: '192.168.1.1', ms: 0.6 }, { id: 'dns', result: 'ok', value: '142.250.65.68', ms: null },
+        { id: 'internet', result: 'ok', value: '', ms: 18 }, { id: 'route', result: 'ok', value: 'eth0', ms: null },
+        { id: 'updates', result: 'ok', value: '', ms: null }, { id: 'phone', result: 'ok', value: '', ms: null }] });
+      d = 1500;
+    }
     else if (/^test-driver --last/.test(args)) { out = '[INFO] Driver test: it works.\n\n' + dtReport; }
     else if (/^test-driver/.test(args)) {
       status.driverTest.state = 'running';

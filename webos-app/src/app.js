@@ -132,6 +132,10 @@
         if (h.wifiFallback) { o.push('--wifi-fallback'); }
         if (h.wifiWake) { o.push('--wifi-wake'); }
         if (h.eeeOff) { o.push('--eee-off'); }
+        if (h.blockUpdates) { o.push('--block-updates'); }
+        if (h.blockRemoteSupport) { o.push('--block-remote-support'); }
+        if (h.blockUpdates && h.blockPhone === false) { o.push('--no-block-phone-updates'); }
+        if (h.blockUpdates && h.stopDownloads === false) { o.push('--no-stop-downloads'); }
         return o.length ? o.join(' ') : 'None, the defaults';
     }
 
@@ -336,7 +340,7 @@
         $('tog-watch').className = 'tog' + (bootOn && h.watch ? ' on' : '');
         $('tog-wifi').className = 'tog' + (bootOn && h.wifiFallback ? ' on' : '');
         // Wi-Fi wake keeps Wi-Fi connected, so the TV already falls back to it
-        $('wifi-hint').textContent = bootOn && h.wifiWake ? T('Wi-Fi wake keeps Wi-Fi connected already') : T('if the cable stops working');
+        $('wifi-hint').textContent = bootOn && h.wifiWake ? T('Wi-Fi wake keeps Wi-Fi connected already') : T('turns Wi-Fi on if the cable stops working, and off when it\'s back');
         $('tog-wake').className = 'tog' + (bootOn && h.wifiWake ? ' on' : '');
         $('tog-updates').className = 'tog' + (bootOn && h.blockUpdates ? ' on' : '');
         // Turn off IPv6: only where it helps, once the speed test found IPv6
@@ -359,11 +363,30 @@
         // With it on: what it has caught, so there's proof it works
         var blocking = bootOn && h.blockUpdates;
         $('updates-hint').textContent = blocking && u.found && Date.now() - u.found * 1000 < 2592000000 ?
-            T('removed an update webOS found on {date}', { date: new Date(u.found * 1000).toLocaleDateString() }) :
-            (blocking && u.tries ? T('stopped LG\'s updater {n} times, last on {date}', { n: u.tries, date: new Date(u.lastTry * 1000).toLocaleDateString() }) :
-            (blocking && h.running ? T('checked every 10 minutes, no tries seen yet') :
-            (blocking ? T('on now, checked every 10 minutes from the next restart') :
-            (u.hbcBlock === false ? T('the Homebrew Channel\'s block is off too') : T('on top of the Homebrew Channel\'s block')))));
+            T('on: removed a firmware update webOS found on {date}, before it could install', { date: new Date(u.found * 1000).toLocaleDateString() }) :
+            (blocking && u.tries ? T('on: stopped LG\'s updater reaching its server {n} times, last on {date}', { n: u.tries, date: new Date(u.lastTry * 1000).toLocaleDateString() }) :
+            (blocking && h.running ? T('on: update check and automatic updates off, every LG update server blocked, checked every 10 minutes') :
+            (blocking ? T('on: update check and automatic updates off, every LG update server blocked, checked every 10 minutes from the next restart') :
+            (u.hbcBlock === false ? T('off, and the Homebrew Channel\'s block is off too: turns off webOS\'s update check and automatic updates and blocks every LG update server, so an update can\'t remove root') : T('turns off webOS\'s update check and automatic updates and blocks every LG update server the Homebrew Channel misses, so an update can\'t remove root for good')))));
+        // Phone apps and the download guard: part of Block updates harder,
+        // on with it unless turned off
+        var phoneOn = blocking && h.blockPhone !== false;
+        // Not needed on a TV whose phone connection has no update calls:
+        // shown off and dimmed, with why
+        var phoneNa = u.phone === 'none';
+        $('tog-phone').className = 'tog' + (phoneOn && !phoneNa ? ' on' : '') + (phoneNa ? ' na' : '');
+        $('phone-hint').textContent = phoneNa ? T('not needed: this TV\'s phone connection has no firmware update calls, so a phone app can\'t start an update on it') : !blocking ? T('with Block updates harder: stops LG ThinQ on a phone pushing a firmware update straight to the TV, which gets past every server block') :
+            (!phoneOn ? T('off by your choice: LG ThinQ on a phone can still push a firmware update to the TV') :
+            ({ blocked: T('on: LG ThinQ on a phone can\'t start a firmware update, and casting and the phone remote still work'), next: T('on from the next TV start, since the TV\'s phone connection reads its list when the TV starts'),
+                other: T('on: another app, like FW Block, already blocks phone updates') }[u.phone] ||
+                T('on: the phone route was open, and it\'s blocked again within 10 minutes')));
+        var dlOn = blocking && h.stopDownloads !== false;
+        $('tog-stopdl').className = 'tog' + (dlOn ? ' on' : '');
+        $('stopdl-hint').textContent = dlOn && u.cancelled ? T('on: stopped {n} firmware downloads that got past the block, last on {date}', { n: u.cancelled, date: new Date(u.lastCancel * 1000).toLocaleDateString() }) :
+            (dlOn ? T('on: every 30 seconds while LG\'s updater is busy, cancels any firmware download.  It never touches an install or a USB update') : T('a last line of defense with Block updates harder: cancels a firmware download that gets past the block, with a message on the TV'));
+        // Block LG Remote Support: optional, off by default
+        $('tog-remote').className = 'tog' + (bootOn && h.blockRemoteSupport ? ' on' : '');
+        $('remote-hint').textContent = bootOn && h.blockRemoteSupport ? T('on: LG Remote Support can\'t connect to this TV, so it can\'t push an update.  Turn it off first if you ever need LG\'s help') : T('optional, off by default: stops LG\'s staff pushing a firmware update during a remote support session.  LG support can\'t connect while it\'s on');
         // Energy Efficient Ethernet off: only where ethtool is there to do it,
         // or when it's on (so it can be turned off again)
         var ee = s.eee || {};
@@ -399,17 +422,73 @@
         $('drvtest-hint').textContent = dt.state === 'running' ? T('testing now') :
             (dt.result ? T('last test: {result}', { result: T(DT_SAYS[dt.result] || dt.result) }) :
                 (dt.adapterOk ? T('built for this TV\'s kernel, helps add support') : T('plug in an adapter it supports to try it')));
+        // Link health says when the cable link has been dropping
+        $('health-hint').textContent = drops.length ? T('dropped {n} times in the last day: see when, and the error counts', { n: drops.length }) :
+            T('how long the cable link has been up, with its drops and errors');
+        // Speed test history: only once there's a result
+        var sh = s.speedHistory || [];
+        document.querySelector('[data-action="speedhist"]').style.display = sh.length ? '' : 'none';
+        if (sh.length) {
+            $('speedhist-hint').textContent = T('last: {down} down / {up} up Mbit/s on {date}, and the ones before',
+                { down: sh[0].downMbps, up: sh[0].upMbps, date: new Date(sh[0].at * 1000).toLocaleDateString() });
+        }
         $('lang-hint').textContent = I18N ? I18N.label() : 'English';
         renderUpdate();
         if (current >= buttons().length) { current = buttons().length - 1; }
     }
 
-    // Squeeze the rows a little when there are more of them, so they fit
-    // above the footer.  Also run before the first status, so the menu
-    // doesn't run into the footer while the app is still checking the TV.
+    // The menu's tabs: only the open tab's rows show, a tab with no rows to
+    // show is hidden, and More gets a dot when an update is waiting there.
+    // Also run before the first status, while the app is still checking.
+    var TABS = ['conn', 'fw', 'driver', 'net', 'more'];
+    // True while the focus is up on the tab bar (UP from a tab's first row)
+    var onTabs = false;
+    var tab = 'conn';
+    function tabRows(t) {
+        return Array.prototype.slice.call(document.querySelectorAll('.btn[data-tab="' + t + '"]')).filter(function (b) {
+            return b.style.display !== 'none';
+        });
+    }
+    function visibleTabs() { return TABS.filter(function (t) { return tabRows(t).length > 0; }); }
     function fitRows() {
-        var n = buttons().length;
-        $('actions').className = 'actions' + (n >= 14 ? ' tightest squeeze cram' : n >= 12 ? ' tightest squeeze' : (n >= 10 ? ' tightest' : (n >= 9 ? ' tighter' : (n >= 8 ? ' tight' : ''))));
+        var vis = visibleTabs();
+        if (vis.indexOf(tab) < 0) { tab = vis[0] || 'conn'; }
+        Array.prototype.slice.call(document.querySelectorAll('.tab')).forEach(function (el) {
+            var t = el.getAttribute('data-tab');
+            var news = t === 'more' && tabRows('more').some(function (b) { return b.className.indexOf('btn-update') >= 0; });
+            el.className = 'tab' + (t === tab ? ' on' : '') + (news ? ' news' : '') + (vis.indexOf(t) < 0 ? ' gone' : '');
+        });
+        Array.prototype.slice.call(document.querySelectorAll('.btn')).forEach(function (b) {
+            b.className = b.className.replace(/ ?off-tab/g, '') + (b.getAttribute('data-tab') === tab ? '' : ' off-tab');
+        });
+        // Longer tab names (Spanish, Russian) step the tab text down to fit
+        var bar = $('tabs');
+        bar.className = 'tabs';
+        if (bar.scrollWidth > bar.clientWidth) { bar.className = 'tabs small'; }
+        if (bar.scrollWidth > bar.clientWidth) { bar.className = 'tabs smaller'; }
+    }
+    // Open tab T (or the next visible one in a direction).  The focus stays
+    // on the tab bar if it's there, or goes to the tab's first row.
+    function openTab(t) {
+        tab = t;
+        current = 0;
+        fitRows();
+        focusCurrent();
+    }
+    function stepTab(dir) {
+        var vis = visibleTabs();
+        var i = vis.indexOf(tab) + dir;
+        if (i >= 0 && i < vis.length) { openTab(vis[i]); }
+    }
+    // Focus the row for ACTION, on its own tab
+    function focusAction(action) {
+        var b = document.querySelector('[data-action="' + action + '"]');
+        if (!b) { return; }
+        tab = b.getAttribute('data-tab');
+        onTabs = false;
+        fitRows();
+        current = Math.max(buttons().indexOf(b), 0);
+        focusCurrent();
     }
 
     // The update row only shows when a newer release is out.  If the
@@ -448,6 +527,7 @@
     }
     function closeOverlay() {
         overlayMode = null;
+        liveTok++; // stops Live traffic's updates
         onConfirm = null;
         $('overlay').className = 'overlay hidden';
         focusCurrent();
@@ -624,7 +704,7 @@
                 T('There\'s a driver built for this TV\'s kernel from LG\'s own source, so your adapter could work, and nobody with this kernel has tried it yet.'))) +
             li('', esc(T('Testing it takes a minute: it\'s only loaded until the next restart, and you send the result with your phone.  That\'s how it gets offered to everyone with this TV.'))) +
             li('', esc(dt.adapterOk ? T('Your adapter is one it supports.') : T('Plug in an adapter it supports first: Realtek (RTL8152, RTL8153 or RTL8156), ASIX AX88179, Aquantia AQC111, Davicom DM9601 or Microchip LAN78xx, whichever the new driver is for.'))) +
-            li('', esc(T('It stays in the menu as Test a new driver, so you can do it any time.'))) + '</ul>';
+            li('', esc(T('It stays in the menu as Test a new driver, on the Driver tab, so you can do it any time.'))) + '</ul>';
         if (dt.adapterOk) {
             stepThen(T('A new driver to test'), html, T('Press OK to test it now, or BACK for later.'), drvtestStart);
         } else {
@@ -713,6 +793,210 @@
         overlay('confirm', title, esc(text), T('Press OK to go ahead, or BACK to cancel.'));
     }
 
+    // ------------------------------------------------------------------ network tab
+
+    // A script command's JSON answer, or null
+    function runJson(args, cb) {
+        runScript(args, function (ok, out, err) {
+            var d = null;
+            try { d = JSON.parse(out.slice(out.indexOf('{'))); } catch (e) { d = null; }
+            cb(d, out || err);
+        });
+    }
+    // A time span for people: 3 d 4 h, 2 h 10 min, 5 min
+    function span(secs) {
+        var d = Math.floor(secs / 86400), h = Math.floor(secs % 86400 / 3600), m = Math.floor(secs % 3600 / 60);
+        if (d) { return T('{d} d {h} h', { d: d, h: h }); }
+        if (h) { return T('{h} h {m} min', { h: h, m: m }); }
+        return T('{m} min', { m: Math.max(m, 1) });
+    }
+    function when(at) {
+        var d = new Date(at * 1000);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    function kv(rows) {
+        return '<table class="kv">' + rows.map(function (r) { return r ? row(r[0], r[1]) : ''; }).join('') + '</table>';
+    }
+    // Speeds with one decimal under 10, whole numbers above
+    function mbps(v) { return v >= 10 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1); }
+    // A byte count: 1.2 GB, 340 MB
+    function bytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b >= 1e6 ? Math.round(b / 1e6) + ' MB' : Math.round(b / 1e3) + ' KB'); }
+    function failed(title, text) {
+        busy = false;
+        overlay('message', T('{title}: something went wrong', { title: title }),
+            '<pre>' + esc((text || T('No answer from the script.')).replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>', T('Press OK or BACK to close.'));
+    }
+
+    // What each connection check step found, in plain words
+    function checkLine(s) {
+        var v = s.value || '', ms = s.ms;
+        var say = {
+            'cable.ok': v ? T('Cable link at {speed} Mbit/s', { speed: v }) : T('Cable link'),
+            'cable.fail': T('No cable link.  Check the cable is in at both ends, or try another cable or router port.'),
+            'address.ok': T('Address {ip} from the router', { ip: v }),
+            'address.fail': v ? T('The router\'s DHCP didn\'t answer, so the TV gave itself {ip}, which goes nowhere.  Restart the router.', { ip: v }) :
+                T('No address yet: the router\'s DHCP didn\'t answer.  Restart the router, or wait a minute and check again.'),
+            'router.ok': ms !== null && ms !== undefined ? T('Router {ip} answers in {ms} ms', { ip: v, ms: ms }) : T('Router {ip} answers', { ip: v }),
+            'router.fail': v ? T('Router {ip} doesn\'t answer.  Restart it, and check the cable goes to it.', { ip: v }) : T('The router didn\'t give eth0 a gateway.'),
+            'dns.ok': T('Names resolve: www.google.com is {ip}', { ip: v }),
+            'dns.fail': T('Names don\'t resolve, so apps can\'t find their servers.  The TV asks {dns}.  Restart the router, or set another DNS server on it.', { dns: v.replace(/,/g, ', ') || T('no DNS server') }),
+            'internet.ok': ms !== null && ms !== undefined ? T('Internet works, {ms} ms to Google', { ms: ms }) : T('Internet works'),
+            'internet.fail': T('The router answers, but the internet doesn\'t.  Check the router\'s own connection.'),
+            'route.ok': T('Apps use eth0'),
+            'route.warn': T('Apps use {nic}, not eth0.  Choose Switch now, or check Wi-Fi as a backup.', { nic: v }),
+            'route.fail': T('There\'s no route out, so nothing reaches the internet.'),
+            'updates.ok': T('LG\'s update servers are blocked'),
+            'updates.fail': T('Block updates harder has gaps ({gaps}).  It fixes them within 10 minutes, or turn it off and on.', { gaps: v.replace(/,/g, ', ') }),
+            'phone.ok': T('Phone apps can\'t start an update'),
+            'phone.warn': T('Phone apps are blocked from the next TV start'),
+            'phone.fail': T('Phone apps can still start an update.  It\'s blocked again within 10 minutes, and works from the next TV start.'),
+            'remote.ok': T('LG Remote Support is blocked'),
+            'remote.fail': T('Block LG Remote Support has gaps ({gaps}).  It fixes them within 10 minutes, or turn it off and on.', { gaps: v.replace(/,/g, ', ') })
+        };
+        var skip = { address: T('Address: skipped'), router: T('Router: skipped'), dns: T('DNS: skipped'), internet: T('Internet: skipped') };
+        if (s.result === 'skip') { return li('skip', esc(skip[s.id] || s.id)); }
+        var cls = s.result === 'ok' ? 'ok' : (s.result === 'warn' ? 'warn' : 'bad');
+        return li(cls, esc(say[s.id + '.' + s.result] || (s.id + ': ' + s.result)));
+    }
+    function netCheck() {
+        if (busy) { return; }
+        busy = true;
+        overlay('busy', T('Check connection'), '<span class="spinner"></span>' + esc(T('Checking the cable, router, DNS and internet…')), '');
+        runJson('netcheck --json', function (d, raw) {
+            if (!d || !d.steps) { failed(T('Check connection'), raw); return; }
+            busy = false;
+            var bad = d.steps.filter(function (s) { return s.result === 'fail'; });
+            var warn = d.steps.filter(function (s) { return s.result === 'warn'; });
+            var title = bad.length ? T('Check connection: a problem found') : (warn.length ? T('Check connection: works, with a warning') : T('Check connection: all good'));
+            stepThen(title, '<ul class="walk check">' + d.steps.map(checkLine).join('') + '</ul>',
+                T('Press OK to check again, or BACK to close.'), netCheck);
+        });
+    }
+
+    // Network details: what eth0 is using
+    function netInfo() {
+        if (busy) { return; }
+        busy = true;
+        overlay('busy', T('Network details'), '<span class="spinner"></span>' + esc(T('Reading the network setup.')), '');
+        runJson('netinfo --json', function (d, raw) {
+            if (!d || !d.interface) { failed(T('Network details'), raw); return; }
+            busy = false;
+            var ip = d.ipv4 ? d.ipv4.split('/') : null;
+            var how = d.method === 'dhcp' ? T('from the router (DHCP)') : (d.method === 'manual' ? T('set by hand') : '');
+            var link = d.speed ? d.speed + ' ' + T('Mbit/s') + (d.duplex === 'half' ? T(', half duplex') : '') : T('no cable');
+            overlay('message', T('Network details'), kv([
+                [T('Connection'), esc(d.interface + ' · ' + link)],
+                [T('Address'), ip ? esc(ip[0]) + ' <span class="dim">' + esc('/' + ip[1] + (how ? ' · ' + how : '')) + '</span>' : esc(T('none yet'))],
+                [T('Router'), esc(d.gateway || T('none'))],
+                [T('DNS servers'), esc(d.dns.length ? d.dns.join(', ') : T('none'))],
+                [T('IPv6'), esc(d.ipv6.length ? d.ipv6.map(function (a) { return a.replace(/\/\d+$/, ''); }).join(', ') : T('none'))],
+                [T('MAC address'), '<code>' + esc(d.mac) + '</code>'],
+                [T('MTU'), esc(String(d.mtu || '?'))],
+                [T('Apps use'), d.defaultRoute === d.interface ? esc(d.defaultRoute) : '<span class="warn">' + esc(d.defaultRoute || T('nothing')) + '</span>']
+            ]) + '<div class="speed-meta">' + esc(T('To keep this address, reserve the MAC address for it in your router\'s DHCP settings.')) + '</div>',
+                T('Press OK or BACK to close.'));
+        });
+    }
+
+    // Link health: how long the cable link has been up, its drops and errors
+    var LINK_SAYS = {
+        lost: 'Cable link lost', back: 'Cable link back', plugged: 'Adapter plugged in', unplugged: 'Adapter unplugged',
+        hung: 'Adapter stopped answering, restarted it', generic: 'Adapter on the generic driver, moved it back'
+    };
+    function linkHealth() {
+        if (busy) { return; }
+        busy = true;
+        overlay('busy', T('Link health'), '<span class="spinner"></span>' + esc(T('Reading the network setup.')), '');
+        runJson('netinfo --json', function (d, raw) {
+            if (!d || !d.health) { failed(T('Link health'), raw); return; }
+            busy = false;
+            var h = d.health, now = Date.now() / 1000;
+            var errs = h.rxErrors + h.txErrors;
+            var verdict = !h.carrier ? li('bad', esc(T('No cable link right now.'))) :
+                (h.dropsDay ? li('warn', esc(T('The link dropped {n} times in the last day.  Turning off Energy Efficient Ethernet often helps, or try another cable.', { n: h.dropsDay }))) :
+                (errs ? li('warn', esc(T('No drops in the last day, but {n} errors since the TV started.  A cable or adapter going bad shows here first.', { n: errs }))) :
+                li('ok', esc(T('Healthy: no drops in the last day and no errors.')))));
+            var events = (state && state.links || []).slice(0, 5).map(function (e) {
+                var extra = e.kind === 'back' && /^\d+/.test(e.detail) ? T(' after {s} s', { s: e.detail.split(' ')[0] }) : '';
+                return '<tr><td>' + esc(when(e.at)) + '</td><td>' + esc(T(LINK_SAYS[e.kind] || e.kind) + extra) + '</td></tr>';
+            }).join('');
+            overlay('message', T('Link health'), '<ul class="walk">' + verdict + '</ul>' + kv([
+                [T('Link up for'), h.upSince ? esc(span(now - h.upSince)) + ' <span class="dim">' + esc(T('since {time}', { time: when(h.upSince) })) + '</span>' : esc(T('no cable'))],
+                [T('Drops'), esc(T('{day} in the last day, {week} in the last week', { day: h.dropsDay, week: h.dropsWeek }))],
+                [T('Errors'), (errs ? '<span class="warn">' : '') + esc(T('{rx} in, {tx} out', { rx: h.rxErrors, tx: h.txErrors }) +
+                    (h.rxCrc ? T(' ({n} bad checksums)', { n: h.rxCrc }) : '')) + (errs ? '</span>' : '')],
+                [T('Packets'), esc(T('{rx} in, {tx} out', { rx: h.rxPackets.toLocaleString(), tx: h.txPackets.toLocaleString() }))],
+                h.eee ? [T('Energy Efficient Ethernet'), esc(h.eee === 'on' ? T('on') : T('off'))] : null
+            ]) + (events ? '<div class="walk-h">' + esc(T('Recent changes')) + '</div><table class="hist events">' + events + '</table>' : ''),
+                T('Press OK or BACK to close.'));
+        });
+    }
+
+    // Live traffic: each connection's speed right now, every second or so,
+    // until it's closed
+    var liveTok = 0;
+    function liveTraffic() {
+        if (busy) { return; }
+        var tok = ++liveTok, past = [], first = true;
+        overlay('message', T('Live traffic'), '<span class="spinner"></span>' + esc(T('Measuring…')), T('Updates every second.  Press OK or BACK to close.'));
+        function draw(d) {
+            var main = null, others = [];
+            d.interfaces.forEach(function (i) { if (i.name === d.defaultRoute && !main) { main = i; } else { others.push(i); } });
+            if (!main) { main = others.shift(); }
+            past.push(main.rxMbps);
+            if (past.length > 40) { past.shift(); }
+            var top = Math.max.apply(null, past.concat([1]));
+            // 40 slots, filling in from the right
+            var bars = new Array(41 - past.length).join('<i class="e"></i>') +
+                past.map(function (v) { return '<i style="height:' + Math.max(4, Math.round(v / top * 100)) + '%"></i>'; }).join('');
+            var rest = others.map(function (i) {
+                return '<tr><td>' + esc(i.name) + '</td><td>' + esc(T('{down} down · {up} up Mbit/s', { down: mbps(i.rxMbps), up: mbps(i.txMbps) })) + '</td></tr>';
+            }).join('');
+            $('overlay-body').innerHTML = '<div class="speed">' +
+                '<div class="tile"><small>' + esc(T('Download')) + ' · ' + esc(main.name) + '</small><b>' + esc(mbps(main.rxMbps)) + '</b><span>' + esc(T('Mbit/s')) + '</span></div>' +
+                '<div class="tile"><small>' + esc(T('Upload')) + ' · ' + esc(main.name) + '</small><b>' + esc(mbps(main.txMbps)) + '</b><span>' + esc(T('Mbit/s')) + '</span></div></div>' +
+                '<div class="spark">' + bars + '</div>' +
+                '<div class="speed-meta">' + esc(T('{down} down and {up} up since the TV started.', { down: bytes(main.rxBytes), up: bytes(main.txBytes) })) +
+                (main.name !== d.defaultRoute && d.defaultRoute ? ' <span class="warn">' + esc(T('Apps use {nic} right now, not {main}.', { nic: d.defaultRoute, main: main.name })) + '</span>' : '') + '</div>' +
+                (rest ? '<table class="hist">' + rest + '</table>' : '');
+        }
+        function tick() {
+            runJson('traffic --json', function (d, raw) {
+                if (tok !== liveTok || overlayMode !== 'message') { return; }
+                if (!d || !d.interfaces || !d.interfaces.length) {
+                    if (first) { $('overlay-body').innerHTML = '<pre>' + esc((raw || T('No answer from the script.')).replace(/\x1b\[[0-9;]*m/g, '').trim()) + '</pre>'; }
+                    return;
+                }
+                first = false;
+                draw(d);
+                tick();
+            });
+        }
+        tick();
+    }
+
+    // Speed test history: the earlier results, with a bar for each download
+    // against what the connection can carry
+    function speedHistory() {
+        var all = (state && state.speedHistory) || [];
+        if (!all.length) { return; }
+        var a = state.adapter || {};
+        var usb2 = a.bus === 'USB 2.0';
+        var cap = usb2 ? 300 : Math.round((a.speed || 1000) * 0.94);
+        var top = Math.max.apply(null, all.map(function (h) { return +h.downMbps || 0; }).concat([cap]));
+        var rows = all.slice(0, 8).map(function (h) {
+            var w = Math.max(2, Math.round((+h.downMbps || 0) / top * 100));
+            return '<tr><td>' + esc(when(h.at)) + '</td><td class="barcell"><span class="bar"><i style="width:' + w + '%"></i></span><b>' + esc(String(h.downMbps)) + '</b></td><td>' +
+                esc(String(h.upMbps)) + '</td><td>' + esc(h.pingMs !== null && h.pingMs !== undefined ? h.pingMs + ' ' + T('ms') : '') + '</td><td class="dim">' + esc(h.driver || '') + '</td></tr>';
+        }).join('');
+        overlay('message', T('Speed test history'),
+            '<table class="speedhist"><tr class="head"><td>' + esc(T('When')) + '</td><td>' + esc(T('Download')) + '</td><td>' + esc(T('Upload')) + '</td><td>' + esc(T('Latency')) + '</td><td>' + esc(T('Driver')) + '</td></tr>' + rows + '</table>' +
+            '<div class="speed-meta">' + esc(usb2 ? T('Speeds in Mbit/s.  The bars go up to {cap}, about the most a USB 2.0 adapter can carry.', { cap: top }) :
+                T('Speeds in Mbit/s.  The bars go up to {cap}, about the most this link can carry.', { cap: top })) +
+            '  ' + esc(T('A new driver or firmware shows up as a change in the driver column.')) + '</div>',
+            T('Press OK or BACK to close.'));
+    }
+
     // ------------------------------------------------------------------ actions
 
     function installArgs(extra) { return 'install -y ' + extra; }
@@ -725,7 +1009,8 @@
                     act(T('Turn off at boot'), 'uninstall -y');
                 });
             } else {
-                act(T('Turn on at boot'), installArgs(''));
+                confirmThen(T('Run at every boot?'), T('A small boot hook makes your USB adapter the TV\'s eth0 at every start, so the TV\'s settings show the wired connection and apps that refuse eth1 play.  It doesn\'t change any system files.  Turning it off puts the built-in port back as eth0 at the next reboot.'),
+                    function () { act(T('Turn on at boot'), installArgs('')); });
             }
         },
         driver: function () {
@@ -771,7 +1056,13 @@
         watch: function () {
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.watch;
-            act(on ? T('Stop following plug and unplug') : T('Follow plug and unplug'), installArgs(on ? '--no-watch' : '--watch'));
+            if (on) {
+                confirmThen(T('Stop following plug and unplug?'), T('An adapter you plug in after boot stays as it is until you choose Switch now or reboot, and an adapter that stops answering is no longer restarted.'),
+                    function () { act(T('Stop following plug and unplug'), installArgs('--no-watch')); });
+            } else {
+                confirmThen(T('Follow plug and unplug?'), T('After boot, it keeps checking every few seconds: an adapter you plug in becomes eth0, and when it\'s unplugged, the built-in port gets eth0 back.  It also restarts an adapter that stops answering.  It starts from the next boot.'),
+                    function () { act(T('Follow plug and unplug'), installArgs('--watch')); });
+            }
         },
         realtek: function () {
             if (!state) { return; }
@@ -780,14 +1071,16 @@
                     T('Your Realtek adapter stays on the generic driver, which works but is slower.  It takes effect from the next boot.'),
                     function () { act(T('Realtek mode off'), installArgs('--no-realtek-mode')); });
             } else {
-                act(T('Realtek mode'), installArgs('--realtek-mode'));
+                confirmThen(T('Turn Realtek mode on?'), T('A Realtek RTL8152 or RTL8153 adapter left on the generic driver is switched to its Realtek mode, so the TV\'s own r8152 driver takes it, which is faster.  If r8152 doesn\'t take it within 5 seconds, it goes back to how it was.  It takes effect from the next boot.'),
+                    function () { act(T('Realtek mode'), installArgs('--realtek-mode')); });
             }
         },
         wifi: function () {
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.wifiFallback;
             if (on) {
-                act(T('Wi-Fi backup off'), installArgs('--no-wifi-fallback'));
+                confirmThen(T('Stop using Wi-Fi as a backup?'), T('If the cable stops working, the TV no longer turns Wi-Fi on by itself.  Wi-Fi stays as it is now.'),
+                    function () { act(T('Wi-Fi backup off'), installArgs('--no-wifi-fallback')); });
             } else {
                 var wakeOn = state.hook.state === 'enabled' && state.hook.wifiWake;
                 confirmThen(T('Use Wi-Fi as a backup?'),
@@ -800,7 +1093,8 @@
             if (!state) { return; }
             var on = state.hook.state === 'enabled' && state.hook.wifiWake;
             if (on) {
-                act(T('Wi-Fi wake off'), installArgs('--no-wifi-wake'));
+                confirmThen(T('Stop Wi-Fi wake in standby?'), T('The adapter stays connected in standby again, so on TVs that drop Wi-Fi then, Turn on via Wi-Fi may stop working.  It stops right away.'),
+                    function () { act(T('Wi-Fi wake off'), installArgs('--no-wifi-wake')); });
             } else {
                 confirmThen(T('Keep Wi-Fi wake in standby?'),
                     T('On some TVs, Turn on via Wi-Fi stops working in standby while the adapter is the main connection.  Just before standby, this disconnects only the adapter\'s network session (it stays plugged in), so Wi-Fi stays ready, and connects it again on wake.  Only when Wi-Fi is connected and Turn on via Wi-Fi is on.  Starts right away.'),
@@ -811,12 +1105,56 @@
             if (!state) { return; }
             if (state.hook.state === 'enabled' && state.hook.blockUpdates) {
                 confirmThen(T('Stop blocking updates harder?'),
-                    T('webOS\'s own update check goes back to how it was, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.'),
+                    T('A firmware update can remove root for good.  webOS\'s update check and automatic updates go back to how they were, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.'),
                     function () { act(T('Update blocking off'), installArgs('--no-block-updates')); });
             } else {
                 confirmThen(T('Block updates harder?'),
-                    T('A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  It turns off webOS\'s own update check, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  It starts now and at every boot, and turning it off undoes all of it.'),
+                    T('A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  It turns off webOS\'s own update check and automatic updates, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  It starts now, checks every 10 minutes that nothing undid it, and turning it off undoes all of it.'),
                     function () { act(T('Block updates'), installArgs('--block-updates')); });
+            }
+        },
+        phone: function () {
+            if (!state) { return; }
+            var h = state.hook, main = h.state === 'enabled' && h.blockUpdates;
+            if ((state.updates || {}).phone === 'none') {
+                overlay('message', T('Block phone app updates: not needed'),
+                    esc(T('On other LG TVs, the TV\'s phone connection (what LG ThinQ and casting talk to) lists calls that let LG\'s phone app start a firmware update.  This TV\'s doesn\'t list any, so there\'s nothing to block here.  If a firmware update adds them, the block covers them from the next TV start, as long as Block updates harder is on.')),
+                    T('Press OK or BACK to close.'));
+                return;
+            }
+            if (main && h.blockPhone !== false) {
+                confirmThen(T('Let phone apps start updates again?'),
+                    T('From the next TV start, LG\'s phone app (LG ThinQ) can tell the TV to download and install a firmware update again, which can remove root for good.  The rest of the block stays on.'),
+                    function () { act(T('Phone app updates allowed'), installArgs('--no-block-phone-updates')); });
+            } else {
+                confirmThen(T('Block phone app updates?'),
+                    T('LG\'s phone app (LG ThinQ) can tell the TV to download and install a firmware update straight from the phone, which gets past every server block.  This makes the TV\'s phone connection stop offering that, from the next TV start, since it reads its list when the TV starts.  Casting, the phone remote and everything else keep working.  Turning it off puts it back from the next start.') +
+                    (main ? '' : T('  It turns on Block updates harder too.')),
+                    function () { act(T('Phone app updates blocked'), installArgs((main ? '' : '--block-updates ') + '--block-phone-updates')); });
+            }
+        },
+        stopdl: function () {
+            if (!state) { return; }
+            var h = state.hook, main = h.state === 'enabled' && h.blockUpdates;
+            if (main && h.stopDownloads !== false) {
+                confirmThen(T('Turn off Stop firmware downloads?'),
+                    T('A firmware download that gets past the block runs to the end again.  The rest of the block stays on.'),
+                    function () { act(T('Stop firmware downloads off'), installArgs('--no-stop-downloads')); });
+            } else {
+                confirmThen(T('Stop firmware downloads?'),
+                    T('A last line of defense, in case LG finds a way past the block: every 30 seconds while LG\'s updater is busy, this checks whether it\'s downloading firmware and cancels it, with a message on the TV.  It never stops an install that\'s already under way, or a USB update you started yourself.  It starts now.') +
+                    (main ? '' : T('  It turns on Block updates harder too.')),
+                    function () { act(T('Stop firmware downloads'), installArgs((main ? '' : '--block-updates ') + '--stop-downloads')); });
+            }
+        },
+        remote: function () {
+            if (!state) { return; }
+            if (state.hook.state === 'enabled' && state.hook.blockRemoteSupport) {
+                confirmThen(T('Allow LG Remote Support again?'), T('LG\'s support staff can connect to this TV again when you start a remote support session, and could push a firmware update during it.  Don\'t start a session with LG while the TV is rooted.'),
+                    function () { act(T('Remote Support allowed'), installArgs('--no-block-remote-support')); });
+            } else {
+                confirmThen(T('Block LG Remote Support?'), T('Optional.  During an LG Remote Support session, LG\'s staff can push a firmware update straight to the TV, which skips the update check that Block updates harder stops.  This blocks the remote support servers so that can\'t happen.  The catch: LG support can\'t connect to your TV while it\'s on, so turn it off first if you ever need them to.  It starts now and at every boot.'),
+                    function () { act(T('Remote Support blocked'), installArgs('--block-remote-support')); });
             }
         },
         ipv6: function () {
@@ -989,6 +1327,11 @@
                 pick(items, d.choice, T('Cloudflare is the fastest by far, and Auto uses it.  The other servers are only a backup for networks where Cloudflare is blocked, like in Russia.  Most are small volunteer servers and measure well below your real speed.'));
             });
         },
+        netcheck: netCheck,
+        netinfo: netInfo,
+        traffic: liveTraffic,
+        health: linkHealth,
+        speedhist: speedHistory,
         report: function () {
             runScript('report', function (ok, out) {
                 // The issue form adds its own code block, so drop the fences.  Squeeze
@@ -1032,7 +1375,7 @@
             });
         },
         off: function () {
-            confirmThen(T('Turn everything off?'), T('This removes the boot hook and gives eth0 back to the built-in port now.  Do this before removing the app.'), function () {
+            confirmThen(T('Turn everything off?'), T('This removes the boot hook, gives eth0 back to the built-in port now, undoes every switch (the update blocks included) and deletes everything it kept on the TV: settings, log, history and downloaded drivers.  Removing the app does the same within about a minute, but this is quicker.'), function () {
                 act(T('Turn everything off'), 'uninstall -y --now', null, true);
             });
         },
@@ -1069,18 +1412,58 @@
 
     // ------------------------------------------------------------------ remote / keyboard
 
-    // Only the buttons on screen, in order (hidden rows are skipped)
-    function buttons() {
-        return Array.prototype.slice.call(document.querySelectorAll('.btn')).filter(function (b) {
-            return b.style.display !== 'none';
-        });
-    }
+    // Only the open tab's buttons on screen, in order (hidden rows are skipped)
+    function buttons() { return tabRows(tab); }
     var current = 0;
     function focusCurrent() {
+        // On the tab bar the open tab's rows still get laid out (and the
+        // scroll rail updated), only the focus goes to the tab
+        var tabEl = onTabs ? document.querySelector('.tab[data-tab="' + tab + '"]') : null;
+        if (onTabs && !tabEl) { onTabs = false; }
         var list = buttons();
-        if (!list.length) { return; }
+        if (!list.length) {
+            $('rail').className = 'rail';
+            if (tabEl) { tabEl.focus(); }
+            return;
+        }
         if (current >= list.length) { current = list.length - 1; }
-        list[current].focus();
+        // Scroll the rows so the focused one shows whole, starting the view at
+        // a row's top edge (never half a row at the top)
+        var box = $('rows'), first = 0, used = 0;
+        for (var i = current; i >= 0; i--) {
+            used += list[i].offsetHeight + 14;
+            if (used - 14 > box.clientHeight) { break; }
+            first = i;
+        }
+        box.scrollTop = first > 0 ? list[first].offsetTop - list[0].offsetTop : 0;
+        // A row that doesn't fit whole is hidden, not cut off, and arrows say
+        // there's more above or below (TVs draw text a little taller than a PC)
+        var top = box.scrollTop, bottom = top + box.clientHeight, above = false, below = false;
+        var shown = 0, firstShown = -1;
+        for (var j = 0; j < list.length; j++) {
+            var rt = list[j].offsetTop - list[0].offsetTop, rb = rt + list[j].offsetHeight;
+            var whole = rt >= top - 1 && rb <= bottom + 1;
+            list[j].style.visibility = whole ? '' : 'hidden';
+            if (whole) { shown++; if (firstShown < 0) { firstShown = j; } }
+            if (!whole && rb <= top + 1) { above = true; }
+            if (!whole && rt >= top) { below = true; }
+        }
+        // The rail sits beside the rows: thumb size is the share of rows on
+        // screen, its place is where they are in the list
+        var rail = $('rail'), more = above || below;
+        rail.className = 'rail' + (more ? ' show' : '');
+        if (more) {
+            var last = list[firstShown + shown - 1];
+            var h = last.offsetTop - list[0].offsetTop + last.offsetHeight - top;
+            rail.style.top = (box.offsetTop + 22) + 'px';
+            rail.style.height = Math.max(h - 44, 60) + 'px';
+            var track = rail.clientHeight;
+            $('rail-thumb').style.height = Math.max(track * shown / list.length, 24) + 'px';
+            $('rail-thumb').style.top = (track * firstShown / list.length) + 'px';
+            rail.children[0].className = 'rail-cap up' + (above ? ' lit' : '');
+            rail.children[2].className = 'rail-cap down' + (below ? ' lit' : '');
+        }
+        if (tabEl) { tabEl.focus(); } else { list[current].focus({ preventScroll: true }); }
     }
 
     function exitApp() {
@@ -1117,8 +1500,20 @@
             return;
         }
         var list = buttons();
+        // Up on the tab bar: LEFT and RIGHT pick a tab, DOWN or OK go into it
+        if (onTabs) {
+            if (k === KEY.LEFT) { stepTab(-1); }
+            else if (k === KEY.RIGHT) { stepTab(1); }
+            else if (k === KEY.DOWN || k === KEY.ENTER) { onTabs = false; current = 0; focusCurrent(); }
+            else if (k === KEY.BACK || k === KEY.ESC) { exitApp(); }
+            e.preventDefault();
+            return;
+        }
         if (k === KEY.DOWN) { current = Math.min(current + 1, list.length - 1); focusCurrent(); e.preventDefault(); }
+        else if (k === KEY.UP && current === 0) { onTabs = true; focusCurrent(); e.preventDefault(); }
         else if (k === KEY.UP) { current = Math.max(current - 1, 0); focusCurrent(); e.preventDefault(); }
+        else if (k === KEY.LEFT) { stepTab(-1); e.preventDefault(); }
+        else if (k === KEY.RIGHT) { stepTab(1); e.preventDefault(); }
         else if (k === KEY.ENTER) {
             var btn = list[current];
             if (btn && btn.className.indexOf('disabled') < 0) { actions[btn.getAttribute('data-action')](); }
@@ -1128,11 +1523,15 @@
 
     // Magic Remote pointer: hovering moves focus, clicking acts
     Array.prototype.slice.call(document.querySelectorAll('.btn')).forEach(function (btn) {
-        btn.addEventListener('mouseover', function () { current = buttons().indexOf(btn); focusCurrent(); });
+        btn.addEventListener('mouseover', function () { onTabs = false; current = buttons().indexOf(btn); focusCurrent(); });
         btn.addEventListener('click', function () {
             current = buttons().indexOf(btn);
             if (!overlayMode && btn.className.indexOf('disabled') < 0) { actions[btn.getAttribute('data-action')](); }
         });
+    });
+    // Magic Remote pointer on the tabs
+    Array.prototype.slice.call(document.querySelectorAll('.tab')).forEach(function (el) {
+        el.addEventListener('click', function () { if (!overlayMode) { onTabs = true; openTab(el.getAttribute('data-tab')); } });
     });
     $('overlay').addEventListener('click', function () {
         if (overlayMode === 'confirm' && onConfirm) { var fn = onConfirm; onConfirm = null; fn(); }
@@ -1152,6 +1551,8 @@
     try {
         if (window.sessionStorage.getItem('lgu2e.focus') === 'lang') {
             window.sessionStorage.removeItem('lgu2e.focus');
+            tab = 'more';
+            fitRows();
             current = buttons().indexOf(document.querySelector('[data-action="lang"]'));
         }
     } catch (e) { /* first row */ }

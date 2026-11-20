@@ -2,6 +2,26 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.46] - 2026-11-19
+
+### Changed
+
+- **A new menu, made for big TVs.**  The menu is split into tabs (Connection, Block updates, Driver, Network and More), with bigger text and a longer description on every row.  UP from a tab's first row goes to the tabs, LEFT and RIGHT switch between them, and a slim scroll bar shows when a tab has more rows than fit.
+
+### Added
+
+- **Five new tools on the Network tab, and over SSH.**  Check connection tests the cable, address, router, DNS and internet one step at a time and says where it breaks, along with whether apps use `eth0` and whether the LG servers you blocked stay blocked (`netcheck`).  Network details shows the address, router, DNS servers, MAC address and MTU (`netinfo`).  Live traffic shows how fast data is moving through the adapter and Wi-Fi, every second (`traffic`).  Link health shows how long the cable link has been up, its drops and errors, and the recent changes.  Speed test history lists your earlier tests with the driver each ran on, against what the connection can carry.
+- **Block updates harder now covers phone apps and stops a download that starts anyway, like FW Block.**  LG's phone app (LG ThinQ) can tell the TV to download a firmware update straight from the phone, which gets past every server block: the TV's phone connection now stops offering that, from the next TV start (Block phone app updates, `--no-block-phone-updates` to leave it open).  And every 30 seconds while LG's updater is busy, a firmware download is cancelled, with a message on the TV, while an install or a USB update is left alone (Stop firmware downloads, `--no-stop-downloads`).  Both are on with the block, have their own switches in the app, and show in Check connection and the report.
+- **One more driver confirmed working, now offered by Faster driver.**  Realtek's `r8152_oot` for kernel `5.4.268-329.ptl4tv.2` ran an RTL8153 adapter as `eth0` on a 2022 G2 (OLED65G26LA, webOS 25), online at 1000 Mbit/s (lasharor, issue #53).
+- **Block LG Remote Support, an optional new switch (`--block-remote-support`), off by default.**  During an LG Remote Support session, LG's staff can push a firmware update that skips the update check the update block stops (found in the C2's firmware, and the same on webOS 26).  This blocks LG's remote support servers in `/etc/hosts` and the two it reaches by IP, checked every 10 minutes like the update block.  While it's on, LG support can't connect to the TV, which the app says before you turn it on.
+- **Every switch in the app asks first.**  Run at every boot, Follow plug and unplug, Realtek mode, Wi-Fi as a backup and Wi-Fi wake used to switch at once in one direction or both.  Now every switch, on and off, says what it does and how to undo it, and goes ahead only on OK.
+
+### Fixed
+
+- **Turn everything off now leaves nothing behind, and removing the app cleans up too.**  `uninstall` used to keep the log, the update block's counts, the connection history and downloaded drivers.  Now it deletes every file the script kept, along with undoing every option.  And since webOS runs nothing when an app is removed, the background job now checks every 30 seconds that the app is still there: gone for about a minute, it undoes everything the same way.  It also fixed the update block's `/etc/hosts` lines staying behind when they were the only lines in the file.
+- **Block updates harder also turns off webOS's automatic updates.**  The updater reads a second setting (`automaticUpdate`) along with the update check, and with it on, installs an update it finds without asking.  It's now turned off too, checked every 10 minutes, and put back how it was when the option is turned off.
+- **No more warning about the updater's server flag.**  2.11.44 warned when one of the updater's server flag files showed up, but the updater makes one itself, and every server they pick is one the block covers.  They're only listed in the report now.
+
 ## [2.11.45] - 2026-11-19
 
 ### Added

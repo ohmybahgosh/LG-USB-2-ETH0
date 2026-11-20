@@ -62,9 +62,18 @@ function savePng(raw, name) {
     await page.waitForTimeout(wait);
   };
   await shot('?x=1', 'app-home.png');
+  // The More tab, where the Update row is
   await shot('?ver=2.4.1', 'app-update.png', async () => {
-    await page.evaluate(() => document.querySelector('[data-action="update"]').focus());
+    for (let i = 0; i < 4; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(150); }
+    await page.waitForTimeout(300);
   });
+  // The Block updates tab, and Check connection on the Network tab
+  await shot('?x=1', 'app-block.png', async () => {
+    await page.evaluate((v) => { try { localStorage.setItem('lgu2e.seenVersion', v); } catch (e) {} }, '2.11.46');
+    await page.reload(); await page.waitForTimeout(800);
+    await page.keyboard.press('ArrowRight'); await page.waitForTimeout(400);
+  });
+  await shot('?x=1', 'app-netcheck.png', click('netcheck', 2000));
   await shot('?sd=50', 'app-speed.png', click('speed', 800));
   await shot('?x=1', 'app-report.png', click('report', 500));
   // Upgrade from v1: the walk-through's three steps

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fake `getent` for the test suite: `getent hosts|ahostsv4 NAME` answers with a made-up
+# address, or nothing (exit 2) when $FAKE_STATE/dns_fail exists
+echo "getent $*" >> "$FAKE_STATE/getent.log"
+case "$1" in hosts|ahostsv4) ;; *) exit 1 ;; esac
+[ -e "$FAKE_STATE/dns_fail" ] && exit 2
+echo "142.250.0.1     $2"

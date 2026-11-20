@@ -3,11 +3,19 @@
 # with the version in $FAKE_STATE/appver (as if an install had finished).
 # Wi-Fi's switch is $FAKE_STATE/wifi ("enabled" or "disabled", default off);
 # $FAKE_STATE/wifi-broken makes setstate fail.  webOS's update check
-# (support/softwareUpdateEnable) is $FAKE_STATE/updcheck, default true.
+# (support/softwareUpdateEnable) is $FAKE_STATE/updcheck, default true, and its
+# automatic updates (support/automaticUpdate) $FAKE_STATE/autoupd, default on.
 # getPowerState sends the states listed in $FAKE_STATE/power_events, and
 # network settings' wolwowlOnOff is $FAKE_STATE/wolwowl, default true.
 printf 'luna-send %s\n' "$*" >> "$FAKE_STATE/luna.log"
 case "$*" in
+    # webOS's updater: its status is $FAKE_STATE/upd_status (default idle),
+    # and cancelUpdate sets it back to idle
+    *com.webos.service.update/getStatus*)
+        printf '{"returnValue":true,"status":"%s"}\n' "$(cat "$FAKE_STATE/upd_status" 2>/dev/null || echo idle)" ;;
+    *com.webos.service.update/cancelUpdate*)
+        echo idle > "$FAKE_STATE/upd_status"
+        echo '{"returnValue":true}' ;;
     *getPowerState*)
         # The TV's power state: each line of $FAKE_STATE/power_events, as
         # it's added.  With -i (subscribed) it keeps following the file.
@@ -44,6 +52,12 @@ case "$*" in
         echo '{"returnValue":true}' ;;
     *getSystemSettings*wolwowlOnOff*)
         printf '{"returnValue":true,"category":"network","settings":{"wolwowlOnOff":"%s"}}\n' "$(cat "$FAKE_STATE/wolwowl" 2>/dev/null || echo true)" ;;
+    *getSystemSettings*automaticUpdate*)
+        printf '{"returnValue":true,"category":"support","settings":{"automaticUpdate":"%s"}}\n' "$(cat "$FAKE_STATE/autoupd" 2>/dev/null || echo on)" ;;
+    *setSystemSettings*automaticUpdate*)
+        _au=$(echo "$*" | sed -n 's/.*"automaticUpdate":"\([a-z]*\)".*/\1/p')
+        [ -n "$_au" ] && echo "$_au" > "$FAKE_STATE/autoupd"
+        echo '{"returnValue":true}' ;;
     *getSystemSettings*softwareUpdateEnable*)
         printf '{"returnValue":true,"category":"support","settings":{"softwareUpdateEnable":"%s"}}\n' "$(cat "$FAKE_STATE/updcheck" 2>/dev/null || echo true)" ;;
     *setSystemSettings*softwareUpdateEnable*)

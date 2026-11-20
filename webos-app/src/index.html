@@ -22,30 +22,49 @@
     </section>
 
     <section class="actions" id="actions">
-      <div class="btn btn-update" tabindex="0" data-action="upgrade" style="display:none"><span><span class="upd-title">Upgrade from v1</span><small>replaces the old boot hook, step by step</small></span></div>
-      <div class="btn btn-update" tabindex="0" data-action="update" style="display:none"><span><span id="update-title">Update</span><small id="update-hint"></small></span></div>
-      <div class="btn" tabindex="0" data-action="boot">Run at every boot <span class="tog" id="tog-boot"></span></div>
-      <div class="btn" tabindex="0" data-action="driver"><span>Faster driver<small id="driver-hint"></small></span> <span class="tog" id="tog-driver"></span></div>
-      <div class="btn" tabindex="0" data-action="realtek" style="display:none"><span>Realtek mode<small id="realtek-hint">uses the TV's own Realtek driver</small></span> <span class="tog" id="tog-realtek"></span></div>
-      <div class="btn" tabindex="0" data-action="drvtest" style="display:none"><span>Test a new driver<small id="drvtest-hint"></small></span></div>
-      <div class="btn" tabindex="0" data-action="watch"><span>Follow plug and unplug<small>from the next boot</small></span> <span class="tog" id="tog-watch"></span></div>
-      <div class="btn" tabindex="0" data-action="wifi"><span>Wi-Fi as a backup<small id="wifi-hint">if the cable stops working</small></span> <span class="tog" id="tog-wifi"></span></div>
-      <div class="btn" tabindex="0" data-action="wake"><span>Wi-Fi wake in standby<small>for Turn on via Wi-Fi</small></span> <span class="tog" id="tog-wake"></span></div>
-      <div class="btn" tabindex="0" data-action="ipv6" style="display:none"><span>Turn off IPv6<small id="ipv6-hint">for networks where IPv6 is broken</small></span> <span class="tog" id="tog-ipv6"></span></div>
-      <div class="btn" tabindex="0" data-action="eee" style="display:none"><span>Turn off Energy Efficient Ethernet<small id="eee-hint">for a link that drops for a few seconds</small></span> <span class="tog" id="tog-eee"></span></div>
-      <div class="btn" tabindex="0" data-action="updates"><span>Block updates harder<small id="updates-hint">on top of the Homebrew Channel's block</small></span> <span class="tog" id="tog-updates"></span></div>
-      <div class="btn" tabindex="0" data-action="apply">Switch now <small>applies without a reboot</small></div>
-      <div class="btn" tabindex="0" data-action="speed">Speed test <small>download, upload and latency</small></div>
-      <div class="btn" tabindex="0" data-action="speedsrv"><span>Speed test server<small id="speedsrv-hint">Auto: Cloudflare, or the closest other server</small></span></div>
-      <div class="btn" tabindex="0" data-action="report">Report for GitHub <small>shows a QR code</small></div>
-      <div class="btn" tabindex="0" data-action="lang">Language <small id="lang-hint"></small></div>
-      <div class="btn" tabindex="0" data-action="about">About and licenses <small>free and open source</small></div>
-      <div class="btn" tabindex="0" data-action="off">Turn everything off <small>back to the built-in port</small></div>
+      <nav class="tabs" id="tabs">
+        <span class="tab" tabindex="0" data-tab="conn">Connection</span>
+        <span class="tab" tabindex="0" data-tab="fw">Block updates</span>
+        <span class="tab" tabindex="0" data-tab="driver">Driver</span>
+        <span class="tab" tabindex="0" data-tab="net">Network</span>
+        <span class="tab" tabindex="0" data-tab="more">More</span>
+      </nav>
+      <div class="rows" id="rows">
+      <div class="btn btn-update" tabindex="0" data-tab="more" data-action="upgrade" style="display:none"><span><span class="upd-title">Upgrade from v1</span><small>replaces the old boot hook, step by step</small></span></div>
+      <div class="btn btn-update" tabindex="0" data-tab="more" data-action="update" style="display:none"><span><span id="update-title">Update</span><small id="update-hint"></small></span></div>
+      <div class="btn" tabindex="0" data-tab="conn" data-action="boot"><span>Run at every boot<small>makes the USB adapter eth0 every time the TV starts</small></span> <span class="tog" id="tog-boot"></span></div>
+      <div class="btn" tabindex="0" data-tab="conn" data-action="apply"><span>Switch now<small>makes the adapter eth0 right away, no reboot needed</small></span></div>
+      <div class="btn" tabindex="0" data-tab="driver" data-action="driver"><span>Faster driver<small id="driver-hint"></small></span> <span class="tog" id="tog-driver"></span></div>
+      <div class="btn" tabindex="0" data-tab="driver" data-action="realtek" style="display:none"><span>Realtek mode<small id="realtek-hint">uses the TV's own Realtek driver</small></span> <span class="tog" id="tog-realtek"></span></div>
+      <div class="btn" tabindex="0" data-tab="driver" data-action="drvtest" style="display:none"><span>Test a new driver<small id="drvtest-hint"></small></span></div>
+      <div class="btn" tabindex="0" data-tab="conn" data-action="watch"><span>Follow plug and unplug<small>an adapter plugged in later becomes eth0, and a stuck one is restarted</small></span> <span class="tog" id="tog-watch"></span></div>
+      <div class="btn" tabindex="0" data-tab="conn" data-action="wifi"><span>Wi-Fi as a backup<small id="wifi-hint">turns Wi-Fi on if the cable stops working, and off when it's back</small></span> <span class="tog" id="tog-wifi"></span></div>
+      <div class="btn" tabindex="0" data-tab="conn" data-action="wake"><span>Wi-Fi wake in standby<small>keeps Turn on via Wi-Fi working in standby with the adapter in</small></span> <span class="tog" id="tog-wake"></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="ipv6" style="display:none"><span>Turn off IPv6<small id="ipv6-hint">for networks where IPv6 is broken</small></span> <span class="tog" id="tog-ipv6"></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="eee" style="display:none"><span>Turn off Energy Efficient Ethernet<small id="eee-hint">for a link that drops for a few seconds</small></span> <span class="tog" id="tog-eee"></span></div>
+      <div class="btn" tabindex="0" data-tab="fw" data-action="updates"><span>Block updates harder<small id="updates-hint">turns off webOS's update check and automatic updates and blocks every LG update server the Homebrew Channel misses, so an update can't remove root for good</small></span> <span class="tog" id="tog-updates"></span></div>
+      <div class="btn" tabindex="0" data-tab="fw" data-action="phone"><span>Block phone app updates<small id="phone-hint">with Block updates harder: stops LG ThinQ on a phone pushing a firmware update straight to the TV, which gets past every server block</small></span> <span class="tog" id="tog-phone"></span></div>
+      <div class="btn" tabindex="0" data-tab="fw" data-action="stopdl"><span>Stop firmware downloads<small id="stopdl-hint">a last line of defense with Block updates harder: cancels a firmware download that gets past the block, with a message on the TV</small></span> <span class="tog" id="tog-stopdl"></span></div>
+      <div class="btn" tabindex="0" data-tab="fw" data-action="remote"><span>Block LG Remote Support<small id="remote-hint">optional, off by default: stops LG's staff pushing a firmware update during a remote support session.  LG support can't connect while it's on</small></span> <span class="tog" id="tog-remote"></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="netcheck"><span>Check connection<small>tests the cable, address, router, DNS and internet one step at a time, and says where it breaks</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="speed"><span>Speed test<small>measures download, upload and latency over the TV's connection</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="netinfo"><span>Network details<small>the address, router, DNS servers, MAC address and MTU eth0 is using</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="traffic"><span>Live traffic<small>how fast data is moving through the adapter and Wi-Fi right now, updated every second</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="health"><span>Link health<small id="health-hint">how long the cable link has been up, with its drops and errors</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="speedhist" style="display:none"><span>Speed test history<small id="speedhist-hint">your earlier speed tests, with the driver each ran on</small></span></div>
+      <div class="btn" tabindex="0" data-tab="net" data-action="speedsrv"><span>Speed test server<small id="speedsrv-hint">Auto: Cloudflare, or the closest other server</small></span></div>
+      <div class="btn" tabindex="0" data-tab="more" data-action="report"><span>Report for GitHub<small>a QR code that opens a filled-in compatibility report on your phone</small></span></div>
+      <div class="btn" tabindex="0" data-tab="more" data-action="lang"><span>Language<small id="lang-hint"></small></span></div>
+      <div class="btn" tabindex="0" data-tab="more" data-action="about"><span>About and licenses<small>free and open source under the MIT License, with credits</small></span></div>
+      <div class="btn" tabindex="0" data-tab="more" data-action="off"><span>Turn everything off<small>undoes every switch, gives eth0 back to the built-in port, and deletes everything it kept on the TV</small></span></div>
+      </div>
+      <div class="rail" id="rail"><i class="rail-cap up"></i><b class="rail-thumb" id="rail-thumb"></b><i class="rail-cap down"></i></div>
     </section>
   </main>
 
   <footer>
     <span><span class="k">OK</span>Select</span>
+    <span><span class="k">◀ ▶</span>Tabs</span>
     <span><span class="k">▲ ▼</span>Move</span>
     <span><span class="k">BACK</span>Exit</span>
     <span class="right">github.com/ohmybahgosh/LG-USB-2-ETH0</span>

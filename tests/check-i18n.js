@@ -28,6 +28,10 @@ const says = app.match(/var DT_SAYS = \{([\s\S]*?)\};/);
 if (!says) { console.log('DT_SAYS not found in app.js'); process.exit(1); }
 const vals = says[1].match(/:\s*'((?:[^'\\]|\\.)*)'/g).map((v) => v.replace(/^:\s*'|'$/g, '').replace(/\\'/g, "'"));
 vals.forEach((t) => used.add(t));
+// The link history's events, on Link health
+const links = app.match(/var LINK_SAYS = \{([\s\S]*?)\};/);
+if (!links) { console.log('LINK_SAYS not found in app.js'); process.exit(1); }
+links[1].match(/:\s*'((?:[^'\\]|\\.)*)'/g).map((v) => v.replace(/^:\s*'|'$/g, '').replace(/\\'/g, "'")).forEach((t) => used.add(t));
 ['latency', 'download', 'upload', 'Added', 'Fixed', 'Changed', 'Auto ({lang})'].forEach((t) => used.add(t));
 // index.html's own text, between tags
 html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/>([^<>]+)</g, (all, t) => {

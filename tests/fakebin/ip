@@ -5,6 +5,7 @@
 #   ip link set dev IF up|down
 #   ip link set dev IF name NEW
 #   ip -o -4 addr show [dev IF]
+#   ip -o -6 addr show dev IF scope global
 #   ip route
 #   ip neigh show dev IF
 # A file $FAKE_STATE/fail_rename_IF holding a number makes that many renames
@@ -56,6 +57,11 @@ case "$1" in
                 esac ;;
         esac ;;
     -o)
+        # ip -o -6 addr show dev IF scope global: $FAKE_STATE/addr6, like addr
+        if [ "$2" = -6 ]; then
+            [ -f "$FAKE_STATE/addr6" ] && awk -v d="$6" '$2 == d' "$FAKE_STATE/addr6"
+            exit 0
+        fi
         # ip -o -4 addr show [dev IF]
         [ -f "$FAKE_STATE/addr" ] || exit 0
         if [ "$5" = dev ]; then

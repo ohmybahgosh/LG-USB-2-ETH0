@@ -181,7 +181,7 @@ run() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" \
         LGU2E_ROOT="$ROOT" LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 LGU2E_UPD_EVERY=2 \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_SPEED_SECS=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" FAKE_KERNEL="${FAKE_KERNEL:-}" FAKE_SOC="${FAKE_SOC:-}" LGU2E_TEST_DRIVER="${LGU2E_TEST_DRIVER:-}" LGU2E_TEST_EXPERIMENTAL="${LGU2E_TEST_EXPERIMENTAL:-}" LGU2E_TEST_TESTED="${LGU2E_TEST_TESTED:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" LGU2E_NET_CHECK=4 LGU2E_NOMOUNT=1 LGU2E_SPEED_SECS=1 LGU2E_TRAFFIC_SECS="${TRAFFIC_SECS:-1}" LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_RELEASES=https://releases.test \
         FAKE_STATE="$STATE" SSH_CONNECTION="${SSH_CONNECTION_TEST:-}" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SPEED_LIBRE="$FAKE_LIBRE" \
         LGU2E_APP_FIRMWARE="${APP_FIRMWARE:-}" LGU2E_APP_MODEL="${APP_MODEL:-}" LGU2E_APP_BOARD="${APP_BOARD:-}" LGU2E_APP_LANG="${APP_LANG:-}" LGU2E_RELEASE_PUBKEY="$KEYDIR/key.pub $KEYDIR/backup.pub" \
@@ -196,7 +196,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 LGU2E_UPD_EVERY=2 \
-        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 \
+        LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_NOMOUNT=1 LGU2E_GUARD_EVERY=1 LGU2E_APP_GONE_SECS=1 LGU2E_APP_CHECK_EVERY=2 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
 }
@@ -1104,7 +1104,9 @@ test_block_updates() {
     check "exit 0" rc_is 0
     check "saved" grep -q '^BLOCK_UPDATES="1"' "$CONF"
     check "update check off" grep -qx false "$STATE/updcheck"
+    check "automatic updates off" grep -qx off "$STATE/autoupd"
     check "remembers it was on" grep -qx true "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "remembers automatic updates were on" grep -qx on "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
     check "adds nsu.lge.com" grep -q "nsu.lge.com" "$SB/hosts"
     check "adds snu-dev.lge.com" grep -q "snu-dev.lge.com" "$SB/hosts"
     check "doesn't repeat the HBC ones" sh -c "! grep 'lg-usb-2-eth0' '$SB/hosts' | grep -q ' snu.lge.com '"
@@ -1121,6 +1123,7 @@ test_block_updates() {
     check "status names it" has "blocks firmware updates"
     run install -y --no-block-updates
     check "update check back on" grep -qx true "$STATE/updcheck"
+    check "automatic updates back on" grep -qx on "$STATE/autoupd"
     check "our hosts lines gone" sh -c "! grep -q 'lg-usb-2-eth0' '$SB/hosts'"
     check "HBC's lines kept" grep -q '^127.0.0.1 snu.lge.com su-dev.lge.com' "$SB/hosts"
     check "firewall rule gone" sh -c "! grep -q 156.147.69.32 '$STATE/iptables'"
@@ -1230,20 +1233,61 @@ test_block_starts_now() {
     sleep 2
     check "light: the adapter isn't moved" is eth1 usb:1-1
     check "light: no following" lacks_log "Watching for the adapter"
+    # The updater's own server flag: covered by the block, so only listed in
+    # the report, never warned about
     mkdir -p "$ROOT/mnt/lg/cmn_data/update"
     touch "$ROOT/mnt/lg/cmn_data/update/.nsuServerTypeSDP"
-    check "notes a server switch" wait_log "switched to another update server (SDP)"
-    sleep 3
-    check "noted once" test "$(grep -c 'another update server' "$LOG")" = 1
+    echo on > "$STATE/autoupd"
+    check "turns automatic updates off again" wait_log "update block was partly undone (auto)"
     check "leaves LG's file alone" test -e "$ROOT/mnt/lg/cmn_data/update/.nsuServerTypeSDP"
     run status
-    check "status says so" has "switched to another update server (SDP)"
+    check "no warning for it" lacks "update server"
+    run report
+    check "report lists it" has "updater server flag SDP"
     run status --json
-    check "json says so" json_ok "$OUT" "d['updates']['serverSwitch'] == 'SDP'"
+    check "json lists it" json_ok "$OUT" "d['updates']['serverFlag'] == 'SDP' and d['updates']['auto'] == 'off'"
     # With the job running, saving again carries it on as it was
     run install -y --no-ipv6-off
     check "restarted once more" wait_for_file "$LOG" "Checking the update block"
     check "two starts" test "$(grep -c 'started again with the new settings' "$LOG")" = 2
+    stop_bg
+}
+
+# --block-remote-support: LG Remote Support's servers blocked too, off by
+# default, apart from the update block, checked after boot, and undone
+test_block_remote_support() {
+    add_builtin
+    hbc_hosts
+    run install -y --block-updates --wait 2
+    check "off by default" sh -c "! grep -q 'rone-' '$SB/hosts'"
+    run status --json
+    check "json: off by default" json_ok "$OUT" "d['hook']['blockRemoteSupport'] is False"
+    run install -y --block-remote-support
+    check "says it's on" has "Block LG Remote Support"
+    check "hosts" grep -q "rone-tv-aic.lge.com # lg-usb-2-eth0 block-remote-support" "$SB/hosts"
+    check "all nine" test "$(grep -c '^0.0.0.0.*block-remote-support' "$SB/hosts")" = 9
+    check "first IP" grep -q "165.244.62.249" "$STATE/iptables"
+    check "second IP" grep -q "165.244.99.174" "$STATE/iptables"
+    check "update block kept" grep -q "nsu.lge.com" "$SB/hosts"
+    run status --json
+    check "json: on, nothing missing" json_ok "$OUT" "d['hook']['blockRemoteSupport'] is True and d['remoteSupport']['missingHosts'] == '' and d['remoteSupport']['missingIps'] == ''"
+    run status
+    check "status names it" has "blocks LG Remote Support"
+    run report
+    check "report says so" has "Remote Support block: in place"
+    check "job checks it" wait_log "Checking the LG Remote Support block every"
+    sed -i '/165.244.99.174/d' "$STATE/iptables"
+    check "puts it back" wait_log "LG Remote Support block was partly undone (firewall)"
+    check "rule back" wait_for_file "$STATE/iptables" 165.244.99.174
+    run install -y --no-block-remote-support
+    check "off again" has "LG Remote Support isn't blocked anymore"
+    check "hosts lines gone" sh -c "! grep -q 'block-remote-support' '$SB/hosts'"
+    check "rules gone" sh -c "! grep -q '165.244' '$STATE/iptables'"
+    check "update block still there" grep -q "nsu.lge.com" "$SB/hosts"
+    run install -y --block-remote-support
+    run uninstall -y
+    check "uninstall undoes it" has "Undid --block-remote-support"
+    check "uninstall: clean" sh -c "! grep -q '165.244' '$STATE/iptables'"
     stop_bg
 }
 
@@ -1646,6 +1690,7 @@ t block_updates_without_hbc test_block_updates_without_hbc
 t block_rechecks test_block_rechecks
 t link_history test_link_history
 t block_starts_now test_block_starts_now
+t block_remote_support test_block_remote_support
 t eee_off test_eee_off
 t disable_enable test_disable_enable
 t upgrade_v1 test_upgrade_v1
@@ -1919,7 +1964,7 @@ test_concurrent_lang_saves() {
         check "round $round: watch kept" grep -q '^WATCH="1"' "$CONF"
         check "round $round: wake kept" grep -q '^WIFI_WAKE="1"' "$CONF"
         check "round $round: one language line" test "$(grep -c '^UI_LANG=' "$CONF")" = 1
-        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 16
+        check "round $round: every line kept" test "$(wc -l < "$CONF")" = 19
     done
     check "no temp files left" sh -c "! ls '$CONF'.new* 2>/dev/null | grep -q ."
     check "no lock left" test ! -e "$CONF.lock"
@@ -2237,6 +2282,257 @@ test_speedtest_offline() {
     check "says it couldn't reach it" has "Couldn't reach"
     run status --json
     check "no speed in json" json_ok "$OUT" "d['speed'] is None"
+}
+
+# The phone gateway's update file, as webOS 25 has it
+ssg_file() {
+    SSG=$ROOT/usr/palm/services/com.webos.service.secondscreen.gateway/interfaces/com.webos.service.update.interface
+    mkdir -p "${SSG%/*}"
+    cat > "$SSG" <<'SSG_EOF'
+{
+	"service": "com.webos.service.update",
+	"methods": [
+		{"path": "/getCurrentSWInformation", "requiredPermissions": ["READ_UPDATE_INFO"]},
+		{"path": "/startUpdateByRemoteApp", "requiredPermissions": ["UPDATE_FROM_REMOTE_APP"]},
+		{"path": "/getProgress", "requiredPermissions": ["UPDATE_FROM_REMOTE_APP"]},
+		{"path": "/getStatus", "requiredPermissions": ["UPDATE_FROM_REMOTE_APP"]}
+	]
+}
+SSG_EOF
+}
+
+# --block-updates also stops phone apps starting an update, through the
+# phone gateway's file, and turning it off puts the file back
+test_block_phone_updates() {
+    add_builtin
+    ssg_file
+    run install -y --block-updates
+    check "install exits 0" rc_is 0
+    check "says from the next start" has "from the next TV start"
+    check "the update call is gone" sh -c "! grep -q startUpdateByRemoteApp '$SSG'"
+    check "the read-only call stays" grep -q getCurrentSWInformation "$SSG"
+    check "the copy is valid JSON" python3 -c "import json, sys; json.load(open(sys.argv[1]))" "$SSG"
+    check "saved" grep -qx 'BLOCK_PHONE="1"' "$CONF"
+    run status --json
+    check "json: from the next start" json_ok "$OUT" "d['updates']['phone'] == 'next' and d['hook']['blockPhone'] and d['hook']['stopDownloads']"
+    run netcheck --json
+    check "netcheck: a warning until the next start" json_ok "$OUT" "[s['result'] for s in d['steps'] if s['id'] == 'phone'] == ['warn']"
+    run install -y --no-block-phone-updates
+    check "the file is back" grep -q startUpdateByRemoteApp "$SSG"
+    run status --json
+    check "json: open, by choice" json_ok "$OUT" "d['updates']['phone'] == 'open' and not d['hook']['blockPhone'] and 'phone' not in d['updates']['missingHosts']"
+    run report
+    check "report: not a gap when it's off" lacks "missing phone"
+    # A restart: the mount and its mark are gone, and the boot hook puts it
+    # back before the gateway starts
+    run install -y --block-phone-updates --wait 2
+    cp "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.update.interface.orig" "$SSG"
+    rm -f "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.phone" "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.update.interface"*
+    run_hook
+    check "boot blocks it" wait_log "Blocked phone apps from starting a firmware update."
+    check "mark says boot" grep -qx boot "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.phone"
+    run status --json
+    check "json: blocked" json_ok "$OUT" "d['updates']['phone'] == 'blocked'"
+    stop_bg
+    run install -y --no-block-updates
+    check "turning the block off puts it back" grep -q startUpdateByRemoteApp "$SSG"
+    check "and the mark goes" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.phone"
+}
+
+# Something else (like FW Block) already blocked it: left alone
+test_block_phone_other() {
+    add_builtin
+    ssg_file
+    sed -i '/UPDATE_FROM_REMOTE_APP/d' "$SSG"
+    run install -y --block-updates
+    check "no mark" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.phone"
+    run status --json
+    check "json: other" json_ok "$OUT" "d['updates']['phone'] == 'other'"
+    rm -f "$SSG"
+    run status --json
+    check "json: none without the file" json_ok "$OUT" "d['updates']['phone'] == 'none'"
+}
+
+# The download guard cancels a firmware download that starts anyway, and
+# leaves an install alone
+test_download_guard() {
+    add_builtin
+    run install -y --block-updates --wait 2
+    run_hook
+    check "guard on" wait_log "Stopping firmware downloads"
+    echo downloading > "$STATE/upd_status"
+    touch "$ROOT/tmp/nsu-running"
+    check "stops it" wait_log "stopped a firmware download (downloading)"
+    check "asked the updater to cancel" grep -q cancelUpdate "$STATE/luna.log"
+    check "toast" grep -q 'stopped a firmware update download' "$STATE/luna.log"
+    echo installing > "$STATE/upd_status"
+    check "an install is left alone" wait_log "is installing"
+    stop_bg
+    check "one cancel only" test "$(grep -c cancelUpdate "$STATE/luna.log")" = 1
+    run status --json
+    check "json counts it" json_ok "$OUT" "d['updates']['cancelled'] == 1 and d['updates']['lastCancel'] > 0"
+    run status
+    check "status says so" has "A firmware download started in the last week"
+    run install -y --no-stop-downloads
+    check "saved off" grep -qx 'STOP_DL="0"' "$CONF"
+    run status --json
+    check "json: off" json_ok "$OUT" "not d['hook']['stopDownloads']"
+}
+
+# uninstall puts back everything and leaves none of its files behind
+test_uninstall_clean() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    ssg_file
+    cp /etc/hosts "$SB/hosts" 2>/dev/null || : > "$SB/hosts"
+    cp "$SB/hosts" "$SB/hosts.before"
+    run install -y --block-updates --block-remote-support --ipv6-off --wait 2
+    run_hook
+    check "boot ran" wait_log "Done: the USB adapter is eth0"
+    run speedtest
+    echo "$(date +%s) lost" > "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.links"
+    stop_bg
+    run uninstall -y
+    check "exit 0" rc_is 0
+    check "hook gone" test ! -e "$HOOK"
+    check "settings gone" test ! -e "$CONF"
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "automatic updates back on" grep -qx on "$STATE/autoupd"
+    check "hosts as before" cmp -s "$SB/hosts" "$SB/hosts.before"
+    check "no firewall rules left" sh -c "! grep -q 'DROP' '$STATE/iptables' 2>/dev/null"
+    check "phone file back" grep -q startUpdateByRemoteApp "$SSG"
+    check "no files left in /var/lib/webosbrew" sh -c "! ls '$ROOT/var/lib/webosbrew' | grep -q lg-usb-2-eth0"
+    check "no copy left in /home/root" test ! -e "$ROOT/home/root/lg-usb-2-eth0"
+    check "run folder empty" sh -c "[ -z \"\$(ls -A '$ROOT/tmp/lg-usb-2-eth0' 2>/dev/null)\" ]"
+}
+
+# Removing the TV app: webOS runs nothing, so the background job notices
+# the app's folder is gone and undoes everything, like uninstall
+test_app_removed() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    ssg_file
+    : > "$SB/hosts"
+    run install -y --block-updates --wait 2
+    local app=$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0
+    mkdir -p "$app/assets"
+    echo '{"id":"org.ohmybahgosh.lgusb2eth0"}' > "$app/appinfo.json"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    ln -sfn "$app/assets/lg-usb-2-eth0.sh" "$HOOK"
+    # The job install started runs the old link's copy: as after a restart
+    stop_bg
+    run_hook
+    check "boot ran" wait_log "Stopping firmware downloads"
+    check "blocking" grep -qx false "$STATE/updcheck"
+    # An app update replaces the folder for a moment: not a removal
+    mv "$app" "$app.tmp"; sleep 1; mv "$app.tmp" "$app"
+    sleep 4
+    check "a short gap is ignored" test -e "$CONF"
+    rm -rf "$app"
+    local i=0
+    while [ -e "$CONF" ] && [ "$i" -lt 30 ]; do sleep 1; i=$((i + 1)); done
+    check "settings gone" test ! -e "$CONF"
+    check "hook gone" test ! -e "$HOOK"
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "hosts lines gone" sh -c "! grep -q lg-usb-2-eth0 '$SB/hosts'"
+    check "phone file back" grep -q startUpdateByRemoteApp "$SSG"
+    check "no files left" sh -c "! ls '$ROOT/var/lib/webosbrew' | grep -q lg-usb-2-eth0"
+    check "the job stopped" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.pid"
+}
+
+# net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
+# some counters, for netinfo, traffic and netcheck
+net_fixture() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    run apply -y
+    echo "2: eth0 inet 192.168.1.42/24" > "$STATE/addr"
+    echo "2: eth0 inet6 2001:db8::42/64" > "$STATE/addr6"
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    echo "*AO Wired                ethernet_00e04c680001_cable" > "$STATE/cm_services"
+    echo 192.168.1.1 > "$STATE/cm_gateway"
+    mkdir -p "$ROOT/etc"
+    printf 'nameserver 127.0.0.1\nnameserver 192.168.1.53\n' > "$ROOT/etc/resolv.conf"
+    local d f
+    d=$(readlink -f "$SYS/class/net/eth0")
+    mkdir -p "$d/statistics"
+    echo 1500 > "$d/mtu"
+    echo 4 > "$d/carrier_changes"
+    echo 1000 > "$d/speed"
+    for f in rx_packets:900 tx_packets:400 rx_errors:3 tx_errors:0 rx_dropped:7 tx_dropped:0 rx_crc_errors:2 rx_bytes:1000 tx_bytes:500; do
+        echo "${f#*:}" > "$d/statistics/${f%%:*}"
+    done
+    NOW=$(date +%s)
+    printf '%s lost\n%s back 10 1000\n' $((NOW - 100)) $((NOW - 90)) > "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.links"
+}
+
+# netinfo: eth0's details and link health
+test_netinfo() {
+    net_fixture
+    run netinfo --json
+    check "exit 0" rc_is 0
+    check "details" json_ok "$OUT" "d['interface'] == 'eth0' and d['mac'] == '00:e0:4c:68:00:01' and d['ipv4'] == '192.168.1.42/24' and d['gateway'] == '192.168.1.1' and d['mtu'] == 1500 and d['method'] == 'dhcp' and d['defaultRoute'] == 'eth0' and d['speed'] == 1000"
+    check "DNS from resolv.conf, not the local proxy" json_ok "$OUT" "d['dns'] == ['192.168.1.53']"
+    check "IPv6" json_ok "$OUT" "d['ipv6'] == ['2001:db8::42/64']"
+    check "health" json_ok "$OUT" "d['health']['dropsDay'] == 1 and d['health']['dropsWeek'] == 1 and d['health']['rxErrors'] == 3 and d['health']['rxCrc'] == 2 and d['health']['carrierChanges'] == 4 and d['health']['carrier']"
+    check "up since the link came back" json_ok "$OUT" "d['health']['upSince'] == $((NOW - 90))"
+    run netinfo
+    check "text: router" has "Router:       192.168.1.1"
+    check "text: drops" has "1 in the last day"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    run netinfo --json
+    check "no link, no up time" json_ok "$OUT" "d['health']['upSince'] is None and not d['health']['carrier']"
+}
+
+# traffic: how fast bytes go through each connection
+test_traffic() {
+    net_fixture
+    add_wifi wlan0 1-2
+    local d
+    d=$(readlink -f "$SYS/class/net/eth0")
+    ( sleep 2; echo 5001000 > "$d/statistics/rx_bytes"; echo 500500 > "$d/statistics/tx_bytes" ) &
+    TRAFFIC_SECS=4 run traffic --json
+    wait
+    check "exit 0" rc_is 0
+    check "eth0's speed" json_ok "$OUT" "[i for i in d['interfaces'] if i['name'] == 'eth0'][0]['rxMbps'] == 10.0 and [i for i in d['interfaces'] if i['name'] == 'eth0'][0]['txMbps'] == 1.0"
+    check "Wi-Fi listed too" json_ok "$OUT" "'wlan0' in [i['name'] for i in d['interfaces']] and d['defaultRoute'] == 'eth0'"
+    run traffic
+    check "text" has "traffic goes here"
+}
+
+# netcheck: each step of the connection, and where it breaks
+test_netcheck() {
+    net_fixture
+    run netcheck --json
+    check "exit 0" rc_is 0
+    check "all fine" json_ok "$OUT" "[(s['id'], s['result']) for s in d['steps']] == [('cable', 'ok'), ('address', 'ok'), ('router', 'ok'), ('dns', 'ok'), ('internet', 'ok'), ('route', 'ok')]"
+    check "details" json_ok "$OUT" "d['steps'][0]['value'] == '1000' and d['steps'][1]['value'] == '192.168.1.42' and d['steps'][2]['value'] == '192.168.1.1' and d['steps'][3]['value'] == '142.250.0.1' and d['steps'][4]['ms'] == 25"
+    touch "$STATE/no_204"
+    run netcheck --json
+    check "falls back to Cloudflare" json_ok "$OUT" "d['steps'][4]['result'] == 'ok'"
+    touch "$STATE/dns_fail" "$STATE/curl_fail"
+    run netcheck --json
+    check "DNS and internet fail" json_ok "$OUT" "d['steps'][3]['result'] == 'fail' and d['steps'][3]['value'] == '192.168.1.53' and d['steps'][4]['result'] == 'fail'"
+    rm -f "$STATE/dns_fail" "$STATE/curl_fail"
+    touch "$STATE/ping_fail"
+    run netcheck --json
+    check "a router that doesn't answer" json_ok "$OUT" "d['steps'][2] == {'id': 'router', 'result': 'fail', 'value': '192.168.1.1', 'ms': None}"
+    run netcheck
+    check "text: the router" has "Router 192.168.1.1 doesn't answer"
+    rm -f "$STATE/ping_fail"
+    echo "default via 192.168.1.1 dev wlan0" > "$STATE/route"
+    run netcheck --json
+    check "traffic on Wi-Fi is a warning" json_ok "$OUT" "d['steps'][-1] == {'id': 'route', 'result': 'warn', 'value': 'wlan0', 'ms': None}"
+    echo 0 > "$SYS/class/net/eth0/carrier"
+    run netcheck --json
+    check "no cable: the rest is skipped" json_ok "$OUT" "[s['result'] for s in d['steps']][:5] == ['fail', 'skip', 'skip', 'skip', 'skip']"
+    run netcheck
+    check "text" has "FAIL  No cable link"
+    echo 1 > "$SYS/class/net/eth0/carrier"
+    echo "default via 192.168.1.1 dev eth0" > "$STATE/route"
+    run install -y --block-updates
+    run netcheck --json
+    check "with the block on, its servers are checked" json_ok "$OUT" "d['steps'][-1]['id'] == 'updates' and d['steps'][-1]['result'] == 'ok'"
 }
 
 # release VERSION [SCRIPT]: a fake latest release
@@ -3398,6 +3694,14 @@ t test_driver_crashed test_test_driver_crashed
 t test_driver_checks test_test_driver_checks
 t test_driver_k6lp test_test_driver_k6lp
 t test_driver_unclaimed test_test_driver_unclaimed
+t block_phone_updates test_block_phone_updates
+t block_phone_other test_block_phone_other
+t download_guard test_download_guard
+t uninstall_clean test_uninstall_clean
+t app_removed test_app_removed
+t netinfo test_netinfo
+t traffic test_traffic
+t netcheck test_netcheck
 
 [ -n "${BBDIR:-}" ] && rm -rf "$BBDIR"
 rm -rf "$KEYDIR"

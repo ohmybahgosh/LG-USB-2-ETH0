@@ -36,6 +36,14 @@ done
 if [ -s "$FAKE_STATE/curl_404" ]; then
     case "$url" in *"$(cat "$FAKE_STATE/curl_404")"*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
 fi
+# The connection check's first try: http://.../generate_204 answers 204,
+# unless $FAKE_STATE/no_204 exists (it's blocked)
+case "$url" in
+    */generate_204)
+        [ -e "$FAKE_STATE/no_204" ] && exit 7
+        printf '%s' "$fmt" | sed 's/%{http_code}/204/g; s/%{time_total}/0.025/g'
+        exit 0 ;;
+esac
 case "$url" in
     *__down*|*__up*|*/garbage.php*|*/empty.php*)
         host=${url#*://}; host=${host%%/*}
