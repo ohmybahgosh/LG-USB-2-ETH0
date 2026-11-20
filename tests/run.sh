@@ -2604,6 +2604,32 @@ test_app_removed_retry() {
     check "no files left" sh -c "! ls '$ROOT/var/lib/webosbrew' | grep -q lg-usb-2-eth0"
 }
 
+# With the adapter as eth0, each connection only answers ARP for its own
+# address, so the router doesn't send eth0's traffic (and DNS answers) to
+# Wi-Fi; uninstall puts the old values back
+test_arp_strict() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    local a=$ROOT/proc/sys/net/ipv4/conf/all
+    mkdir -p "$a"
+    echo 0 > "$a/arp_ignore"
+    echo 0 > "$a/arp_announce"
+    run apply -y
+    # apply swaps in the background
+    local i=0
+    while ! grep -qx 2 "$a/arp_announce" && [ "$i" -lt 20 ]; do sleep 0.5; i=$((i + 1)); done
+    check "arp_ignore 1" grep -qx 1 "$a/arp_ignore"
+    check "arp_announce 2" grep -qx 2 "$a/arp_announce"
+    check "old values kept" grep -qx "0 0" "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.arp"
+    run apply -y
+    check "kept once" grep -qx "0 0" "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.arp"
+    run install -y
+    run uninstall -y
+    check "arp_ignore back" grep -qx 0 "$a/arp_ignore"
+    check "arp_announce back" grep -qx 0 "$a/arp_announce"
+    check "mark gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.arp"
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3862,6 +3888,7 @@ t block_phone_updates test_block_phone_updates
 t block_phone_other test_block_phone_other
 t download_guard test_download_guard
 t uninstall_clean test_uninstall_clean
+t arp_strict test_arp_strict
 t fwblock_first test_fwblock_first
 t fwblock_bad_orig test_fwblock_bad_orig
 t fwblock_after test_fwblock_after

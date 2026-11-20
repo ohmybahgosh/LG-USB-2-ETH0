@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.47"
+VERSION="2.11.48"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -556,6 +556,43 @@ swap_in() {
     ip link set dev eth0 up
     [ -n "$_park" ] && ip link set dev "$_park" up
     echo "Done: the USB adapter is eth0${_park:+, the built-in port is $_park}."
+    arp_strict
+    return 0
+}
+
+# With Wi-Fi connected too (Wi-Fi wake keeps it on), both connections are on
+# the same network.  Linux answers the router's "who has this address" from
+# either one, so the router can send eth0's traffic to the Wi-Fi radio.  The
+# TV's DNS relay only listens for answers on eth0, so every lookup times
+# out.  This makes each connection answer only for its own address, and
+# tells the router eth0's address belongs to the adapter.  The old values
+# are kept in RUN_DIR, like the IPv6 ones, since they reset at every restart.
+# Here in CORE, since the background job that swaps runs only CORE.
+ARP_CONF="${LGU2E_ROOT}/proc/sys/net/ipv4/conf/all"
+ARP_MARK="$RUN_DIR/lg-usb-2-eth0.arp"
+arp_strict() {
+    [ -f "$ARP_CONF/arp_ignore" ] || return 0
+    _ai=""; _aa=""
+    { read -r _ai < "$ARP_CONF/arp_ignore"; read -r _aa < "$ARP_CONF/arp_announce"; } 2>/dev/null
+    if [ ! -f "$ARP_MARK" ] && { [ "$_ai" != 1 ] || [ "$_aa" != 2 ]; }; then
+        mkdir -p "${ARP_MARK%/*}" 2>/dev/null
+        echo "${_ai:-0} ${_aa:-0}" > "$ARP_MARK"
+    fi
+    echo 1 > "$ARP_CONF/arp_ignore" 2>/dev/null
+    echo 2 > "$ARP_CONF/arp_announce" 2>/dev/null
+    _a4=$(ip -4 -o addr show dev eth0 2>/dev/null | awk '{print $4; exit}')
+    _a4=${_a4%/*}
+    [ -n "$_a4" ] && command -v arping >/dev/null 2>&1 &&
+        arping -U -c 2 -I eth0 -s "$_a4" "$_a4" >/dev/null 2>&1
+    return 0
+}
+# Put ARP back how it was
+arp_restore() {
+    [ -f "$ARP_MARK" ] || return 0
+    read -r _ai _aa < "$ARP_MARK"
+    case "$_ai" in [0-8]) echo "$_ai" > "$ARP_CONF/arp_ignore" 2>/dev/null ;; esac
+    case "$_aa" in [0-2]) echo "$_aa" > "$ARP_CONF/arp_announce" 2>/dev/null ;; esac
+    rm -f "$ARP_MARK"
     return 0
 }
 
@@ -3903,6 +3940,7 @@ undo_changes() {
         ipv6_restore
         echo "Undid --ipv6-off: IPv6 is back to how it was."
     fi
+    arp_restore
     return "$_ucf"
 }
 # Remove every file the script keeps: history, counts, the log, downloaded

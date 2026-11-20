@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.48] - 2026-11-20
+
+### Fixed
+
+- **Las apps podían quedarse sin DNS con el encendido por Wi-Fi activado.**  El encendido por Wi-Fi mantiene el Wi-Fi conectado a la misma red que el adaptador, y el TV respondía al "quién tiene esta dirección" del router desde ambos, así que el router podía mandar el tráfico de `eth0` a la radio Wi-Fi.  El relé DNS del TV solo escucha respuestas en `eth0`, así que cada consulta caducaba y las apps no encontraban nada por nombre (visto en un C2: Netflix, TiviBro y la terminal fallaban mientras el router respondía bien).  Ahora cada conexión solo responde por su propia dirección, y el TV se lo dice al router justo después del cambio.  Desinstalar lo deja como estaba.
+
 ## [2.11.47] - 2026-11-20
 
 ### Changed

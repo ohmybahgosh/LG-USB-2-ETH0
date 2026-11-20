@@ -1,0 +1,3 @@
+#!/bin/sh
+# Fake arping: sends nothing
+exit 0

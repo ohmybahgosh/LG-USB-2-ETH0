@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.48] - 2026-11-20
+
+### Fixed
+
+- **Apps could lose DNS with Wi-Fi wake on.**  Wi-Fi wake keeps Wi-Fi connected on the same network as the adapter, and the TV answered the router's "who has this address" from both, so the router could send `eth0`'s traffic to the Wi-Fi radio.  The TV's DNS relay only listens for answers on `eth0`, so every lookup timed out and apps couldn't reach anything by name (found on a C2: Netflix, TiviBro and the shell all failed while the router answered fine).  Now each connection only answers for its own address, and the TV tells the router right after the swap.  Uninstall puts it back how it was.
+
 ## [2.11.47] - 2026-11-20
 
 ### Changed
