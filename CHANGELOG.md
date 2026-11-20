@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Block phone app updates says when it needs a TV restart.**  The TV's phone connection only reads its list when the TV starts, so the switch now says "takes effect after the next TV restart" until it's in place, instead of promising it within 10 minutes.
+
+### Added
+
+- **One more driver confirmed working, now offered by Faster driver.**  ASIX's `ax88179_178a` for kernel `4.4.84-899.19.koli.1`, with the `usbnet` that kernel leaves out, ran an AX88179 adapter on a 2021 B1 (OLED55B16LA, webOS 6), online at 1000 Mbit/s (lun3x, issue #55).
+
 ## [2.11.46] - 2026-11-19
 
 ### Changed

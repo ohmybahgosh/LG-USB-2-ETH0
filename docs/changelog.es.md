@@ -2,6 +2,16 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [Unreleased]
+
+### Changed
+
+- **Bloquear actualizaciones desde el teléfono dice cuándo hace falta reiniciar el TV.**  La conexión con el teléfono solo lee su lista al encender el TV, así que el interruptor ahora dice "funciona tras el próximo reinicio del TV" hasta que el bloqueo esté en su sitio, en vez de prometerlo en 10 minutos.
+
+### Added
+
+- **Un controlador más confirmado, ahora ofrecido por el controlador más rápido.**  `ax88179_178a` de ASIX para el kernel `4.4.84-899.19.koli.1`, con el `usbnet` que ese kernel no trae, hizo funcionar un adaptador AX88179 en un B1 de 2021 (OLED55B16LA, webOS 6), en línea a 1000 Mbit/s (lun3x, issue #55).
+
 ## [2.11.46] - 2026-11-19
 
 ### Changed

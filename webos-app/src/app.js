@@ -377,9 +377,9 @@
         $('tog-phone').className = 'tog' + (phoneOn && !phoneNa ? ' on' : '') + (phoneNa ? ' na' : '');
         $('phone-hint').textContent = phoneNa ? T('not needed: this TV\'s phone connection has no firmware update calls, so a phone app can\'t start an update on it') : !blocking ? T('with Block updates harder: stops LG ThinQ on a phone pushing a firmware update straight to the TV, which gets past every server block') :
             (!phoneOn ? T('off by your choice: LG ThinQ on a phone can still push a firmware update to the TV') :
-            ({ blocked: T('on: LG ThinQ on a phone can\'t start a firmware update, and casting and the phone remote still work'), next: T('on from the next TV start, since the TV\'s phone connection reads its list when the TV starts'),
+            ({ blocked: T('on: LG ThinQ on a phone can\'t start a firmware update, and casting and the phone remote still work'), next: T('on, takes effect after the next TV restart: the TV\'s phone connection only reads its list when the TV starts'),
                 other: T('on: another app, like FW Block, already blocks phone updates') }[u.phone] ||
-                T('on: the phone route was open, and it\'s blocked again within 10 minutes')));
+                T('on, takes effect after the next TV restart: the TV\'s phone connection only reads its list when the TV starts')));
         var dlOn = blocking && h.stopDownloads !== false;
         $('tog-stopdl').className = 'tog' + (dlOn ? ' on' : '');
         $('stopdl-hint').textContent = dlOn && u.cancelled ? T('on: stopped {n} firmware downloads that got past the block, last on {date}', { n: u.cancelled, date: new Date(u.lastCancel * 1000).toLocaleDateString() }) :
@@ -848,8 +848,8 @@
             'updates.ok': T('LG\'s update servers are blocked'),
             'updates.fail': T('Block updates harder has gaps ({gaps}).  It fixes them within 10 minutes, or turn it off and on.', { gaps: v.replace(/,/g, ', ') }),
             'phone.ok': T('Phone apps can\'t start an update'),
-            'phone.warn': T('Phone apps are blocked from the next TV start'),
-            'phone.fail': T('Phone apps can still start an update.  It\'s blocked again within 10 minutes, and works from the next TV start.'),
+            'phone.warn': T('Phone apps are blocked after the next TV restart'),
+            'phone.fail': T('Phone apps can still start an update until the TV restarts.  The block is on, and the TV\'s phone connection only reads its list when the TV starts.'),
             'remote.ok': T('LG Remote Support is blocked'),
             'remote.fail': T('Block LG Remote Support has gaps ({gaps}).  It fixes them within 10 minutes, or turn it off and on.', { gaps: v.replace(/,/g, ', ') })
         };
