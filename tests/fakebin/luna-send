@@ -54,17 +54,18 @@ case "$*" in
         printf '{"returnValue":true,"category":"network","settings":{"wolwowlOnOff":"%s"}}\n' "$(cat "$FAKE_STATE/wolwowl" 2>/dev/null || echo true)" ;;
     *getSystemSettings*automaticUpdate*)
         printf '{"returnValue":true,"category":"support","settings":{"automaticUpdate":"%s"}}\n' "$(cat "$FAKE_STATE/autoupd" 2>/dev/null || echo on)" ;;
-    *setSystemSettings*automaticUpdate*)
-        _au=$(echo "$*" | sed -n 's/.*"automaticUpdate":"\([a-z]*\)".*/\1/p')
-        [ -n "$_au" ] && echo "$_au" > "$FAKE_STATE/autoupd"
-        echo '{"returnValue":true}' ;;
-    *getSystemSettings*softwareUpdateEnable*)
-        printf '{"returnValue":true,"category":"support","settings":{"softwareUpdateEnable":"%s"}}\n' "$(cat "$FAKE_STATE/updcheck" 2>/dev/null || echo true)" ;;
-    *setSystemSettings*softwareUpdateEnable*)
+    *setSystemSettings*)
+        # set_fail: webOS refuses the next setting change
+        if [ -e "$FAKE_STATE/set_fail" ]; then echo '{"returnValue":false,"errorText":"refused"}'; exit 0; fi
         case "$*" in
+            *automaticUpdate*)
+                _au=$(echo "$*" | sed -n 's/.*"automaticUpdate":"\([a-z]*\)".*/\1/p')
+                [ -n "$_au" ] && echo "$_au" > "$FAKE_STATE/autoupd" ;;
             *'"softwareUpdateEnable":"false"'*) echo false > "$FAKE_STATE/updcheck" ;;
             *'"softwareUpdateEnable":"true"'*) echo true > "$FAKE_STATE/updcheck" ;;
         esac
         echo '{"returnValue":true}' ;;
+    *getSystemSettings*softwareUpdateEnable*)
+        printf '{"returnValue":true,"category":"support","settings":{"softwareUpdateEnable":"%s"}}\n' "$(cat "$FAKE_STATE/updcheck" 2>/dev/null || echo true)" ;;
     *) echo '{"returnValue":true}' ;;
 esac

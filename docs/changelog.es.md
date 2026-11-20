@@ -2,11 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
-## [Unreleased]
+## [2.11.47] - 2026-11-20
 
 ### Changed
 
 - **Bloquear actualizaciones desde el teléfono dice cuándo hace falta reiniciar el TV.**  La conexión con el teléfono solo lee su lista al encender el TV, así que el interruptor ahora dice "funciona tras el próximo reinicio del TV" hasta que el bloqueo esté en su sitio, en vez de prometerlo en 10 minutos.
+- **Bloquear actualizaciones a fondo funciona junto a FW Block y al bloqueo del Homebrew Channel.**  Si FW Block ya apagó la comprobación de actualizaciones y las actualizaciones automáticas de webOS, el bloqueo de aquí ahora guarda los valores originales de FW Block en vez de "apagado", y al apagar este bloqueo ambos ajustes siguen apagados mientras FW Block o Block system updates del Homebrew Channel los mantengan apagados, y lo dice.  Un ajuste guardado solo se borra cuando de verdad ha vuelto, así que si webOS no deja cambiarlo, apagar el bloqueo otra vez (o uninstall) lo vuelve a intentar, y al quitar la app se sigue intentando hasta devolverlo todo.  El estado dice cuándo es FW Block quien bloquea las actualizaciones.
 
 ### Added
 

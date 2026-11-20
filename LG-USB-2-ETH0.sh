@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.46"
+VERSION="2.11.47"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1667,15 +1667,61 @@ hosts_missing() {
     done
 }
 
+# Other update blockers on the same TV, so the two settings below are never
+# turned back on, or saved wrong, while another one still wants them off.
+# FW Block (github.com/ohmybahgosh/WEBOS-FW-BLOCK) blocks when its settings
+# say BLOCK=1 and its startup hook is there, and keeps the originals it saved
+# in switch.orig (true/false) and auto.orig (on/off).
+FWB_DIR="${LGU2E_ROOT}/var/lib/webosbrew/webos-fw-block"
+FWB_HOOK="${LGU2E_ROOT}/var/lib/webosbrew/init.d/50-webos-fw-block"
+fwb_blocking() {
+    { [ -e "$FWB_HOOK" ] || [ -L "$FWB_HOOK" ]; } && grep -qx 'BLOCK=1' "$FWB_DIR/settings" 2>/dev/null
+}
+# fwb_orig FILE A B: FW Block's saved original, if it's blocking and the
+# value is A or B
+fwb_orig() {
+    fwb_blocking || return 0
+    _fo=$(head -n 1 "$FWB_DIR/$1" 2>/dev/null)
+    { [ "$_fo" = "$2" ] || [ "$_fo" = "$3" ]; } && echo "$_fo"
+    return 0
+}
+# The Homebrew Channel keeps webOS's update check off too once its Block
+# system updates sets softwareUpdateEnable (webos-homebrew-channel PR #264):
+# its flag is on and its service mentions the setting
+hbc_keeps_check() {
+    [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] || return 1
+    _hs="${LGU2E_ROOT}${HBC_DIR}"
+    grep -qs softwareUpdateEnable "$_hs/startup.sh" "$_hs"/*.js
+}
+# Who else keeps the update check off: fwblock, hbc or nothing
+upd_kept_by() {
+    if fwb_blocking; then echo fwblock; elif hbc_keeps_check; then echo hbc; fi
+    return 0
+}
+# mark_write FILE VALUE: save a value whole or not at all
+mark_write() {
+    printf '%s\n' "$2" > "$1.new" 2>/dev/null && [ "$(cat "$1.new" 2>/dev/null)" = "$2" ] && mv -f "$1.new" "$1" && return 0
+    rm -f "$1.new"
+    return 1
+}
 updates_block() {
     _ua=$(upd_auto_setting)
-    [ -n "$_ua" ] && [ ! -f "$UPD_AUTO_MARK" ] && echo "$_ua" > "$UPD_AUTO_MARK"
+    # Remember what it was, once, so turning the option off restores it.  If
+    # FW Block turned it off first, its saved original is the real one.
+    if [ ! -f "$UPD_AUTO_MARK" ]; then
+        _oa=$(fwb_orig auto.orig on off)
+        _oa=${_oa:-$_ua}
+        [ -n "$_oa" ] && mark_write "$UPD_AUTO_MARK" "$_oa"
+    fi
     if [ -n "$_ua" ] && [ "$_ua" != off ]; then
         if upd_auto_set off; then echo "Turned webOS's automatic updates off."; else echo "Could not turn webOS's automatic updates off."; fi
     fi
     _us=$(upd_setting)
-    # Remember what it was, once, so turning the option off restores it
-    [ -n "$_us" ] && [ ! -f "$UPD_MARK" ] && echo "$_us" > "$UPD_MARK"
+    if [ ! -f "$UPD_MARK" ]; then
+        _os=$(fwb_orig switch.orig true false)
+        _os=${_os:-$_us}
+        [ -n "$_os" ] && mark_write "$UPD_MARK" "$_os"
+    fi
     if [ "$_us" != false ]; then
         if upd_set false; then echo "Turned webOS's update check off."; else echo "Could not turn webOS's update check off."; fi
     fi
@@ -1699,23 +1745,51 @@ updates_block() {
     return 0
 }
 
+# Puts the two settings back only when nothing else wants them off, and
+# keeps a saved value until it's really back (or left off on purpose), so
+# turning the block off again tries again.  Returns 1 when a setting
+# couldn't be put back.
 updates_unblock() {
+    _uf=0
     if [ -f "$UPD_AUTO_MARK" ]; then
         _wa=$(cat "$UPD_AUTO_MARK" 2>/dev/null)
-        case "$_wa" in ''|off) ;; *) upd_auto_set "$_wa" || echo "Could not turn webOS's automatic updates back on." ;; esac
-        rm -f "$UPD_AUTO_MARK"
+        case "$_wa" in
+            ''|off) rm -f "$UPD_AUTO_MARK" ;;
+            *)  if fwb_blocking; then
+                    echo "webOS's automatic updates stay off: FW Block keeps them off."
+                    rm -f "$UPD_AUTO_MARK"
+                elif upd_auto_set "$_wa"; then
+                    rm -f "$UPD_AUTO_MARK"
+                else
+                    echo "Could not turn webOS's automatic updates back on.  Turning the block off again tries again."
+                    _uf=1
+                fi ;;
+        esac
     fi
     if [ -f "$UPD_MARK" ]; then
         _was=$(cat "$UPD_MARK" 2>/dev/null)
-        [ "$_was" = true ] && { upd_set true || echo "Could not turn webOS's update check back on."; }
-        rm -f "$UPD_MARK"
+        _kb=$(upd_kept_by)
+        if [ "$_was" != true ]; then
+            rm -f "$UPD_MARK"
+        elif [ "$_kb" = fwblock ]; then
+            echo "webOS's update check stays off: FW Block keeps it off."
+            rm -f "$UPD_MARK"
+        elif [ "$_kb" = hbc ]; then
+            echo "webOS's update check stays off: the Homebrew Channel's Block system updates keeps it off."
+            rm -f "$UPD_MARK"
+        elif upd_set true; then
+            rm -f "$UPD_MARK"
+        else
+            echo "Could not turn webOS's update check back on.  Turning the block off again tries again."
+            _uf=1
+        fi
     fi
     hosts_remove "$UPD_TAG"
     phone_unblock
     if command -v iptables >/dev/null 2>&1; then
         while upd_fw_rule; do iptables -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
     fi
-    return 0
+    return "$_uf"
 }
 
 # What's missing from the block now: any of "check" (webOS's update check is
@@ -2038,10 +2112,15 @@ app_removed() {
 app_removed_cleanup() {
     echo "=== $(date) the app was removed, so everything it set up is undone ==="
     stop_wake
+    # Nothing blocks again while this undoes it
+    BLOCK_UPDATES=0 BLOCK_RS=0 STOP_DL=0 WATCH=0 WIFI_FALLBACK=0 IPV6_OFF=0 EEE_OFF=0
+    if ! undo_changes; then
+        echo "=== $(date) not everything could be put back.  Trying again at the next check. ==="
+        return 0
+    fi
     conf_lock
     rm -f "$HOOK" "$DISABLED_HOOK" "$OLD_DISABLED_HOOK" "$HOOK.new" "$CONF"
     conf_unlock
-    undo_changes
     purge_data
     rm -f "$PID_FILE"
     exit 0
@@ -3808,9 +3887,13 @@ undo_changes() {
         rm -f "$WIFI_MARK"
         warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
     fi
+    _ucf=0
     if [ -f "$UPD_MARK" ] || [ -f "$UPD_AUTO_MARK" ] || [ -f "$SSG_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null || { command -v iptables >/dev/null 2>&1 && upd_fw_rule; }; then
-        updates_unblock
-        echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
+        if updates_unblock; then
+            echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
+        else
+            _ucf=1
+        fi
     fi
     if grep -q "$RS_TAG" "$HOSTS_FILE" 2>/dev/null || rs_any_rule; then
         rs_unblock
@@ -3820,13 +3903,15 @@ undo_changes() {
         ipv6_restore
         echo "Undid --ipv6-off: IPv6 is back to how it was."
     fi
-    return 0
+    return "$_ucf"
 }
 # Remove every file the script keeps: history, counts, the log, downloaded
 # drivers and its own copy.  Nothing of it is left on the TV.
 purge_data() {
+    # Not the saved update settings: updates_unblock removes those once
+    # they're back, and keeps them to try again when they aren't
     rm -f "$SPEED_HIST" "$SPEED_CHOICE" "$UPD_STATS" "$UPD_HITS" "$LINK_LOG" "$DRVTEST_FILE" \
-        "$UPD_MARK" "$UPD_AUTO_MARK" "$LOG_FILE.1" 2>/dev/null
+        "$LOG_FILE.1" 2>/dev/null
     rm -rf "$DRIVER_DIR" 2>/dev/null
     rm -f "$SCRIPT_HOME/LG-USB-2-ETH0.sh" "$SCRIPT_HOME/LG-USB-2-ETH0.sh.new" 2>/dev/null
     rmdir "$SCRIPT_HOME" 2>/dev/null
@@ -3852,7 +3937,7 @@ uninstall_fix() {
         conf_unlock
         success "Boot hook removed."
     fi
-    undo_changes
+    undo_changes || warn "Not everything could be put back.  Run uninstall again in a minute to try again."
     purge_data
     _bi=$(find_builtin_nic)
     if [ "$APPLY_NOW" = 1 ]; then
@@ -4161,7 +4246,9 @@ show_status() {
         done
     fi
     if [ "$(hook_setting BLOCK_UPDATES)" != 1 ]; then
-        if [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ]; then
+        if fwb_blocking; then
+            status_note "FW Block blocks firmware updates on this TV, so the update block here isn't needed."
+        elif [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ]; then
             status_note "The Homebrew Channel blocks four of LG's update servers, but misses others.  install --block-updates closes the rest."
         else
             status_note "Firmware updates aren't blocked.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel."
@@ -4338,11 +4425,11 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s,"keptBy":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
         "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")" "$(js "$(upd_auto_setting)")" \
-        "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")"
+        "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")" "$(js "$(upd_kept_by)")"
     printf '"remoteSupport":{"missingHosts":%s,"missingIps":%s},' "$(js "$(rs_missing_hosts | sed 's/ $//')")" "$(js "$(rs_missing_ips | sed 's/ $//')")"
     printf '"links":%s,"eee":{"tool":%s,"state":%s},' "$(links_json)" "$(jb "$(eee_tool > /dev/null && echo 1)")" "$(js "$(eee_state)")"
     printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"blockRemoteSupport":%s,"blockPhone":%s,"stopDownloads":%s,"realtekMode":%s,"running":%s,"pid":%s},' \

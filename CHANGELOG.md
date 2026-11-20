@@ -2,11 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.11.47] - 2026-11-20
 
 ### Changed
 
 - **Block phone app updates says when it needs a TV restart.**  The TV's phone connection only reads its list when the TV starts, so the switch now says "takes effect after the next TV restart" until it's in place, instead of promising it within 10 minutes.
+- **Block updates harder works alongside FW Block and the Homebrew Channel's block.**  When FW Block turned webOS's update check and automatic updates off first, the block here now saves FW Block's originals instead of "off", and turning the block here off leaves both settings off while FW Block or the Homebrew Channel's Block system updates still keeps them off, and says so.  A saved setting is only removed once it's really back, so if webOS won't change it, turning the block off again (or uninstall) tries again, and removing the app keeps trying until everything is put back.  Status says when FW Block is the one blocking updates.
 
 ### Added
 

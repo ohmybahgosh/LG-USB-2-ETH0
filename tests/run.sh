@@ -2440,6 +2440,170 @@ test_app_removed() {
     check "the job stopped" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.pid"
 }
 
+# fwb_on / fwb_off: FW Block blocking (its settings and hook), with the
+# originals it saved
+fwb_on() {
+    mkdir -p "$ROOT/var/lib/webosbrew/webos-fw-block" "$ROOT/var/lib/webosbrew/init.d"
+    echo BLOCK=1 > "$ROOT/var/lib/webosbrew/webos-fw-block/settings"
+    echo "${1:-true}" > "$ROOT/var/lib/webosbrew/webos-fw-block/switch.orig"
+    echo "${2:-on}" > "$ROOT/var/lib/webosbrew/webos-fw-block/auto.orig"
+    echo '#!/bin/sh' > "$ROOT/var/lib/webosbrew/init.d/50-webos-fw-block"
+}
+fwb_off() {
+    echo BLOCK=0 > "$ROOT/var/lib/webosbrew/webos-fw-block/settings"
+    rm -f "$ROOT/var/lib/webosbrew/init.d/50-webos-fw-block"
+}
+
+# FW Block first: it turned both settings off, so the block here saves its
+# originals, not "off"; with FW Block off, turning this block off puts them back
+test_fwblock_first() {
+    add_builtin
+    hbc_hosts
+    echo false > "$STATE/updcheck"
+    echo off > "$STATE/autoupd"
+    fwb_on true on
+    run install -y --block-updates
+    check "saves FW Block's original" grep -qx true "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "and for automatic updates" grep -qx on "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
+    check "no half-written file" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates.new"
+    run status --json
+    check "json: FW Block keeps it off" has '"keptBy":"fwblock"'
+    fwb_off
+    run install -y --no-block-updates
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "automatic updates back on" grep -qx on "$STATE/autoupd"
+    check "marks gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+}
+
+# FW Block with a bad saved value: the current value is used
+test_fwblock_bad_orig() {
+    add_builtin
+    hbc_hosts
+    fwb_on maybe sometimes
+    run install -y --block-updates
+    check "falls back to the setting" grep -qx true "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "same for automatic updates" grep -qx on "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
+}
+
+# This block first, then FW Block: turning this one off leaves both off
+test_fwblock_after() {
+    add_builtin
+    hbc_hosts
+    run install -y --block-updates
+    fwb_on false off
+    run install -y --no-block-updates
+    check "update check stays off" grep -qx false "$STATE/updcheck"
+    check "automatic updates stay off" grep -qx off "$STATE/autoupd"
+    check "says why" has "update check stays off: FW Block keeps it off"
+    check "says why for automatic" has "automatic updates stay off: FW Block"
+    check "marks gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "auto mark gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
+    run status
+    check "status credits FW Block" has "FW Block blocks firmware updates"
+    # Only BLOCK=1 with the hook counts
+    rm -f "$ROOT/var/lib/webosbrew/init.d/50-webos-fw-block"
+    run status --json
+    check "no hook, not blocking" has '"keptBy":""'
+}
+
+# The Homebrew Channel keeps the update check off with PR #264: its flag
+# and a service that sets softwareUpdateEnable.  The flag alone doesn't count.
+test_hbc_keeps_check() {
+    add_builtin
+    hbc_hosts
+    local hbc=$ROOT/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service
+    mkdir -p "$hbc" "$ROOT/var/luna/preferences"
+    touch "$ROOT/var/luna/preferences/webosbrew_block_updates"
+    echo 'echo hi' > "$hbc/startup.sh"
+    run install -y --block-updates
+    run install -y --no-block-updates
+    check "flag alone: check back on" grep -qx true "$STATE/updcheck"
+    echo 'luna-send ... {"softwareUpdateEnable":"false"}' > "$hbc/startup.sh"
+    run install -y --block-updates
+    run status --json
+    check "json: HBC keeps it off" has '"keptBy":"hbc"'
+    run install -y --no-block-updates
+    check "HBC: check stays off" grep -qx false "$STATE/updcheck"
+    check "says why" has "the Homebrew Channel's Block system updates keeps it off"
+    check "automatic updates back on" grep -qx on "$STATE/autoupd"
+    check "mark gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    # In the service's .js instead
+    echo 'echo hi' > "$hbc/startup.sh"
+    echo 'set({softwareUpdateEnable: false})' > "$hbc/service.js"
+    run install -y --block-updates
+    run install -y --no-block-updates
+    check "js: check stays off" grep -qx false "$STATE/updcheck"
+    rm -f "$ROOT/var/luna/preferences/webosbrew_block_updates"
+    echo true > "$STATE/updcheck"
+    run install -y --block-updates
+    run install -y --no-block-updates
+    check "HBC block off: check back on" grep -qx true "$STATE/updcheck"
+}
+
+# A setting webOS won't change back keeps its saved value, and turning the
+# block off again tries again.  Other hosts lines stay exactly as they were.
+test_restore_retry() {
+    add_builtin
+    printf '%s\n' '127.0.0.1 localhost' '10.0.0.5 nas.home  # mine' '127.0.0.1 snu.lge.com # not ours' > "$SB/hosts"
+    cp "$SB/hosts" "$SB/hosts.orig"
+    run install -y --block-updates
+    touch "$STATE/set_fail"
+    run install -y --no-block-updates
+    check "says it" has "Could not turn webOS's update check back on"
+    check "says it for automatic" has "Could not turn webOS's automatic updates back on"
+    check "mark kept" grep -qx true "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "auto mark kept" grep -qx on "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
+    check "still off" grep -qx false "$STATE/updcheck"
+    check "other hosts lines byte-identical" cmp -s "$SB/hosts" "$SB/hosts.orig"
+    rm -f "$STATE/set_fail"
+    run install -y --no-block-updates
+    check "second try: back on" grep -qx true "$STATE/updcheck"
+    check "second try: automatic back on" grep -qx on "$STATE/autoupd"
+    check "marks gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "auto mark gone" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.autoupdate"
+    # uninstall: says so, keeps the saved values, and a second run finishes
+    run install -y --block-updates
+    touch "$STATE/set_fail"
+    run uninstall -y
+    check "uninstall warns" has "Run uninstall again"
+    check "uninstall keeps the mark" test -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    rm -f "$STATE/set_fail"
+    run uninstall -y
+    check "second uninstall restores" grep -qx true "$STATE/updcheck"
+    check "mark gone after" test ! -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    check "hosts as before" cmp -s "$SB/hosts" "$SB/hosts.orig"
+}
+
+# Removing the app while webOS refuses the change: the hook and settings stay,
+# and the next check finishes the job
+test_app_removed_retry() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    ssg_file
+    : > "$SB/hosts"
+    run install -y --block-updates --wait 2
+    local app=$ROOT/media/developer/apps/usr/palm/applications/org.ohmybahgosh.lgusb2eth0
+    mkdir -p "$app/assets"
+    echo '{"id":"org.ohmybahgosh.lgusb2eth0"}' > "$app/appinfo.json"
+    cp "$SCRIPT" "$app/assets/lg-usb-2-eth0.sh"
+    ln -sfn "$app/assets/lg-usb-2-eth0.sh" "$HOOK"
+    stop_bg
+    run_hook
+    check "boot ran" wait_log "Stopping firmware downloads"
+    touch "$STATE/set_fail"
+    rm -rf "$app"
+    check "notices it can't finish" wait_log "not everything could be put back"
+    check "hook kept" test -e "$HOOK" -o -L "$HOOK"
+    check "settings kept" test -e "$CONF"
+    check "mark kept" test -e "$ROOT/var/lib/webosbrew/lg-usb-2-eth0.updates"
+    rm -f "$STATE/set_fail"
+    local i=0
+    while [ -e "$CONF" ] && [ "$i" -lt 30 ]; do sleep 1; i=$((i + 1)); done
+    check "settings gone" test ! -e "$CONF"
+    check "update check back on" grep -qx true "$STATE/updcheck"
+    check "no files left" sh -c "! ls '$ROOT/var/lib/webosbrew' | grep -q lg-usb-2-eth0"
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3698,6 +3862,12 @@ t block_phone_updates test_block_phone_updates
 t block_phone_other test_block_phone_other
 t download_guard test_download_guard
 t uninstall_clean test_uninstall_clean
+t fwblock_first test_fwblock_first
+t fwblock_bad_orig test_fwblock_bad_orig
+t fwblock_after test_fwblock_after
+t hbc_keeps_check test_hbc_keeps_check
+t restore_retry test_restore_retry
+t app_removed_retry test_app_removed_retry
 t app_removed test_app_removed
 t netinfo test_netinfo
 t traffic test_traffic
