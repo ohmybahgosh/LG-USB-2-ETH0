@@ -1028,6 +1028,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
   <a href="https://github.com/tirth0jain" title="tirth0jain: 2 driver tests, 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/163157087?v=4&amp;s=96" width="48" height="48" alt="tirth0jain"></a>
   <a href="https://github.com/ivyquartz" title="ivyquartz: 1 driver test"><img src="https://avatars.githubusercontent.com/u/26045099?v=4&amp;s=96" width="48" height="48" alt="ivyquartz"></a>
   <a href="https://github.com/lasharor" title="lasharor: 1 driver test"><img src="https://avatars.githubusercontent.com/u/2119747?v=4&amp;s=96" width="48" height="48" alt="lasharor"></a>
+  <a href="https://github.com/lun3x" title="lun3x: 1 driver test"><img src="https://avatars.githubusercontent.com/u/4021413?v=4&amp;s=96" width="48" height="48" alt="lun3x"></a>
   <a href="https://github.com/sodasoba1" title="sodasoba1: 1 driver test"><img src="https://avatars.githubusercontent.com/u/78702593?v=4&amp;s=96" width="48" height="48" alt="sodasoba1"></a>
   <a href="https://github.com/yurix67rem" title="yurix67rem: 4 compatibility reports, 1 bug report or idea"><img src="https://avatars.githubusercontent.com/u/285026565?v=4&amp;s=96" width="48" height="48" alt="yurix67rem"></a>
   <a href="https://github.com/romansat" title="romansat: 1 compatibility report, 1 bug report or idea, 1 discussion"><img src="https://avatars.githubusercontent.com/u/94401139?v=4&amp;s=96" width="48" height="48" alt="romansat"></a>
@@ -1048,6 +1049,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
 - **[tirth0jain](https://github.com/tirth0jain)**: 2 driver tests, 1 compatibility report
 - **[ivyquartz](https://github.com/ivyquartz)**: 1 driver test
 - **[lasharor](https://github.com/lasharor)**: 1 driver test
+- **[lun3x](https://github.com/lun3x)**: 1 driver test
 - **[sodasoba1](https://github.com/sodasoba1)**: 1 driver test
 - **[yurix67rem](https://github.com/yurix67rem)**: 4 compatibility reports, 1 bug report or idea
 - **[romansat](https://github.com/romansat)**: 1 compatibility report, 1 bug report or idea, 1 discussion
