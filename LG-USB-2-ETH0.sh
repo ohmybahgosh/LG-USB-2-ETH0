@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.49"
+VERSION="2.11.50"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -4407,7 +4407,7 @@ links_text() {
 links_json() {
     [ -s "$LINK_LOG" ] || { printf '[]'; return 0; }
     tail -n 20 "$LINK_LOG" | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[a-z]+$/ {
-            d = ""; for (i = 3; i <= NF; i++) d = d (i > 3 ? " " : "") $i
+            d = ""; for (i = 3; i <= NF; i++) { if (i > 3) d = d " "; d = d $i }
             gsub(/[^0-9A-Za-z .-]/, "", d)
             l[++c] = "{\"at\":" $1 ",\"kind\":\"" $2 "\",\"detail\":\"" d "\"}" }
         END { printf "["; for (i = c; i >= 1; i--) printf "%s%s", l[i], (i > 1 ? "," : ""); printf "]" }'

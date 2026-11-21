@@ -2,11 +2,15 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
-## [Unreleased]
+## [2.11.50] - 2026-11-21
 
 ### Added
 
 - **Un controlador más confirmado, ahora ofrecido por el controlador más rápido.**  El `r8152_oot` de Realtek para el kernel `4.4.84-899.19.koli.1` hizo funcionar un TP-Link UE300 (RTL8153) en un NANO85 de 2021 (NANO85APA, webOS 6), a 296 Mbit/s de bajada (pdroidix, issue #57).
+
+### Fixed
+
+- **La app de TV decía que no podía llegar a root en televisores con un BusyBox antiguo.**  Una vez que el TV había registrado una reconexión del cable, una línea del historial de conexión usaba una forma de `awk` que el `awk` del BusyBox antiguo de algunos televisores lee como una llamada a una función que no existe.  Su error quedaba en medio del estado, así que la app no podía leerlo y mostraba "No se puede acceder al televisor como root" o "El script dio una respuesta inesperada", mientras el adaptador seguía funcionando (un NANO85 de 2021 con webOS 6, pdroidix, issue #57).  Corregido, y una nueva comprobación mantiene cada `awk` del script legible para ese BusyBox.
 
 ## [2.11.49] - 2026-11-20
 

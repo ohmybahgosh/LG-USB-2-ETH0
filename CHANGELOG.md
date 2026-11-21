@@ -2,11 +2,15 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.11.50] - 2026-11-21
 
 ### Added
 
 - **One more driver confirmed working, now offered by Faster driver.**  Realtek's `r8152_oot` for kernel `4.4.84-899.19.koli.1` ran a TP-Link UE300 (RTL8153) on a 2021 NANO85 (NANO85APA, webOS 6), at 296 Mbit/s down (pdroidix, issue #57).
+
+### Fixed
+
+- **The TV app said it couldn't reach root on TVs with an older BusyBox.**  Once the TV had logged a cable reconnect, one line in the connection history used an `awk` form the older BusyBox `awk` on some TVs reads as a call to a missing function.  Its error landed in the middle of the status, so the app couldn't read it and showed "Can't reach the TV as root" or "The script gave an unexpected answer", while the adapter itself kept working (a 2021 NANO85 on webOS 6, pdroidix, issue #57).  Fixed, and a new check keeps every `awk` in the script readable by that BusyBox.
 
 ## [2.11.49] - 2026-11-20
 
