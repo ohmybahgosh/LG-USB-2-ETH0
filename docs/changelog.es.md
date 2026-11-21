@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [Unreleased]
+
+### Added
+
+- **Un controlador más confirmado, ahora ofrecido por el controlador más rápido.**  El `r8152_oot` de Realtek para el kernel `4.4.84-899.19.koli.1` hizo funcionar un TP-Link UE300 (RTL8153) en un NANO85 de 2021 (NANO85APA, webOS 6), a 296 Mbit/s de bajada (pdroidix, issue #57).
+
 ## [2.11.49] - 2026-11-20
 
 ### Fixed

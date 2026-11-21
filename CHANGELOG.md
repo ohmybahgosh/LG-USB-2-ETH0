@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **One more driver confirmed working, now offered by Faster driver.**  Realtek's `r8152_oot` for kernel `4.4.84-899.19.koli.1` ran a TP-Link UE300 (RTL8153) on a 2021 NANO85 (NANO85APA, webOS 6), at 296 Mbit/s down (pdroidix, issue #57).
+
 ## [2.11.49] - 2026-11-20
 
 ### Fixed
