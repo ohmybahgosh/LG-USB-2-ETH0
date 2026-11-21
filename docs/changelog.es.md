@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.49] - 2026-11-20
+
+### Fixed
+
+- **Los servidores del bloqueo de actualizaciones siguen bloqueados con el bloqueador de anuncios de Glasshouse.**  [Glasshouse](https://github.com/rorygallagher2024/glasshouse) monta su propia tabla sobre `/etc/hosts` y, cuando cambian sus ajustes, solo conserva las líneas de otras herramientas bajo su encabezado "Kept from /etc/hosts".  El bloqueo de actualizaciones añadía sus líneas sin él, así que Glasshouse las quitaba hasta la siguiente comprobación de 10 minutos.  Ahora van bajo ese encabezado.
+
 ## [2.11.48] - 2026-11-20
 
 ### Fixed

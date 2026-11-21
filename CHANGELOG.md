@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.49] - 2026-11-20
+
+### Fixed
+
+- **The update block's servers stay blocked under Glasshouse's ad block.**  [Glasshouse](https://github.com/rorygallagher2024/glasshouse) mounts its own table over `/etc/hosts` and, when its settings change, keeps other tools' lines only under its "Kept from /etc/hosts" header.  The update block added its lines without one, so Glasshouse dropped them until the next 10-minute check put them back.  They now go under that header.
+
 ## [2.11.48] - 2026-11-20
 
 ### Fixed

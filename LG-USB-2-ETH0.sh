@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.48"
+VERSION="2.11.49"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1683,10 +1683,19 @@ hosts_append() {
     fi
     ( : >> "$HOSTS_FILE" ) 2>/dev/null || return 1
     {
+        # Glasshouse's ad block (github.com/rorygallagher2024/glasshouse)
+        # mounts its own table over /etc/hosts and rewrites it when its
+        # settings change, keeping other tools' blocks only below this
+        # header, so ours go there
+        if grep -q 'LG Ad & Telemetry Blackhole' "$HOSTS_FILE" 2>/dev/null &&
+            ! grep -qx "$GLASSHOUSE_KEPT" "$HOSTS_FILE" 2>/dev/null; then
+            printf '\n%s\n' "$GLASSHOUSE_KEPT"
+        fi
         echo "$_ht"
         for _h in "$@"; do printf '0.0.0.0\t%s %s\n::\t%s %s\n' "$_h" "$_ht" "$_h" "$_ht"; done
     } >> "$HOSTS_FILE"
 }
+GLASSHOUSE_KEPT="# Kept from /etc/hosts, where other tools put them"
 # hosts_remove TAG: take the lines marked TAG out of /etc/hosts, in place
 # (it may be a bind mount that can't be replaced)
 hosts_remove() {

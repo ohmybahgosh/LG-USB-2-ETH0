@@ -55,7 +55,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
 - **Network tools.**  **Check connection** tests the cable, address, router, DNS and internet one step at a time and says where it breaks.  **Live traffic**, **Network details**, **Link health** and **Speed test history** show the rest.  [The TV app](#the-tv-app)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 170 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 171 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
@@ -785,6 +785,8 @@ The firmware itself downloads from `su.lge.com` and `su-ssl.lge.com` (the Homebr
 Turning it off puts the update check back how it was and takes its hosts lines and firewall rule off.  The Homebrew Channel's own setting stays as you left it either way.  With both on, they cover the same servers, which does no harm.  `status` points out when nothing blocks updates, or when only the Homebrew Channel's block does.
 
 It works alongside [FW Block](https://github.com/ohmybahgosh/WEBOS-FW-BLOCK) and the Homebrew Channel's Block system updates.  If FW Block turned the two settings off first, this keeps FW Block's record of how they were, not "off".  Turning this block off leaves a setting off while FW Block or the Homebrew Channel still keeps it off, and says so.  A saved setting is only forgotten once it's really back: if webOS won't change it, turning the block off again (or `uninstall`) tries again.
+
+It works with [Glasshouse](https://github.com/rorygallagher2024/glasshouse)'s ad block too.  Glasshouse mounts its own table over `/etc/hosts` at boot and rewrites it when its settings change, keeping other tools' blocks only under its `# Kept from /etc/hosts, where other tools put them` header.  The update block's lines go under that header, so Glasshouse keeps them, and `uninstall` takes out only its own.
 
 **Block LG Remote Support** (`--block-remote-support`) is a separate, optional switch, off by default.  During an LG Remote Support session, LG's staff can start a firmware update with a download address they hand over, which skips the update check everything above stops.  It blocks LG's remote support servers (`rone-tv-*.lge.com`, `rone-*.lge.com` and two addresses the TV reaches by IP) the same way, checked every 10 minutes too.  While it's on, LG support can't connect to your TV, so turn it off first if you ever need them to.
 

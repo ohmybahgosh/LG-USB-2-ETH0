@@ -2630,6 +2630,27 @@ test_arp_strict() {
     check "mark gone" test ! -e "$ROOT/tmp/lg-usb-2-eth0/lg-usb-2-eth0.arp"
 }
 
+# Glasshouse's ad block table over /etc/hosts keeps other tools' lines only
+# below its "Kept" header, so the update block's lines go there; uninstall
+# takes out only ours
+test_glasshouse_hosts() {
+    add_builtin
+    printf '%s\n' '127.0.0.1	localhost.localdomain	localhost' '' \
+        '# LG Ad & Telemetry Blackhole (lg-webos-dashboard)' '0.0.0.0	ads.lgtvsdp.com' > "$SB/hosts"
+    cp "$SB/hosts" "$SB/hosts.orig"
+    run install -y --block-updates
+    check "adds the header" grep -qx '# Kept from /etc/hosts, where other tools put them' "$SB/hosts"
+    check "ours after it" sh -c "awk '/^# Kept from/{f=1} f && /nsu.lge.com/{ok=1} END{exit !ok}' '$SB/hosts'"
+    check "header once" test "$(grep -c '^# Kept from' "$SB/hosts")" = 1
+    : > "$STATE/iptables"
+    run install -y --block-updates --block-remote-support
+    check "still one header" test "$(grep -c '^# Kept from' "$SB/hosts")" = 1
+    check "its own lines kept" grep -q 'ads.lgtvsdp.com' "$SB/hosts"
+    run uninstall -y
+    check "ours gone" sh -c "! grep -q 'lg-usb-2-eth0' '$SB/hosts'"
+    check "its lines kept" grep -q 'ads.lgtvsdp.com' "$SB/hosts"
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3889,6 +3910,7 @@ t block_phone_other test_block_phone_other
 t download_guard test_download_guard
 t uninstall_clean test_uninstall_clean
 t arp_strict test_arp_strict
+t glasshouse_hosts test_glasshouse_hosts
 t fwblock_first test_fwblock_first
 t fwblock_bad_orig test_fwblock_bad_orig
 t fwblock_after test_fwblock_after
