@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.50"
+VERSION="2.11.51"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -374,6 +374,13 @@ UPD_EVERY=${LGU2E_UPD_EVERY:-600}
 # How often the download guard looks whether the updater is busy (a file
 # check; it only asks the updater when one of its working files is there)
 GUARD_EVERY=${LGU2E_GUARD_EVERY:-30}
+# How often the background job looks whether a blocked server's hosts line
+# is gone (one read of /etc/hosts), and at least how long between the fixes
+# that starts.  Another tool can mount its own table over /etc/hosts after
+# the block added its lines (Glasshouse's ad block does at boot), hiding
+# them until the full check every UPD_EVERY seconds.
+HOSTS_EVERY=${LGU2E_HOSTS_EVERY:-30}
+HOSTS_FIX_MIN=${LGU2E_HOSTS_FIX_MIN:-120}
 # Seconds between the checks that the app is really gone (see app_removed)
 APP_GONE_SECS=${LGU2E_APP_GONE_SECS:-20}
 # How often the background job looks whether the app is still there
@@ -1955,6 +1962,18 @@ rs_gaps() {
     echo "${_rg# }"
 }
 # The watch loop's check for it, with the update block's
+# The first server the update and Remote Support blocks keep in /etc/hosts
+# that has no line there now, or nothing.  One read of the file, no luna.
+hosts_kept_missing() {
+    _hk=""
+    [ "$BLOCK_UPDATES" = 1 ] && _hk="$UPD_HOSTS"
+    [ "$BLOCK_RS" = 1 ] && _hk="$_hk $RS_HOSTS"
+    [ -n "$_hk" ] || return 0
+    awk -v want="$_hk" 'BEGIN { n = split(want, w, " ") }
+        { sub(/#.*/, ""); for (i = 2; i <= NF; i++) have[$i] = 1 }
+        END { for (i = 1; i <= n; i++) if (!(w[i] in have)) { print w[i]; exit } }' "$HOSTS_FILE" 2>/dev/null
+    return 0
+}
 rs_watch() {
     _rw=$(rs_gaps)
     [ -n "$_rw" ] || return 0
@@ -2192,7 +2211,7 @@ watch_run() {
     _wifi_tried=""
     _wifi_on=""
     [ -f "$WIFI_MARK" ] && _wifi_on=1
-    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _gq=0 _ac=0 _pcar=""
+    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _gq=0 _ac=0 _pcar="" _hq=0 _hf=$HOSTS_FIX_MIN
     LINK_LOST="" LINK_LOST_AT=""
     { read -r _pcar < "$NET/eth0/carrier"; } 2>/dev/null
     while :; do
@@ -2214,6 +2233,19 @@ watch_run() {
                 _uc=0
                 [ "$BLOCK_UPDATES" = 1 ] && upd_watch
                 [ "$BLOCK_RS" = 1 ] && rs_watch
+            fi
+            # A blocked server's hosts line gone between those checks: put
+            # the blocks back now, at most every HOSTS_FIX_MIN seconds
+            _hq=$((_hq + WATCH_EVERY))
+            _hf=$((_hf + WATCH_EVERY))
+            if [ "$_hq" -ge "$HOSTS_EVERY" ]; then
+                _hq=0
+                if [ "$_hf" -ge "$HOSTS_FIX_MIN" ] && [ -n "$(hosts_kept_missing)" ]; then
+                    _hf=0
+                    _uc=0
+                    [ "$BLOCK_UPDATES" = 1 ] && upd_watch
+                    [ "$BLOCK_RS" = 1 ] && rs_watch
+                fi
             fi
         fi
         # The app removed: undo everything (a folder check every APP_CHECK_EVERY)

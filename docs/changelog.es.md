@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.51] - 2026-11-23
+
+### Fixed
+
+- **Los servidores ocultos al arrancar vuelven en 30 segundos, no en 10 minutos.**  El bloqueador de anuncios de Glasshouse monta su propia tabla sobre `/etc/hosts` en segundo plano al arrancar, y si lo hace justo después de que el bloqueo de actualizaciones o de soporte remoto añadiera sus líneas, quedan ocultas debajo hasta la siguiente comprobación, hasta 10 minutos después.  Ahora la tarea en segundo plano lee `/etc/hosts` cada 30 segundos y, si a alguno de los servidores del bloqueo le falta su línea, las vuelve a poner enseguida, bajo el encabezado de Glasshouse (encontrado por FW Block 1.1.1 en un C2).
+
 ## [2.11.50] - 2026-11-21
 
 ### Added

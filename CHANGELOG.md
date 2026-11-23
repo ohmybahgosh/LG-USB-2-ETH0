@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.51] - 2026-11-23
+
+### Fixed
+
+- **Blocked servers hidden at boot come back within 30 seconds, not 10 minutes.**  Glasshouse's ad block mounts its own table over `/etc/hosts` in the background at boot, and when it lands just after the update or Remote Support block added its lines, they end up hidden underneath until the next check, up to 10 minutes later.  Now the background job reads `/etc/hosts` every 30 seconds, and if any of the block's servers has no line, it puts them back right away, under Glasshouse's header (found by FW Block 1.1.1 on a C2).
+
 ## [2.11.50] - 2026-11-21
 
 ### Added

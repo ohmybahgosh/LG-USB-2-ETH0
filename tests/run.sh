@@ -195,7 +195,8 @@ run_hook() {
     # shellcheck disable=SC2086 # SH is a command plus its options
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
-        LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 LGU2E_UPD_EVERY=2 \
+        LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 LGU2E_UPD_EVERY="${UPD_EVERY_TEST:-2}" \
+        LGU2E_HOSTS_EVERY="${HOSTS_EVERY_TEST:-}" LGU2E_HOSTS_FIX_MIN="${HOSTS_FIX_MIN_TEST:-}" \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_NOMOUNT=1 LGU2E_GUARD_EVERY=1 LGU2E_APP_GONE_SECS=1 LGU2E_APP_CHECK_EVERY=2 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
@@ -2651,6 +2652,31 @@ test_glasshouse_hosts() {
     check "its lines kept" grep -q 'ads.lgtvsdp.com' "$SB/hosts"
 }
 
+# Glasshouse mounts its table over /etc/hosts after the boot hook added the
+# block's lines: the 30-second hosts check puts them back under its "Kept"
+# header right away, without waiting for the full check, and says so once
+test_hosts_hidden_at_boot() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    printf '%s\n' '127.0.0.1	localhost' > "$SB/hosts"
+    run install -y --block-updates --block-remote-support --wait 2
+    stop_bg
+    UPD_EVERY_TEST=600 HOSTS_EVERY_TEST=1 HOSTS_FIX_MIN_TEST=3 run_hook
+    check "boot ran" wait_log "Checking the update block every 600s"
+    check "boot added them" wait_for_file "$SB/hosts" "nsu.lge.com"
+    printf '%s\n' '127.0.0.1	localhost.localdomain	localhost' '' \
+        '# LG Ad & Telemetry Blackhole (lg-webos-dashboard)' '0.0.0.0	ads.lgtvsdp.com' > "$SB/hosts"
+    check "update servers back" wait_for_file "$SB/hosts" "nsu.lge.com.*lg-usb-2-eth0"
+    check "remote support back" wait_for_file "$SB/hosts" "rone-tv-aic.lge.com.*lg-usb-2-eth0"
+    check "under the Kept header" sh -c "awk '/^# Kept from/{f=1} f && /rone-tv-aic/{ok=1} END{exit !ok}' '$SB/hosts'"
+    check "Glasshouse's lines kept" grep -q 'ads.lgtvsdp.com' "$SB/hosts"
+    sleep 4
+    check "said once (updates)" test "$(grep -c 'update block was partly undone (hosts)' "$LOG")" = 1
+    check "said once (remote support)" test "$(grep -c 'Remote Support block was partly undone' "$LOG")" = 1
+    check "one header" test "$(grep -c '^# Kept from' "$SB/hosts")" = 1
+    stop_bg
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3911,6 +3937,7 @@ t download_guard test_download_guard
 t uninstall_clean test_uninstall_clean
 t arp_strict test_arp_strict
 t glasshouse_hosts test_glasshouse_hosts
+t hosts_hidden_at_boot test_hosts_hidden_at_boot
 t fwblock_first test_fwblock_first
 t fwblock_bad_orig test_fwblock_bad_orig
 t fwblock_after test_fwblock_after
