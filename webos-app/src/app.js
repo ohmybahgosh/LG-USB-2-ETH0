@@ -109,6 +109,7 @@
             state = data;
             if (overlayMode === 'setup') { setupDone(); }
             render();
+            whatsNew(data);
             if (cb) { cb(data); }
         });
     }
@@ -572,31 +573,100 @@
             .replace(/`([^`]+)`/g, '<code>$1</code>');
     }
 
-    // After an update, the first time the new version opens, show what
-    // changed.  The last version seen is kept in the app's own storage.
-    var whatsNewChecked = false;
-    function whatsNew(s) {
-        if (whatsNewChecked || !s) { return; }
-        whatsNewChecked = true;
-        var wn = window.LGU2E_WHATSNEW, v = s.version, seen = null;
-        try {
-            seen = window.localStorage.getItem('lgu2e.seenVersion');
-            window.localStorage.setItem('lgu2e.seenVersion', v);
-        } catch (e) { return; }
-        // Updated in the app (the script logs it), or through the Homebrew Channel
-        var updated = s.updatedTo === v || (seen && seen !== v);
-        if (!updated || seen === v || !wn || wn.version !== v || overlayMode) { return; }
+    // A changelog's sections as the What's new list: the bold lead of each
+    // item, up to max of them
+    function wnList(secs, max) {
         var html = '', n = 0;
-        // In the app's language when its changelog has this version
-        var secs = (I18N && wn.i18n && wn.i18n[I18N.lang]) || wn.sections;
         secs.forEach(function (sec) {
-            if (n >= 7 || !sec.items.length) { return; }
+            if (n >= max || !sec.items.length) { return; }
             html += '<div class="walk-h">' + esc(T(sec.title)) + '</div><ul class="walk">';
-            sec.items.forEach(function (it) { if (n < 7) { html += li(sec.title === 'Fixed' ? 'ok' : '', mdShort(it)); n++; } });
+            sec.items.forEach(function (it) { if (n < max) { html += li(sec.title === 'Fixed' ? 'ok' : '', mdShort(it)); n++; } });
             html += '</ul>';
         });
-        overlay('message', T('Updated to v{v}: what\'s new', { v: v }), html,
+        return html;
+    }
+    // This version's sections, in the app's language when its changelog has them
+    function wnSections() {
+        var wn = window.LGU2E_WHATSNEW;
+        if (!wn) { return null; }
+        return (I18N && wn.i18n && wn.i18n[I18N.lang]) || wn.sections;
+    }
+    // A key or click in the first moments doesn't close What's new: a button
+    // still held from before the app opened shouldn't hide it unseen
+    var wnGuardUntil = 0;
+    function showWhatsNew(title) {
+        var secs = wnSections();
+        if (!secs) { return false; }
+        overlay('message', title, wnList(secs, 8),
             T('Press OK or BACK to close.  Full notes: github.com/ohmybahgosh/LG-USB-2-ETH0/releases'));
+        wnGuardUntil = Date.now() + 1500;
+        return true;
+    }
+
+    // After an update, the first time the new version opens, show what
+    // changed.  The last version seen is kept in the app's own storage, and
+    // only moved on once What's new has shown: when something else is on
+    // screen, it waits for the next status refresh.  Any version can see it
+    // again with the What's new row.
+    var whatsNewDone = false;
+    function whatsNew(s) {
+        if (whatsNewDone || !s) { return; }
+        var wn = window.LGU2E_WHATSNEW, v = s.version, seen = null;
+        try { seen = window.localStorage.getItem('lgu2e.seenVersion'); } catch (e) { whatsNewDone = true; return; }
+        var mark = function () { try { window.localStorage.setItem('lgu2e.seenVersion', v); } catch (e) { /* shown again next time */ } };
+        // Updated in the app (the script logs it), or through the Homebrew Channel
+        var updated = s.updatedTo === v || (seen && seen !== v);
+        if (!updated || seen === v || !wn || wn.version !== v) { mark(); whatsNewDone = true; return; }
+        if (overlayMode || busy) { return; }
+        if (showWhatsNew(T('Updated to v{v}: what\'s new', { v: v }))) { mark(); whatsNewDone = true; }
+    }
+
+    // a > b for versions like 2.11.51
+    function verGt(a, b) {
+        var x = String(a).split('.'), y = String(b).split('.');
+        for (var i = 0; i < Math.max(x.length, y.length); i++) {
+            var p = parseInt(x[i] || '0', 10), q = parseInt(y[i] || '0', 10);
+            if (p !== q) { return p > q; }
+        }
+        return false;
+    }
+    // Every changelog section newer than from, up to and including to, from
+    // the changelog text, newest first: [{ title, items }] merged by title
+    function changesSince(text, from, to) {
+        var out = [], byTitle = {}, on = false, cur = null;
+        String(text).split('\n').forEach(function (line) {
+            var v = line.match(/^## \[([0-9.]+)\]/);
+            if (/^## /.test(line)) { on = !!v && verGt(v[1], from) && !verGt(v[1], to); cur = null; return; }
+            if (!on) { return; }
+            var h = line.match(/^### (.+)/);
+            if (h) {
+                var title = h[1].trim();
+                if (!byTitle[title]) { byTitle[title] = { title: title, items: [] }; out.push(byTitle[title]); }
+                cur = byTitle[title];
+                return;
+            }
+            var it = line.match(/^- (.+)/);
+            if (it && cur) { cur.items.push(it[1].trim()); }
+        });
+        return out;
+    }
+    // The new version's changelog from GitHub, in the app's language when
+    // there's one: cb(sections or null).  Gives up after 8 seconds.
+    function fetchChanges(from, to, cb) {
+        var file = I18N && (I18N.lang === 'ru' || I18N.lang === 'es') ? 'docs/changelog.' + I18N.lang + '.md' : 'CHANGELOG.md';
+        var done = false, finish = function (r) { if (!done) { done = true; cb(r); } };
+        try {
+            var x = new XMLHttpRequest();
+            x.open('GET', 'https://raw.githubusercontent.com/ohmybahgosh/LG-USB-2-ETH0/v' + to + '/' + file, true);
+            x.timeout = 8000;
+            x.onload = function () {
+                var secs = x.status === 200 ? changesSince(x.responseText, from, to) : [];
+                finish(secs.length ? secs : null);
+            };
+            x.onerror = x.ontimeout = function () { finish(null); };
+            x.send();
+        } catch (e) { finish(null); }
+        setTimeout(function () { finish(null); }, 9000);
     }
 
     // Step 3 of the walk-through: upgrade, then check the result
@@ -1207,14 +1277,25 @@
                 });
         },
         update: function () {
-            if (!upd || !upd.newer) { return; }
-            if (upd.source === 'homebrew') {
-                luna('luna://com.webos.applicationManager/launch', { id: 'org.webosbrew.hbchannel' }, function () {});
-                return;
-            }
-            confirmThen(T('Update to v{v}?', { v: upd.latest }),
-                T('Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.'),
-                function () {
+            if (!upd || !upd.newer || busy) { return; }
+            var latest = upd.latest, homebrew = upd.source === 'homebrew';
+            busy = true;
+            overlay('busy', T('Update to v{v}?', { v: latest }), '<span class="spinner"></span>' + esc(T('Checking what\'s new…')), '');
+            fetchChanges(state ? state.version : '0', latest, function (secs) {
+                busy = false;
+                var news = secs ? '<p>' + esc(T('What\'s new since v{v}:', { v: state ? state.version : '' })) + '</p>' + wnList(secs, 8) : '';
+                if (homebrew) {
+                    stepThen(T('Update to v{v}?', { v: latest }), news + '<p>' + esc(T('Installed from the Homebrew Channel, so it updates there.  OK opens the Homebrew Channel.')) + '</p>',
+                        T('Press OK to go ahead, or BACK to cancel.'), function () {
+                            closeOverlay();
+                            luna('luna://com.webos.applicationManager/launch', { id: 'org.webosbrew.hbchannel' }, function () {});
+                        });
+                    return;
+                }
+                stepThen(T('Update to v{v}?', { v: latest }), news + '<p>' +
+                    esc(T('Downloads the new version from GitHub, checks its SHA-256, and installs it.  The app closes and opens again by itself.  Your settings stay as they are.')) + '</p>',
+                    T('Press OK to go ahead, or BACK to cancel.'), function () {
+                    closeOverlay();
                     act(T('Update'), 'update -y', function (ok, text) {
                         // What's new shows once the new version opens, not here
                         if (ok && /Installing/.test(text || '')) {
@@ -1223,6 +1304,7 @@
                         }
                     });
                 });
+            });
         },
         speed: function () {
             if (busy) { return; }
@@ -1380,6 +1462,12 @@
             });
         },
         // Who made it and under which licenses, with a QR code for the full texts
+        whatsnew: function () {
+            var v = state ? state.version : (window.LGU2E_WHATSNEW && window.LGU2E_WHATSNEW.version);
+            if (!showWhatsNew(T('What\'s new in v{v}', { v: v || '' }))) {
+                overlay('message', T('What\'s new'), esc(T('This build has no notes.  See github.com/ohmybahgosh/LG-USB-2-ETH0/releases')), T('Press OK or BACK to close.'));
+            }
+        },
         about: function () {
             var qr = '';
             try {
@@ -1489,6 +1577,7 @@
                 e.preventDefault();
                 return;
             }
+            if (overlayMode === 'message' && Date.now() < wnGuardUntil) { e.preventDefault(); return; }
             if (k === KEY.ENTER && overlayMode === 'confirm' && onConfirm) {
                 var fn = onConfirm;
                 onConfirm = null;
@@ -1535,7 +1624,7 @@
     });
     $('overlay').addEventListener('click', function () {
         if (overlayMode === 'confirm' && onConfirm) { var fn = onConfirm; onConfirm = null; fn(); }
-        else if (overlayMode === 'message') { closeOverlay(); }
+        else if (overlayMode === 'message' && Date.now() >= wnGuardUntil) { closeOverlay(); }
     });
 
     // Refresh when the app comes back to the foreground

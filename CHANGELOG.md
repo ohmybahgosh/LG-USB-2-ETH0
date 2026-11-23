@@ -2,6 +2,16 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.52] - 2026-11-23
+
+### Added
+
+- **What's new before you update, and a What's new row.**  The update prompt now lists what changed since your version, from the new version's changelog, in the app's language, before you press OK.  And the More tab has a **What's new** row that shows this version's notes any time.
+
+### Fixed
+
+- **What's new after an update didn't always show.**  The app marked the new version as seen before checking whether anything else was on screen, so if something was, What's new was skipped for good.  It now waits for the next status check instead, and a button press in its first moment no longer closes it before you've seen it.
+
 ## [2.11.51] - 2026-11-23
 
 ### Fixed

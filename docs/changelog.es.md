@@ -2,6 +2,16 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.52] - 2026-11-23
+
+### Added
+
+- **Novedades antes de actualizar, y una fila Novedades.**  El aviso de actualización ahora muestra qué cambió desde su versión, del registro de cambios de la nueva versión, en el idioma de la app, antes de pulsar OK.  Y la pestaña Más tiene una fila **Novedades** que muestra las notas de esta versión cuando quiera.
+
+### Fixed
+
+- **Las novedades tras una actualización no siempre aparecían.**  La app marcaba la nueva versión como vista antes de comprobar si había otra cosa en pantalla, y si la había, las novedades se saltaban para siempre.  Ahora espera a la siguiente comprobación del estado, y pulsar un botón en su primer momento ya no las cierra antes de que las vea.
+
 ## [2.11.51] - 2026-11-23
 
 ### Fixed
