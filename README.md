@@ -1055,6 +1055,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
   <a href="https://github.com/xbmcjase" title="xbmcjase: 2 driver tests, 2 compatibility reports"><img src="https://avatars.githubusercontent.com/u/261321952?v=4&amp;s=96" width="48" height="48" alt="xbmcjase"></a>
   <a href="https://github.com/tirth0jain" title="tirth0jain: 2 driver tests, 1 compatibility report"><img src="https://avatars.githubusercontent.com/u/163157087?v=4&amp;s=96" width="48" height="48" alt="tirth0jain"></a>
   <a href="https://github.com/Shintech19" title="Shintech19: 2 driver tests"><img src="https://avatars.githubusercontent.com/u/58284819?v=4&amp;s=96" width="48" height="48" alt="Shintech19"></a>
+  <a href="https://github.com/alvarofer0020priv" title="alvarofer0020priv: 1 driver test"><img src="https://avatars.githubusercontent.com/u/341658191?v=4&amp;s=96" width="48" height="48" alt="alvarofer0020priv"></a>
   <a href="https://github.com/ivyquartz" title="ivyquartz: 1 driver test"><img src="https://avatars.githubusercontent.com/u/26045099?v=4&amp;s=96" width="48" height="48" alt="ivyquartz"></a>
   <a href="https://github.com/lasharor" title="lasharor: 1 driver test"><img src="https://avatars.githubusercontent.com/u/2119747?v=4&amp;s=96" width="48" height="48" alt="lasharor"></a>
   <a href="https://github.com/lun3x" title="lun3x: 1 driver test"><img src="https://avatars.githubusercontent.com/u/4021413?v=4&amp;s=96" width="48" height="48" alt="lun3x"></a>
@@ -1078,6 +1079,7 @@ Everyone who has helped build LG-USB-2-ETH0 with code, driver tests, compatibili
 - **[xbmcjase](https://github.com/xbmcjase)**: 2 driver tests, 2 compatibility reports
 - **[tirth0jain](https://github.com/tirth0jain)**: 2 driver tests, 1 compatibility report
 - **[Shintech19](https://github.com/Shintech19)**: 2 driver tests
+- **[alvarofer0020priv](https://github.com/alvarofer0020priv)**: 1 driver test
 - **[ivyquartz](https://github.com/ivyquartz)**: 1 driver test
 - **[lasharor](https://github.com/lasharor)**: 1 driver test
 - **[lun3x](https://github.com/lun3x)**: 1 driver test
