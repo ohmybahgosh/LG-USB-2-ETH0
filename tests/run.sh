@@ -649,6 +649,13 @@ test_hbc_undo_backport() {
     check "not rescanned" [ ! -e "$STATE/ls-control" ]
     run status
     lacks "2.11.28 added a file"
+    # Homebrew Channel 0.8.0 makes that file itself (its webOS 26 fix)
+    printf '%s\n' "{\"version\":\"0.8.0\",\"apiPermissionFiles\":[\"$_pub\",\"$_af\"],\"id\":\"org.webosbrew.hbchannel\"}" > "$_mf"
+    run app-access
+    check "0.8.0 file kept" [ -e "$_af" ]
+    check "0.8.0 manifest kept" grep -q lunabus "$_mf"
+    run status
+    lacks "2.11.28 added a file"
 }
 
 lacks_log() { ! grep -q "$1" "$LOG"; }
@@ -2677,6 +2684,29 @@ test_hosts_hidden_at_boot() {
     stop_bg
 }
 
+# Homebrew Channel 0.8.0 turns webOS's update check back on when its Block
+# system updates is switched off: the 30-second check notices the switch and
+# turns it off again, without waiting for the full check
+test_hbc_block_switched_off() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    hbc_hosts
+    mkdir -p "$ROOT/var/luna/preferences"
+    touch "$ROOT/var/luna/preferences/webosbrew_block_updates"
+    run install -y --block-updates --wait 2
+    stop_bg
+    UPD_EVERY_TEST=600 HOSTS_EVERY_TEST=1 run_hook
+    check "boot ran" wait_log "Checking the update block every 600s"
+    check "check off" grep -qx false "$STATE/updcheck"
+    # What 0.8.0's setConfiguration does when the block is switched off
+    rm -f "$ROOT/var/luna/preferences/webosbrew_block_updates"
+    echo true > "$STATE/updcheck"
+    check "noticed" wait_log "update block was partly undone (check)" 8
+    check "check off again" grep -qx false "$STATE/updcheck"
+    check "said once" test "$(grep -c 'partly undone (check)' "$LOG")" = 1
+    stop_bg
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3938,6 +3968,7 @@ t uninstall_clean test_uninstall_clean
 t arp_strict test_arp_strict
 t glasshouse_hosts test_glasshouse_hosts
 t hosts_hidden_at_boot test_hosts_hidden_at_boot
+t hbc_block_switched_off test_hbc_block_switched_off
 t fwblock_first test_fwblock_first
 t fwblock_bad_orig test_fwblock_bad_orig
 t fwblock_after test_fwblock_after

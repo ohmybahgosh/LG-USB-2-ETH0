@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.52"
+VERSION="2.11.53"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1739,7 +1739,8 @@ fwb_orig() {
     return 0
 }
 # The Homebrew Channel keeps webOS's update check off too once its Block
-# system updates sets softwareUpdateEnable (webos-homebrew-channel PR #264):
+# system updates sets softwareUpdateEnable (webos-homebrew-channel PR #264,
+# released in 0.8.0):
 # its flag is on and its service mentions the setting
 hbc_keeps_check() {
     [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] || return 1
@@ -2211,7 +2212,8 @@ watch_run() {
     _wifi_tried=""
     _wifi_on=""
     [ -f "$WIFI_MARK" ] && _wifi_on=1
-    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _gq=0 _ac=0 _pcar="" _hq=0 _hf=$HOSTS_FIX_MIN
+    _clock=0 _stall=0 _prx="" _ptx="" _last_reset="" _uc=0 _gq=0 _ac=0 _pcar="" _hq=0 _hf=$HOSTS_FIX_MIN _hbf=""
+    [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && _hbf=1
     LINK_LOST="" LINK_LOST_AT=""
     { read -r _pcar < "$NET/eth0/carrier"; } 2>/dev/null
     while :; do
@@ -2240,6 +2242,15 @@ watch_run() {
             _hf=$((_hf + WATCH_EVERY))
             if [ "$_hq" -ge "$HOSTS_EVERY" ]; then
                 _hq=0
+                # The Homebrew Channel's Block system updates switched: from
+                # 0.8.0, switching it off turns webOS's update check back on,
+                # so check the update block now (one file test)
+                _hbn=""
+                [ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && _hbn=1
+                if [ "$_hbn" != "$_hbf" ]; then
+                    _hbf=$_hbn
+                    [ "$BLOCK_UPDATES" = 1 ] && { _uc=0; upd_watch; }
+                fi
                 if [ "$_hf" -ge "$HOSTS_FIX_MIN" ] && [ -n "$(hosts_kept_missing)" ]; then
                     _hf=0
                     _uc=0
@@ -3634,7 +3645,8 @@ HBC_SVC="org.webosbrew.hbchannel.service"
 # was the wrong call: this script leaves other people's apps alone.
 # `app-access` takes it back out where it's provably ours: the exact file
 # 2.11.28 wrote, listed first in the manifest the way 2.11.28 put it, on a
-# Homebrew Channel 0.7.3 or older (a newer one may make the same file itself).
+# Homebrew Channel 0.7.3 or older (0.8.0 makes the same file itself, so it's
+# never touched there).
 # With "check", only says whether it's there.
 hbc_undo_backport() {
     _ld="${LGU2E_ROOT}/var/luna-service2-dev"

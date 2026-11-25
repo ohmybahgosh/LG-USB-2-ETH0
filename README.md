@@ -55,7 +55,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
 - **Network tools.**  **Check connection** tests the cable, address, router, DNS and internet one step at a time and says where it breaks.  **Live traffic**, **Network details**, **Link health** and **Speed test history** show the rest.  [The TV app](#the-tv-app)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 172 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 173 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
@@ -820,7 +820,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 
 ## Troubleshooting
 
-**The app says it can't reach the TV as root, on webOS 26?**  webOS 26 stopped letting homebrew apps use the Homebrew Channel's root service.  The Homebrew Channel has a fix that isn't released yet.  Until then, the app walks you through one SSH command, `app-access`, that puts this app (only this app) in the Homebrew Channel's permission group.  It only runs when you run it.  The steps, ready to copy on a phone: [webOS 26 setup](docs/webos-26-setup.md).  Thanks to yurix67rem for tracking it down ([#32](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/32)).
+**The app says it can't reach the TV as root, on webOS 26?**  webOS 26 stopped letting homebrew apps use the Homebrew Channel's root service.  [Homebrew Channel 0.8.0](https://github.com/webosbrew/webos-homebrew-channel/releases/tag/v0.8.0) fixes it for every app: update the Homebrew Channel, then restart the TV.  With an older Homebrew Channel, the app walks you through one SSH command, `app-access`, that puts this app (only this app) in the Homebrew Channel's permission group.  It only runs when you run it.  The steps, ready to copy on a phone: [webOS 26 setup](docs/webos-26-setup.md).  Thanks to yurix67rem for tracking it down ([#32](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/32)).
 
 **Lost SSH while switching?**  The switch still finishes on the TV.  Reconnect over Wi-Fi.  The adapter has its own MAC address, so your router may give the TV a new IP.  A DHCP reservation for the adapter's MAC keeps it steady.
 
@@ -887,7 +887,7 @@ Everything it does goes in the log, `/var/lib/webosbrew/lg-usb-2-eth0.log`, with
 | `traffic` | How fast data is going in and out of each connection right now, measured over one second, and how much since the TV started. |
 | `speed-server` | Lists the speed test servers and how far each one is.  `speed-server auto` (the default), `speed-server cloudflare`, a number from the list, or the URL of your own [LibreSpeed](https://github.com/librespeed/speedtest) server picks the one every test uses. |
 | `update` | Checks for a newer release and installs it, once the release's signature checks out and the download matches its SHA-256.  `--check` only checks.  Inside the app, it updates the whole app.  On its own, the script replaces itself (and the boot hook's copy).  Your settings stay. |
-| `app-access` | webOS 26 only, when the app says it can't reach the TV as root: lets the app use the Homebrew Channel again by adding it to the Homebrew Channel's permission group.  Changes only this app's own permissions file, and only when you run it.  Not needed once the Homebrew Channel ships its own fix.  See [webOS 26 setup](docs/webos-26-setup.md). |
+| `app-access` | webOS 26 only, when the app says it can't reach the TV as root: lets the app use the Homebrew Channel again by adding it to the Homebrew Channel's permission group.  Changes only this app's own permissions file, and only when you run it.  Not needed with Homebrew Channel 0.8.0 or newer, which fixes it for every app.  See [webOS 26 setup](docs/webos-26-setup.md). |
 
 <details>
 <summary><b>Options</b></summary>

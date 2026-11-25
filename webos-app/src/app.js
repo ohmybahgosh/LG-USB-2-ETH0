@@ -191,7 +191,8 @@
     // ------------------------------------------------------------------ webOS 26 setup
 
     // webOS 26 no longer lets homebrew apps reach the Homebrew Channel's
-    // root service, until the Homebrew Channel ships its own fix.  The
+    // root service, on Homebrew Channel 0.7.3 and older (0.8.0 has the fix,
+    // webosbrew PR #233).  The
     // script's app-access command, run once by the user over SSH, puts
     // this app (only this one) in the Homebrew Channel's group.  Nothing
     // does that on its own: it's the user's choice.  The app can't do that first step itself (it has no way to root
@@ -228,7 +229,7 @@
         if (overlayMode === 'setup') { return; }
         if (overlayMode) { return; }
         overlay('setup', T('One quick setup step for webOS 26'),
-            '<p>' + esc(T('webOS 26 keeps homebrew apps away from root until the Homebrew Channel gets an update.  One command over SSH lets this app back in.')) + '</p>' + setupBody(),
+            '<p>' + esc(T('webOS 26 keeps homebrew apps away from root on Homebrew Channel 0.7.3 and older.  Update the Homebrew Channel to 0.8.0 or newer and restart the TV, which lets every app back in.  Or one command over SSH lets this app back in.')) + '</p>' + setupBody(),
             T('Checking every few seconds.  OK checks now, BACK exits.'));
         // The TV's address, for the ssh line, if webOS will tell the app
         luna('luna://com.webos.service.connectionmanager/getStatus', {}, function (r) {

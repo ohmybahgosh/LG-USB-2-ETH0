@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.53] - 2026-11-24
+
+### Changed
+
+- **Ready for Homebrew Channel 0.8.0.**  0.8.0 includes the Homebrew Channel's own webOS 26 fix, so on webOS 26 the app now says to update the Homebrew Channel and restart the TV, which lets every app back in.  The `app-access` command stays for Homebrew Channel 0.7.3 and older, and never touches the permissions file 0.8.0 makes itself.  0.8.0's new way of blocking updates (turning off webOS's update check, PR #264) was already supported: Block updates harder works alongside it and never turns the check back on while the Homebrew Channel keeps it off.  One thing 0.8.0 does differently: switching its Block system updates off turns webOS's update check back on, even while Block updates harder is on.  The block now notices that switch within 30 seconds and turns the check off again, instead of at its next 10-minute check (thanks to FW Block 1.2.2 for spotting it).
+
 ## [2.11.52] - 2026-11-23
 
 ### Added

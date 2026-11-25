@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.53] - 2026-11-24
+
+### Changed
+
+- **Listo para el Homebrew Channel 0.8.0.**  La 0.8.0 incluye el propio arreglo del Homebrew Channel para webOS 26, así que en webOS 26 la app ahora indica actualizar el Homebrew Channel y reiniciar el TV, lo que devuelve el acceso a todas las apps.  El comando `app-access` se queda para el Homebrew Channel 0.7.3 o anterior, y nunca toca el archivo de permisos que la 0.8.0 crea por sí misma.  La nueva forma de bloquear actualizaciones de la 0.8.0 (apagar la comprobación de actualizaciones de webOS, PR #264) ya era compatible: Bloquear actualizaciones a fondo funciona junto a ella y nunca vuelve a encender la comprobación mientras el Homebrew Channel la mantenga apagada.  Una diferencia de la 0.8.0: apagar su Block system updates vuelve a encender la comprobación de actualizaciones de webOS, incluso con Bloquear actualizaciones a fondo activado.  Ahora el bloqueo lo nota en 30 segundos y vuelve a apagar la comprobación, en vez de en su siguiente comprobación de 10 minutos (gracias a FW Block 1.2.2 por notarlo).
+
 ## [2.11.52] - 2026-11-23
 
 ### Added
