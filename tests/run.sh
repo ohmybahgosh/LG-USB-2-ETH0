@@ -3466,7 +3466,9 @@ test_test_driver_checks() {
     check "tested: get-driver downloads it" grep -q "59fd481.*/experimental/5.4.268-294.24.papikonda.2-k24n/r8152_oot.ko" "$STATE/curl.log"
 }
 
-# 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter
+# 2020 K6Lp TVs: a Realtek and an ASIX build per kernel, picked by adapter.
+# Uses real kernels whose builds aren't tested yet: when one of them is
+# promoted, point that check at another kernel (as for #59)
 test_test_driver_k6lp() {
     add_builtin
     drvtest_file
