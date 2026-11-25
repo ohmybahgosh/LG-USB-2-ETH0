@@ -2,6 +2,17 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.55] - 2026-11-25
+
+### Added
+
+- **Avisa cuando pasó la comprobación de actualizaciones de LG al encender el TV.**  El actualizador de LG comprueba una vez justo después de cada reinicio, hacia el segundo 23, antes de que nada que arranque un TV con root pueda bloquearlo, y los ajustes de actualización de webOS no detienen esa comprobación (el actualizador siempre lee el ajuste como activado; encontrado en un C2 por FW Block 1.3.0).  Cuando pasa, el bloqueo ahora lo nota por el registro del actualizador, quita lo que encontró y lo dice en el registro, en `status` y en la app, con la versión que ofreció LG.  La nueva sección del README **Block LG on your router too** lista los seis nombres que bloquear en el router, lo único que detiene esa comprobación.
+
+### Fixed
+
+- **El README decía que el bloqueo detiene la comprobación de actualizaciones al principio del arranque.**  No es así: nada en el TV puede, y el README ahora lo dice y remite a la lista para el router.
+- **Las reglas del cortafuegos podían parecer ausentes mientras otra herramienta usaba iptables.**  iptables 1.8.7 sale con 4 sin `-w` mientras otra herramienta tiene su bloqueo, así que una comprobación podía dar una regla por perdida.  Ahora el bloqueo espera al bloqueo de iptables, donde el iptables del TV lo permite.
+
 ## [2.11.54] - 2026-11-25
 
 ### Added

@@ -5,6 +5,18 @@
 printf 'iptables %s\n' "$*" >> "$FAKE_STATE/iptables.log"
 f=$FAKE_STATE/iptables
 touch "$f"
+# Like iptables 1.8.7: -h lists --wait, and -w [seconds] waits for the lock.
+# $FAKE_STATE/iptables_locked: another tool holds the lock, so a call
+# without -w fails with exit 4
+if [ "$1" = -h ]; then echo '  --wait -w [seconds]	maximum wait to acquire xtables lock before give up'; exit 0; fi
+if [ "$1" = -w ]; then
+    shift
+    case "$1" in [0-9]*) shift ;; esac
+    printf 'waited\n' >> "$FAKE_STATE/iptables.waits"
+elif [ -e "$FAKE_STATE/iptables_locked" ]; then
+    echo "Another app is currently holding the xtables lock." >&2
+    exit 4
+fi
 op=$1
 shift
 rule="$*"

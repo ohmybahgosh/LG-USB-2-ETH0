@@ -196,7 +196,7 @@ run_hook() {
     env -i HOME="$SB" PATH="$FAKEBIN:$BASE_PATH" LGU2E_ROOT="$ROOT" \
         LGU2E_SYSFS="$SYS" LGU2E_SETTLE=0 LGU2E_WATCH_EVERY=1 FAKE_STATE="$STATE" LGU2E_HOSTS="$SB/hosts" \
         LGU2E_SYSWRITE="$FAKEBIN/syswrite" LGU2E_WIFI_GRACE=3 LGU2E_WIFI_BACK=2 LGU2E_UPD_EVERY="${UPD_EVERY_TEST:-2}" \
-        LGU2E_HOSTS_EVERY="${HOSTS_EVERY_TEST:-}" LGU2E_HOSTS_FIX_MIN="${HOSTS_FIX_MIN_TEST:-}" \
+        LGU2E_HOSTS_EVERY="${HOSTS_EVERY_TEST:-}" LGU2E_HOSTS_FIX_MIN="${HOSTS_FIX_MIN_TEST:-}" LGU2E_BOOT_ID="${FAKE_BOOT_ID:-boot1}" \
         LGU2E_NET_SETTLE=2 LGU2E_NET_CHECK=3 LGU2E_HANG_SECS=3 LGU2E_WAKE_RETRY_SECS=1 LGU2E_WAKE_ADDR_SECS=1 LGU2E_WAKE_RESUB=1 LGU2E_WAKE_KEEP_SECS=1 LGU2E_WAKE_DHCP_SECS=1 LGU2E_ADDR_SECS=2 LGU2E_NOMOUNT=1 LGU2E_GUARD_EVERY=1 LGU2E_APP_GONE_SECS=1 LGU2E_APP_CHECK_EVERY=2 \
         LGU2E_REALTEK_MODE="${LGU2E_REALTEK_MODE:-}" LGU2E_TEST_USBNET="${LGU2E_TEST_USBNET:-}" $SH "$HOOK" < /dev/null > "$SB/hook_out" 2>&1
     RC=$?
@@ -2707,6 +2707,53 @@ test_hbc_block_switched_off() {
     stop_bg
 }
 
+# LG's updater checks once at every start, before the block can start, and
+# webOS's settings can't stop it.  When that check got through (its log has
+# IMAGE_URL), the block says so once per start, in the log and status, and
+# removes what it found
+test_update_check_at_start() {
+    add_builtin
+    add_usb eth1 1-1 r8152 1 "00:e0:4c:68:00:01"
+    hbc_hosts
+    mkdir -p "$ROOT/var/log" "$ROOT/mnt/lg/cmn_data/swupdate"
+    printf '%s\n' '( 23.012345678) [tNsuMainTask] start auto version check' \
+        '( 28.812345678) [tNsuMainTask] IMAGE_URL: https://example.invalid/image.epk' \
+        '( 28.812400000) [tNsuMainTask] IMAGE_NAME: webOS_TV_o22-43.21.94_A.epk' > "$ROOT/var/log/update.log"
+    echo x > "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    run install -y --block-updates --wait 2
+    stop_bg
+    UPD_EVERY_TEST=600 HOSTS_EVERY_TEST=1 run_hook
+    check "logged" wait_log "update check at the start of the TV got through 28s in"
+    check "the version" grep -q "was offered 43.21.94" "$LOG"
+    check "found update removed" test ! -e "$ROOT/mnt/lg/cmn_data/swupdate/Image_Update_Info.xml"
+    sleep 3
+    check "once per start" test "$(grep -c 'got through 28s in' "$LOG")" = 1
+    run status
+    check "status says so" has "At this start, LG's update check got through 28s in"
+    check "points at the router" has "Only blocking LG's update servers on your router"
+    run status --json
+    check "json" has '"leak":{"sec":"28","version":"43.21.94"}'
+    stop_bg
+    # Another start: nothing found yet, nothing said
+    : > "$ROOT/var/log/update.log"
+    FAKE_BOOT_ID=boot2 run status --json
+    check "new start: none" has '"leak":null'
+}
+
+# iptables 1.8.7 exits 4 without -w while another tool holds its lock: the
+# block waits for the lock, so its rules don't read as missing
+test_iptables_lock() {
+    add_builtin
+    hbc_hosts
+    run install -y --block-updates
+    check "rule added" grep -q "156.147.69.32" "$STATE/iptables"
+    touch "$STATE/iptables_locked"
+    run status --json
+    check "rule still seen" has '"firewall":true'
+    check "waited for the lock" test -s "$STATE/iptables.waits"
+    rm -f "$STATE/iptables_locked"
+}
+
 # net_fixture: an adapter as eth0 with an address, a router, DNS, IPv6 and
 # some counters, for netinfo, traffic and netcheck
 net_fixture() {
@@ -3971,6 +4018,8 @@ t arp_strict test_arp_strict
 t glasshouse_hosts test_glasshouse_hosts
 t hosts_hidden_at_boot test_hosts_hidden_at_boot
 t hbc_block_switched_off test_hbc_block_switched_off
+t update_check_at_start test_update_check_at_start
+t iptables_lock test_iptables_lock
 t fwblock_first test_fwblock_first
 t fwblock_bad_orig test_fwblock_bad_orig
 t fwblock_after test_fwblock_after

@@ -2,6 +2,17 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.55] - 2026-11-25
+
+### Added
+
+- **Says when LG's update check at the start of the TV got through.**  LG's updater checks once right after every restart, about 23 seconds in, before anything a rooted TV starts can block it, and webOS's update settings don't stop that check (the updater reads the setting as always on; found on a C2 by FW Block 1.3.0).  When it gets through, the block now notices from the updater's log, removes what it found, and says so in the log, `status` and the app, with the version LG offered.  The README's new **Block LG on your router too** lists the six names to block on your router, the only thing that stops that check.
+
+### Fixed
+
+- **The README said the block stops the update check early in boot.**  It doesn't: nothing on the TV can, so the README now says so and points to the router list.
+- **Firewall rules could read as missing while another tool used iptables.**  iptables 1.8.7 exits 4 without `-w` while another tool holds its lock, so a check could read a rule as gone.  The block now waits for the lock, where the TV's iptables can.
+
 ## [2.11.54] - 2026-11-25
 
 ### Added

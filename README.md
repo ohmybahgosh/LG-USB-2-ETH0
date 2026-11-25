@@ -31,7 +31,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 >
 > | LG's way in | What the block does |
 > |---|---|
-> | The updater's own check, early in boot too | Turns webOS's update check and automatic updates off |
+> | The updater's own check | Turns webOS's update check and automatic updates off, and says when the one check right after a restart got through (only your router can stop that one: [see below](#block-lg-on-your-router-too)) |
 > | LG's update servers | Blocks all seven, including the ones the Homebrew Channel's block misses |
 > | The address the updater reaches with no name | A firewall rule |
 > | A phone app (LG ThinQ) pushing an update from the phone | The TV's phone connection stops offering it, after one TV restart |
@@ -55,7 +55,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
 - **Network tools.**  **Check connection** tests the cable, address, router, DNS and internet one step at a time and says where it breaks.  **Live traffic**, **Network details**, **Link health** and **Speed test history** show the rest.  [The TV app](#the-tv-app)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 173 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 175 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):
@@ -776,8 +776,8 @@ A firmware update can remove root, and current firmware can't be rooted again (s
 
 <br>
 
-- **webOS's own update check, turned off.**  A hidden webOS setting (`softwareUpdateEnable` in the `support` category) stops the updater's check, including the one it makes early in boot, before the Homebrew Channel's block is in place.  It's the same switch [Homebrew Channel PR #264](https://github.com/webosbrew/webos-homebrew-channel/pull/264) turns off.
-- **webOS's automatic updates, turned off.**  The updater also reads a second setting (`automaticUpdate`, the same as **Automatic software updates** in the TV's settings): on, it installs an update it finds without asking.  Turning the option off puts it back how it was.
+- **webOS's own update check, turned off.**  A hidden webOS setting (`softwareUpdateEnable` in the `support` category), the same switch the Homebrew Channel 0.8.0 turns off ([PR #264](https://github.com/webosbrew/webos-homebrew-channel/pull/264)).  It does **not** stop the check the updater makes right after every restart, about 23 seconds in: the updater reads that setting in a way that always comes out as on (found on a C2 by FW Block).  That check happens before anything the Homebrew Channel starts can run, so no app on the TV can stop it.  When it gets through, the block notices from the updater's log, removes what it found, and says so in the app and `status`.  To stop it, block LG's update servers on your router: [Block LG on your router too](#block-lg-on-your-router-too).
+- **webOS's automatic updates, turned off.**  The updater also reads a second setting (`automaticUpdate`, the same as **Automatic software updates** in the TV's settings): on, it downloads an update it finds without asking.  Off, it only shows a pop-up about it, like LG's "Upgrade to webOS26" one.  Turning the option off puts it back how it was.
 - **The update servers the block misses**, added to `/etc/hosts`: `nsu.lge.com` (LG's current update server, which a TV still reached with the block on), `snu-dev.lge.com` and `ngfts.lge.com`.  If the Homebrew Channel's block is off, it adds that block's four servers too (`snu.lge.com`, `su.lge.com`, `su-ssl.lge.com`, `su-dev.lge.com`), the same way it does: in a writable copy of `/etc/hosts` that's gone after a reboot.  It only adds the ones that aren't there yet, in lines marked as its own, and never changes the Homebrew Channel's.
 - **The server the updater reaches by IP** (`156.147.69.32`), which no hosts file can block, with one firewall rule.
 - **Update details already found or downloaded** (in `/mnt/lg/cmn_data/swupdate`), deleted, so a waiting prompt goes away.
@@ -798,9 +798,24 @@ It works with [Glasshouse](https://github.com/rorygallagher2024/glasshouse)'s ad
 
 One thing no setting can cover, so don't do it on a rooted TV: start an LG Remote Support session with the block off.  Updating the TV from a USB stick is left alone on purpose, since you start that yourself.
 
-It doesn't touch webOS's update service itself.  Overriding that, as some people in the issue have, goes deeper into the system than this script should.  If you can, also block the servers above on your router or Pi-hole: that covers the TV before it has even started.
+It doesn't touch webOS's update service itself.  Overriding that, as some people in the issue have, goes deeper into the system than this script should.
 
 </details>
+
+#### Block LG on your router too
+
+LG's updater checks for an update once right after every restart (not after standby), about 23 seconds in.  Nothing a rooted TV starts at boot runs that early, and webOS's update settings don't stop that check.  The block stops the download that would follow, and removes what the check found, but the check itself can reach LG and put up LG's update pop-up.  Only a block outside the TV stops it: your router, Pi-hole or another filtering DNS.
+
+Block these names:
+
+- `snu.lge.com`
+- `su.lge.com`
+- `su-ssl.lge.com`
+- `nsu.lge.com`
+- `snu-dev.lge.com`
+- `su-dev.lge.com`
+
+Leave `ngfts.lge.com` and `aic-ngfts.lge.com` off the list (or allow them): other TV features use them.  The address the updater reaches with no name, `156.147.69.32`, can't be blocked by DNS, so the firewall rule on the TV stays.  On an Asus router with DNS Director, set the TV's entry to **Router** so the TV can't go around your router's DNS.
 
 ## Waking the TV over Wi-Fi
 

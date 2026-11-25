@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.54"
+VERSION="2.11.55"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -1658,7 +1658,23 @@ upd_set() {
     esac
     return 1
 }
-upd_fw_rule() { iptables -C OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; }
+# iptables, waiting for the xtables lock where this iptables can: while
+# another tool (like FW Block) is using iptables, iptables 1.8.7 exits 4
+# without -w, and a rule check reads as missing
+IPT_W=unset
+ipt() {
+    if [ "$IPT_W" = unset ]; then
+        _ih=$(iptables -h 2>&1)
+        case "$_ih" in
+            *"--wait -w [seconds]"*|*"--wait	-w [seconds]"*) IPT_W="-w 5" ;;
+            *"--wait"*) IPT_W="-w" ;;
+            *) IPT_W="" ;;
+        esac
+    fi
+    # shellcheck disable=SC2086 # -w and its seconds, or nothing
+    iptables $IPT_W "$@"
+}
+upd_fw_rule() { ipt -C OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; }
 # The update servers missing from /etc/hosts
 # shellcheck disable=SC2086 # one word per host
 upd_missing_hosts() { hosts_missing $UPD_HOSTS; }
@@ -1793,7 +1809,7 @@ updates_block() {
         fi
     fi
     if command -v iptables >/dev/null 2>&1 && ! upd_fw_rule; then
-        if iptables -I OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; then echo "Blocked $UPD_IP, which the updater reaches by IP."; else echo "Could not block $UPD_IP."; fi
+        if ipt -I OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; then echo "Blocked $UPD_IP, which the updater reaches by IP."; else echo "Could not block $UPD_IP."; fi
     fi
     if [ "$BLOCK_PHONE" = 1 ]; then phone_block "${1:-now}"; else phone_unblock; fi
     return 0
@@ -1841,7 +1857,7 @@ updates_unblock() {
     hosts_remove "$UPD_TAG"
     phone_unblock
     if command -v iptables >/dev/null 2>&1; then
-        while upd_fw_rule; do iptables -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
+        while upd_fw_rule; do ipt -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
     fi
     return "$_uf"
 }
@@ -1869,12 +1885,43 @@ upd_server_switch() {
 }
 # Packets the firewall rule has stopped since boot
 upd_fw_hits() {
-    iptables -L OUTPUT -n -v -x 2>/dev/null | awk -v ip="$UPD_IP" '$3 == "DROP" && $9 == ip { print $1; exit }'
+    ipt -L OUTPUT -n -v -x 2>/dev/null | awk -v ip="$UPD_IP" '$3 == "DROP" && $9 == ip { print $1; exit }'
 }
 upd_stat_get() { sed -n "s/^$1=//p" "$UPD_STATS" 2>/dev/null | head -n 1; }
 upd_stat_set() {
     mkdir -p "${UPD_STATS%/*}" 2>/dev/null
     { grep -v "^$1=" "$UPD_STATS" 2>/dev/null; echo "$1=$2"; } > "$UPD_STATS.new" && mv -f "$UPD_STATS.new" "$UPD_STATS"
+}
+
+# The updater checks once right after every real start, about 23 seconds in,
+# before anything the Homebrew Channel starts can block it, and the update
+# settings can't stop that check (found on a C2 by FW Block 1.3.0).  Only a
+# block on the router can.  When it got through, its log has the update's
+# address: "( 28.812...) [tNsuMainTask] ... IMAGE_URL: ...", and the version
+# in "IMAGE_NAME: ...-43.21.94_...".  upd_leak_info prints "SECONDS VERSION".
+UPD_LOG="${LGU2E_ROOT}/var/log/update.log"
+upd_leak_info() {
+    [ -f "$UPD_LOG" ] || return 0
+    _ll=$(grep -m 1 'IMAGE_URL: ' "$UPD_LOG" 2>/dev/null) || return 0
+    _ls=$(echo "$_ll" | sed -n 's/^( *\([0-9][0-9]*\)\.[0-9]*).*/\1/p')
+    _lv=$(grep -m 1 'IMAGE_NAME: ' "$UPD_LOG" 2>/dev/null | sed -n 's/.*IMAGE_NAME: .*-\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)_.*/\1/p')
+    echo "${_ls:-?} ${_lv:-?}"
+}
+upd_this_boot() {
+    if [ -n "${LGU2E_BOOT_ID:-}" ]; then echo "$LGU2E_BOOT_ID"; else cat "${LGU2E_ROOT}/proc/sys/kernel/random/boot_id" 2>/dev/null; fi
+}
+# Once per start: if the check got through, say so in the log and status,
+# and delete what it found so no prompt waits for it
+upd_leak_check() {
+    _lb=$(upd_this_boot)
+    [ -n "$_lb" ] && [ "$(upd_stat_get leakBoot)" != "$_lb" ] || return 0
+    _li=$(upd_leak_info)
+    [ -n "$_li" ] || return 0
+    upd_stat_set leakBoot "$_lb"
+    upd_stat_set leak "$_li"
+    echo "=== $(date) LG's update check at the start of the TV got through ${_li%% *}s in, before the block could start, and was offered ${_li#* }.  Removed what it found.  Only blocking LG's update servers on your router stops this check. ==="
+    rm -f "$SWUPDATE_DIR/Image_Update_Info.xml" "$SWUPDATE_DIR/Package_Update_Info.xml" 2>/dev/null
+    return 0
 }
 
 # The watch loop's check, every UPD_EVERY seconds: put back anything that
@@ -1927,12 +1974,12 @@ rs_missing_hosts() { hosts_missing $RS_HOSTS; }
 # The remote support addresses without their firewall rule
 rs_missing_ips() {
     command -v iptables >/dev/null 2>&1 || return 0
-    for _ri in $RS_IPS; do iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null || printf '%s ' "$_ri"; done
+    for _ri in $RS_IPS; do ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null || printf '%s ' "$_ri"; done
 }
 # Is any remote support firewall rule there?
 rs_any_rule() {
     command -v iptables >/dev/null 2>&1 || return 1
-    for _ri in $RS_IPS; do iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null && return 0; done
+    for _ri in $RS_IPS; do ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null && return 0; done
     return 1
 }
 rs_block() {
@@ -1942,7 +1989,7 @@ rs_block() {
         if hosts_append "$RS_TAG" $_rm; then echo "Blocked LG Remote Support's servers in $HOSTS_FILE."; else echo "Could not add LG Remote Support's servers to $HOSTS_FILE."; fi
     fi
     for _ri in $(rs_missing_ips); do
-        if iptables -I OUTPUT -d "$_ri" -j DROP 2>/dev/null; then echo "Blocked $_ri, an LG Remote Support server."; else echo "Could not block $_ri."; fi
+        if ipt -I OUTPUT -d "$_ri" -j DROP 2>/dev/null; then echo "Blocked $_ri, an LG Remote Support server."; else echo "Could not block $_ri."; fi
     done
     return 0
 }
@@ -1950,7 +1997,7 @@ rs_unblock() {
     hosts_remove "$RS_TAG"
     if command -v iptables >/dev/null 2>&1; then
         for _ri in $RS_IPS; do
-            while iptables -C OUTPUT -d "$_ri" -j DROP 2>/dev/null; do iptables -D OUTPUT -d "$_ri" -j DROP 2>/dev/null || break; done
+            while ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null; do ipt -D OUTPUT -d "$_ri" -j DROP 2>/dev/null || break; done
         done
     fi
     return 0
@@ -2251,6 +2298,8 @@ watch_run() {
                     _hbf=$_hbn
                     [ "$BLOCK_UPDATES" = 1 ] && { _uc=0; upd_watch; }
                 fi
+                # The updater's check at start, if it shows up later
+                [ "$BLOCK_UPDATES" = 1 ] && upd_leak_check
                 if [ "$_hf" -ge "$HOSTS_FIX_MIN" ] && [ -n "$(hosts_kept_missing)" ]; then
                     _hf=0
                     _uc=0
@@ -2415,6 +2464,7 @@ toast() {
 boot_run() {
     echo "=== $(date) boot hook (wait ${WAIT_SECS}s${PIN_MAC:+, MAC $PIN_MAC}${MODULE:+, module $MODULE}) ==="
     [ "$BLOCK_UPDATES" = 1 ] && updates_block boot
+    [ "$BLOCK_UPDATES" = 1 ] && upd_leak_check
     [ "$BLOCK_RS" = 1 ] && rs_block
     [ "$IPV6_OFF" = 1 ] && ipv6_off
     # Not $(load_module): that would run it in a subshell
@@ -4345,6 +4395,12 @@ show_status() {
             status_note "Firmware updates aren't blocked.  An update can remove root for good: install with --block-updates, or turn on Block system updates in the Homebrew Channel."
         fi
     else
+        if [ -n "$(upd_stat_get leakBoot)" ] && [ "$(upd_stat_get leakBoot)" = "$(upd_this_boot)" ]; then
+            _lk=$(upd_stat_get leak)
+            _lks=${_lk%% *}
+            _lkv=${_lk#* }
+            status_note "At this start, LG's update check got through ${_lks}s in, before the block could start, and was offered $_lkv.  The block removed it.  Only blocking LG's update servers on your router stops this check: see the README."
+        fi
         [ -n "$(ago_week "$(upd_stat_get found)")" ] && status_note "webOS found a firmware update in the last week.  The update block removed it before it could install."
         [ -n "$(ago_week "$(upd_stat_get lastCancel)")" ] && status_note "A firmware download started in the last week, and the update block stopped it."
         _sw=$(upd_stat_get fixedWhat | tr , ' ')
@@ -4488,6 +4544,16 @@ nic_json() {
     printf '}'
 }
 
+# The updater's check at start that got through this start, as JSON
+upd_leak_json() {
+    _jb=$(upd_stat_get leakBoot)
+    if [ -n "$_jb" ] && [ "$_jb" = "$(upd_this_boot)" ]; then
+        _jl=$(upd_stat_get leak)
+        printf '{"sec":%s,"version":%s}' "$(js "${_jl%% *}")" "$(js "${_jl#* }")"
+    else
+        printf null
+    fi
+}
 show_json() {
     # Reuse every check from 'status', with its text thrown away
     { show_status; } > /dev/null 2>&1
@@ -4516,11 +4582,11 @@ show_json() {
     _jupd=$(sed -n 's/^Updated the app to \([0-9][0-9.]*\)\.$/\1/p' "$LOG_FILE" 2>/dev/null | tail -n 1)
     printf '{"version":%s,"updatedTo":%s,"model":%s,"webos":%s,"webosRelease":%s,"firmware":%s,"kernel":%s,' \
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
-    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s,"keptBy":%s},' \
+    printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s,"keptBy":%s,"leak":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
         "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
         "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")" "$(js "$(upd_auto_setting)")" \
-        "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")" "$(js "$(upd_kept_by)")"
+        "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")" "$(js "$(upd_kept_by)")" "$(upd_leak_json)"
     printf '"remoteSupport":{"missingHosts":%s,"missingIps":%s},' "$(js "$(rs_missing_hosts | sed 's/ $//')")" "$(js "$(rs_missing_ips | sed 's/ $//')")"
     printf '"links":%s,"eee":{"tool":%s,"state":%s},' "$(links_json)" "$(jb "$(eee_tool > /dev/null && echo 1)")" "$(js "$(eee_state)")"
     printf '"hook":{"state":%s,"link":%s,"wait":%s,"mac":%s,"module":%s,"driver":%s,"watch":%s,"wifiFallback":%s,"wifiFallbackOn":%s,"wifiWake":%s,"wifiWakeHandoff":%s,"blockUpdates":%s,"ipv6Off":%s,"eeeOff":%s,"blockRemoteSupport":%s,"blockPhone":%s,"stopDownloads":%s,"realtekMode":%s,"running":%s,"pid":%s},' \
