@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.53"
+VERSION="2.11.54"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2811,7 +2811,8 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
 4.4.84-899.19.koli.1 - ax88179_178a.ko 316a5b93461285f2b77cd776af86046a22a70ae3aedb01eec034550ad8dcece5
 4.4.84-899.19.koli.1 - usbnet.ko 9674ec86e7e586bcd7dcd911c94d99afbc92293a954009e2cfcaa31e2e265817
-4.4.84-899.19.koli.1 - r8152_oot.ko e863bc0c1ae38da9598788f374346e92c1bdea40d725656ebd5e2c12def78f3d"
+4.4.84-899.19.koli.1 - r8152_oot.ko e863bc0c1ae38da9598788f374346e92c1bdea40d725656ebd5e2c12def78f3d
+4.4.84-612.40.jimna.1 k6hp ax88179_178a.ko 2bdda8cd0e9ba5dc4a8a8f82266d6695a71a9cb994e82f77a334e6e496253c84"
 
 EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
 4.4.84-612.40.jimna.1 k6lp r8152.ko 388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e
@@ -2882,7 +2883,6 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 5.4.96-223.obr4tv.29 k24 r8152_oot.ko 952c2545a8a688981d16ed9f7865721d9a92e30b1d7e8a90f198eb46a4983c89
 5.4.96-223.obr4tv.29 k24 ax88179_178a.ko 22a568c650178e9d8812dc65c4a7e8dc88c6311591fa2fbce8c368534d9ed6b6
 4.4.84-612.40.jimna.1 k6hp r8152.ko 2502594b536faf6f62a6a89ad618e7d30d43bdcfa9970499196e1bcfcf8b231e
-4.4.84-612.40.jimna.1 k6hp ax88179_178a.ko 2bdda8cd0e9ba5dc4a8a8f82266d6695a71a9cb994e82f77a334e6e496253c84
 4.4.84-612.21.6.jardine.2 k6hp r8152.ko dd36ef69cf25345c225452aa311b8133dccd502990ef0a58fc3851c4920d21d3
 4.4.84-612.21.6.jardine.2 k6hp ax88179_178a.ko bf0167932f63ec376d64174d8b4fb7698fc07eef95cf1f19ca9acec9252ad2da
 4.4.84-611.japoon.14 k6lp r8152.ko bd7b248ceea3045f2b60074b5cb2a9906cd41ab9b5f4c6ccc2817e0e427a90f7

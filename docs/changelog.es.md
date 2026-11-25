@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.54] - 2026-11-25
+
+### Added
+
+- **Un controlador más confirmado, ahora ofrecido por el controlador más rápido.**  El `ax88179_178a` de ASIX para el kernel `4.4.84-612.40.jimna.1` con el chip K6Hp hizo funcionar un adaptador AX88179 como `eth0` en un NANO91 de 2020 (55NANO916NA, webOS 5), en línea a 1000 Mbit/s (Shintech19, issue #59).
+
 ## [2.11.53] - 2026-11-24
 
 ### Changed

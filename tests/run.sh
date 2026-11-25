@@ -3470,7 +3470,7 @@ test_test_driver_checks() {
 test_test_driver_k6lp() {
     add_builtin
     drvtest_file
-    FAKE_SOC=k6hp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y
+    FAKE_SOC=k6hp FAKE_KERNEL=4.4.84-612.21.6.jardine.2 run test-driver -y
     check "K6Hp: its own builds" has "ASIX AX88179, or Realtek RTL8152, RTL8153 or RTL8156"
     check "K6Hp: its own builds: and the new chips" has "or Davicom DM9601, or Microchip LAN7800 or LAN7850."
     FAKE_SOC=k6lp FAKE_KERNEL=4.4.84-612.40.jimna.1 run test-driver -y

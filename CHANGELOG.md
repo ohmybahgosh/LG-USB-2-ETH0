@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.54] - 2026-11-25
+
+### Added
+
+- **One more driver confirmed working, now offered by Faster driver.**  ASIX's `ax88179_178a` for kernel `4.4.84-612.40.jimna.1` on the K6Hp chip ran an AX88179 adapter as `eth0` on a 2020 NANO91 (55NANO916NA, webOS 5), online at 1000 Mbit/s (Shintech19, issue #59).
+
 ## [2.11.53] - 2026-11-24
 
 ### Changed

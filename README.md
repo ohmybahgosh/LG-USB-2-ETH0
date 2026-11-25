@@ -375,6 +375,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | RTL8153 adapter ([#53](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/53)) | Realtek RTL8153 (`0bda:8153`) | 2022 G2 (OLED65G26LA), webOS 25 | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  `eth0` at 1000 Mbit/s |
 | ASIX AX88179 adapter ([#55](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/55)) | ASIX AX88179/178A (`0b95:1790`) | 2021 B1 (OLED55B16LA), webOS 6 | Works with the `ax88179_178a` built here for its kernel (with `usbnet`, which that kernel leaves out), which **Faster driver** offers.  Online at 1000 Mbit/s |
 | TP-Link UE300 ([#57](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/57)) | Realtek RTL8153 (`2357:0601`) | 2021 NANO85 (NANO85APA), webOS 6, USB 2.0 port | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  296 Mbit/s down, 24 up |
+| ASIX AX88179 adapter ([#59](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/59)) | ASIX AX88179/178A (`0b95:1790`) | 2020 NANO91 (55NANO916NA), webOS 5 | Works with the `ax88179_178a` built here for its kernel, which **Faster driver** offers.  Online at 1000 Mbit/s |
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
@@ -471,7 +472,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**348 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**347 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -491,7 +492,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 348 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
+<summary><b>All 347 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
 
 <br>
 
@@ -531,6 +532,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 | Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
 |---|---|:-:|:-:|---|
 | `4.4.84-612.jcl4tv.40` | [K6Lp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.jcl4tv.40-k6lp) | yes |  |  |
+| `4.4.84-612.40.jimna.1` | [K6Hp](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-612.40.jimna.1-k6hp) |  | yes |  |
 
 **Reported working, now offered by get-driver: webOS 4.0**
 
@@ -706,6 +708,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 4 (4.4.3, firmware 05.50.70) on a 2018 UK6300 (65UK6300PLB), kernel `4.4.84-636.glacier.26`, LM18A chip | The TV's own `r8152` is too old for current RTL8153 adapters.  An RTL8153 (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer, and LG-USB-2-ETH0 makes it `eth0` with `--watch` and `--wifi-fallback`.  297 Mbit/s down, 331 up, and settings show the wired connection. | [#43](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/43) |
 | webOS 4 (4.10.2, firmware 05.50.00) on a 2019 C9 (OLED65C9PLA), kernel `4.4.84-169.gld4tv.5` | RTL8153 (`0bda:8153`) and AX88179 (`0b95:1790`) adapters both work on the TV's own `r8152` and `ax88179_178a` drivers, no extra driver needed.  309 and 284 Mbit/s down over USB 2.0. | [#28](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/28), [#29](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/29) |
 | webOS 5 (5.5.0) on a 2020 UN7300 (55UN7300PUF), kernel `4.4.84-612.jcl4tv.40` | No ASIX driver in the kernel.  A TP-Link UE306 (AX88179, `0b95:1790`) works with OCT0PUSCRIME's `ax88179_178a` build, which `get-driver` offers, and LG-USB-2-ETH0 makes it `eth0`.  228 Mbit/s down, 325 up over USB 2.0.  A Cable Matters RTL8153 works with the K6Lp `r8152` build: 184 Mbit/s down, 229 up ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)). | [Discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [OCT0PUSCRIME/lg-webos-ax88179-driver](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) |
+| webOS 5 (firmware 04.64.00) on a 2020 NANO91 (55NANO916NA), kernel `4.4.84-612.40.jimna.1`, K6Hp chip | An ASIX AX88179 adapter (`0b95:1790`) works with the `ax88179_178a` built here for this kernel, which **Faster driver** and `get-driver` offer.  Online at 1000 Mbit/s. | [#59](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/59) |
 | webOS 6 (firmware 03.53.45) on a 2021 UP7670 (50UP7670PUC), kernel `4.4.84-723.kcl4tv.20`, K7LP chip | An RTL8153 adapter (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer, and LG-USB-2-ETH0 makes it `eth0`.  209 to 246 Mbit/s down, 83 to 127 up. | [#47](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/47) |
 | webOS 6 (6.5.2, firmware 03.53.15) on a 2021 C1 (OLED65C1PUB), kernel `4.4.84-229.kcl4tv.6`, O20N chip | An AX88179 adapter (`0b95:1790`) works out of the box on the TV's own `ax88179_178a` driver, and LG-USB-2-ETH0 makes it `eth0`.  344 Mbit/s down, 248 up, 6 ms, and settings show the wired connection and apps play. | [#51](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/51) |
 | webOS 22 (firmware 04.40.92) on a 2022 UQ76 (43UQ76009LC), kernel `5.4.96-115.22.meru.2`, K8Lp chip | A TP-Link UE300 (RTL8153) works with the `r8152_oot` built here, which **Faster driver** and `get-driver` offer: 283 Mbit/s down, 311 up.  A Plugable USB2-E1000 (AX88178) works on the TV's own `asix` driver: 282 Mbit/s down, 254 up. | [#14](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/14), [#27](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/27) |
