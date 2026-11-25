@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.56] - 2026-11-25
+
+### Fixed
+
+- **The app said Block updates harder turns off webOS's update check.**  It turns off webOS's update settings, which don't stop the check LG's updater makes right after every restart.  The app now says update settings, and its Block updates harder help says that only blocking LG's update servers on your router stops that one check.
+
 ## [2.11.55] - 2026-11-25
 
 ### Added

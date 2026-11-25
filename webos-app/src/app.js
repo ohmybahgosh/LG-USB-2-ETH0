@@ -367,9 +367,9 @@
         $('updates-hint').textContent = blocking && u.found && Date.now() - u.found * 1000 < 2592000000 ?
             T('on: removed a firmware update webOS found on {date}, before it could install', { date: new Date(u.found * 1000).toLocaleDateString() }) :
             (blocking && u.tries ? T('on: stopped LG\'s updater reaching its server {n} times, last on {date}', { n: u.tries, date: new Date(u.lastTry * 1000).toLocaleDateString() }) :
-            (blocking && h.running ? T('on: update check and automatic updates off, every LG update server blocked, checked every 10 minutes') :
-            (blocking ? T('on: update check and automatic updates off, every LG update server blocked, checked every 10 minutes from the next restart') :
-            (u.hbcBlock === false ? T('off, and the Homebrew Channel\'s block is off too: turns off webOS\'s update check and automatic updates and blocks every LG update server, so an update can\'t remove root') : T('turns off webOS\'s update check and automatic updates and blocks every LG update server the Homebrew Channel misses, so an update can\'t remove root for good')))));
+            (blocking && h.running ? T('on: update settings off, every LG update server blocked, checked every 10 minutes') :
+            (blocking ? T('on: update settings off, every LG update server blocked, checked every 10 minutes from the next restart') :
+            (u.hbcBlock === false ? T('off, and the Homebrew Channel\'s block is off too: turns off webOS\'s update settings and blocks every LG update server, so an update can\'t remove root') : T('turns off webOS\'s update settings and blocks every LG update server the Homebrew Channel misses, so an update can\'t remove root for good')))));
         // Phone apps and the download guard: part of Block updates harder,
         // on with it unless turned off
         var phoneOn = blocking && h.blockPhone !== false;
@@ -1176,11 +1176,11 @@
             if (!state) { return; }
             if (state.hook.state === 'enabled' && state.hook.blockUpdates) {
                 confirmThen(T('Stop blocking updates harder?'),
-                    T('A firmware update can remove root for good.  webOS\'s update check and automatic updates go back to how they were, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.'),
+                    T('A firmware update can remove root for good.  webOS\'s update settings go back to how they were, and the extra servers and the firewall rule come off.  The Homebrew Channel\'s Block system updates stays as it is.'),
                     function () { act(T('Update blocking off'), installArgs('--no-block-updates')); });
             } else {
                 confirmThen(T('Block updates harder?'),
-                    T('A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  It turns off webOS\'s own update check and automatic updates, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  It starts now, checks every 10 minutes that nothing undid it, and turning it off undoes all of it.'),
+                    T('A firmware update can remove root for good: LG\'s current firmware, webOS 26 from October 2026 on included, can\'t be rooted again.  It turns off webOS\'s update settings, blocks LG\'s update servers (the ones the Homebrew Channel\'s Block system updates covers, if that\'s off, and the ones it misses), and the one the updater reaches by IP.  It starts now, checks every 10 minutes that nothing undid it, and turning it off undoes all of it.  LG makes one check right after every restart, before anything on the TV can start: to stop that one too, block LG\'s update servers on your router (see the README).'),
                     function () { act(T('Block updates'), installArgs('--block-updates')); });
             }
         },
@@ -1224,7 +1224,7 @@
                 confirmThen(T('Allow LG Remote Support again?'), T('LG\'s support staff can connect to this TV again when you start a remote support session, and could push a firmware update during it.  Don\'t start a session with LG while the TV is rooted.'),
                     function () { act(T('Remote Support allowed'), installArgs('--no-block-remote-support')); });
             } else {
-                confirmThen(T('Block LG Remote Support?'), T('Optional.  During an LG Remote Support session, LG\'s staff can push a firmware update straight to the TV, which skips the update check that Block updates harder stops.  This blocks the remote support servers so that can\'t happen.  The catch: LG support can\'t connect to your TV while it\'s on, so turn it off first if you ever need them to.  It starts now and at every boot.'),
+                confirmThen(T('Block LG Remote Support?'), T('Optional.  During an LG Remote Support session, LG\'s staff can push a firmware update straight to the TV, past the update check and the server blocks.  This blocks the remote support servers so that can\'t happen.  The catch: LG support can\'t connect to your TV while it\'s on, so turn it off first if you ever need them to.  It starts now and at every boot.'),
                     function () { act(T('Remote Support blocked'), installArgs('--block-remote-support')); });
             }
         },

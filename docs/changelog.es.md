@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.56] - 2026-11-25
+
+### Fixed
+
+- **La app decía que Bloquear actualizaciones a fondo apaga la comprobación de actualizaciones de webOS.**  Apaga los ajustes de actualización de webOS, que no detienen la comprobación que el actualizador de LG hace justo después de cada reinicio.  La app ahora habla de ajustes de actualización, y su ayuda dice que solo bloquear los servidores de actualización de LG en el router detiene esa comprobación.
+
 ## [2.11.55] - 2026-11-25
 
 ### Added
