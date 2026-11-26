@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.58] - 2026-11-26
+
+### Fixed
+
+- **ASIX drivers counted RX errors and drops that weren't real.**  Every `ax88179_178a` built from LG's 4.4 and 5.4.96 sources (45 of them, including the tested ones) had the receive code from before Linux's 2022 fix, which miscounts the extra entries current AX88179 firmware sends, so `ip -s link` showed about 1% errors and some drops while every packet got through (Shintech19, issue #62).  They're rebuilt with the fixed code.  A TV set up with one of the old builds is offered the fixed one: **Faster driver** says a fixed build is ready, and `status` says how to get it.
+- **Update block said its firewall rule was missing on kernels without iptables' filter table.**  Some TVs have `iptables` but no `ip_tables` in the kernel (a 2020 NANO91 on webOS 5, issue #62), so the rule can never be added.  The block no longer counts it as missing there.
+
 ## [2.11.57] - 2026-11-25
 
 ### Added

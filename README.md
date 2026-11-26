@@ -55,7 +55,7 @@ LG-USB-2-ETH0 renames the adapter to `eth0` and parks the built-in port under an
 - **Finds problems for you.**  The status screen points out a cable stuck at 100 Mbit/s, traffic going over Wi-Fi, Wi-Fi with the adapter's IP, a cable link that keeps dropping, no update block, and more, with what to do.  [Troubleshooting](#troubleshooting)
 - **Network tools.**  **Check connection** tests the cable, address, router, DNS and internet one step at a time and says where it breaks.  **Live traffic**, **Network details**, **Link health** and **Speed test history** show the rest.  [The TV app](#the-tv-app)
 - **Speed test and reports.**  A speed test against Cloudflare, or another server where Cloudflare is blocked, and a QR code that opens a compatibility report on your phone, filled in with MAC addresses hidden.  [The TV app](#the-tv-app)
-- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 175 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
+- **Hard to break the TV.**  No system files touched, checked downloads, a fallback for every change, and 177 tests under the TV's own busybox shell on every push.  [Is it safe?](#is-it-safe-and-how-do-i-undo-it)
 
 > [!TIP]
 > **Help make it work on more TVs.**  This project grows from people trying it on their own TVs.  Any of these helps, and gets your name in [Special thanks](#special-thanks):

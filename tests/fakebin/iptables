@@ -8,6 +8,11 @@ touch "$f"
 # Like iptables 1.8.7: -h lists --wait, and -w [seconds] waits for the lock.
 # $FAKE_STATE/iptables_locked: another tool holds the lock, so a call
 # without -w fails with exit 4
+# $FAKE_STATE/no_filter: a kernel without ip_tables (no filter table)
+if [ -e "$FAKE_STATE/no_filter" ] && [ "$1" != -h ]; then
+    echo "iptables v1.6.2: can't initialize iptables table \`filter': Table does not exist (do you need to insmod?)" >&2
+    exit 3
+fi
 if [ "$1" = -h ]; then echo '  --wait -w [seconds]	maximum wait to acquire xtables lock before give up'; exit 0; fi
 if [ "$1" = -w ]; then
     shift

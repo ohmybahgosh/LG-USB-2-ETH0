@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.57"
+VERSION="2.11.58"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -62,7 +62,7 @@ DRIVER_DIR="${LGU2E_ROOT}/home/root/lg-usb-2-eth0/drivers"
 # fixed commit.  test-driver only ever loads one until the next restart.
 # How the test went is kept across a restart, so a test that froze the TV
 # is still reported.
-EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/59fd4812260dc98a4eb34f98e893af536dd87fc5/experimental"
+EXPERIMENTAL_URL="https://raw.githubusercontent.com/ohmybahgosh/lg-webos-usb-drivers/e99d6823ac4d1a65a6167cab4fce778f261636c5/experimental"
 DRVTEST_FILE="${LGU2E_ROOT}/var/lib/webosbrew/lg-usb-2-eth0.drvtest"
 DRVTEST_FORM="https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=driver-test.yml"
 # DonZoomik's own boot hook for r8152_oot, which does the same job as --module
@@ -1674,6 +1674,10 @@ ipt() {
     # shellcheck disable=SC2086 # -w and its seconds, or nothing
     iptables $IPT_W "$@"
 }
+# Can this TV use firewall rules at all?  Some kernels have iptables but no
+# ip_tables or filter table (a 2020 NANO91 on webOS 5, issue #62), and every
+# rule there would read as missing forever
+fw_usable() { command -v iptables >/dev/null 2>&1 && ipt -L OUTPUT -n >/dev/null 2>&1; }
 upd_fw_rule() { ipt -C OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; }
 # The update servers missing from /etc/hosts
 # shellcheck disable=SC2086 # one word per host
@@ -1808,7 +1812,7 @@ updates_block() {
             echo "Could not add update servers to $HOSTS_FILE."
         fi
     fi
-    if command -v iptables >/dev/null 2>&1 && ! upd_fw_rule; then
+    if fw_usable && ! upd_fw_rule; then
         if ipt -I OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null; then echo "Blocked $UPD_IP, which the updater reaches by IP."; else echo "Could not block $UPD_IP."; fi
     fi
     if [ "$BLOCK_PHONE" = 1 ]; then phone_block "${1:-now}"; else phone_unblock; fi
@@ -1856,7 +1860,7 @@ updates_unblock() {
     fi
     hosts_remove "$UPD_TAG"
     phone_unblock
-    if command -v iptables >/dev/null 2>&1; then
+    if fw_usable; then
         while upd_fw_rule; do ipt -D OUTPUT -d "$UPD_IP" -j DROP 2>/dev/null || break; done
     fi
     return "$_uf"
@@ -1870,7 +1874,7 @@ upd_gaps() {
     [ "$(upd_setting)" = true ] && _ug="check"
     case "$(upd_auto_setting)" in ''|off) ;; *) _ug="$_ug auto" ;; esac
     [ -n "$(upd_missing_hosts)" ] && _ug="$_ug hosts"
-    command -v iptables >/dev/null 2>&1 && ! upd_fw_rule && _ug="$_ug firewall"
+    fw_usable && ! upd_fw_rule && _ug="$_ug firewall"
     [ "$BLOCK_PHONE" = 1 ] && phone_open && _ug="$_ug phone"
     { [ -e "$SWUPDATE_DIR/Image_Update_Info.xml" ] || [ -e "$SWUPDATE_DIR/Package_Update_Info.xml" ]; } && _ug="$_ug download"
     echo "${_ug# }"
@@ -1973,12 +1977,12 @@ RS_TAG="# lg-usb-2-eth0 block-remote-support"
 rs_missing_hosts() { hosts_missing $RS_HOSTS; }
 # The remote support addresses without their firewall rule
 rs_missing_ips() {
-    command -v iptables >/dev/null 2>&1 || return 0
+    fw_usable || return 0
     for _ri in $RS_IPS; do ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null || printf '%s ' "$_ri"; done
 }
 # Is any remote support firewall rule there?
 rs_any_rule() {
-    command -v iptables >/dev/null 2>&1 || return 1
+    fw_usable || return 1
     for _ri in $RS_IPS; do ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null && return 0; done
     return 1
 }
@@ -1995,7 +1999,7 @@ rs_block() {
 }
 rs_unblock() {
     hosts_remove "$RS_TAG"
-    if command -v iptables >/dev/null 2>&1; then
+    if fw_usable; then
         for _ri in $RS_IPS; do
             while ipt -C OUTPUT -d "$_ri" -j DROP 2>/dev/null; do ipt -D OUTPUT -d "$_ri" -j DROP 2>/dev/null || break; done
         done
@@ -2811,6 +2815,14 @@ driver_offer() {
         if [ -n "$_os" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_om" | awk '{print $1}')" != "$_os" ]; then
             echo changed; return
         fi
+        # A rebuild of the driver set up here is known (like the ASIX builds
+        # with Linux's 2022 RX fix): offer it, if the one set up is one it
+        # replaced, rather than a module of the user's own
+        if [ -n "$_os" ] && case " $SUPERSEDED_DRIVERS " in *" $_os "*) true ;; *) false ;; esac && _nd=$(driver_for_now); then
+            # shellcheck disable=SC2086 # split the fields on purpose
+            set -- $_nd
+            if [ "$3" = "${_om##*/}" ] && [ "$2" != "$_os" ]; then echo newer; return; fi
+        fi
         echo active; return
     fi
     sig_enforced && { echo none; return; }
@@ -2849,9 +2861,9 @@ R8152_OOT_IDS="045e:07ab,045e:07c6,045e:0927,045e:0c5e,04e8:a101,0955:09ff,0b05:
 TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309a215eaea6ce4ce888fbd3c71285f9e47717
 5.4.268-320 - r8152_oot.ko 952bb6b87b7889d4f6d197133d86ed16630d79c1c56c2f96ad89a51f4c4028f0
 4.4.3-119.drd4tv.6 m16p r8152_oot.ko af80711e8fea081b836281223660b721dd26ba995f5f5e312e133885f7ad2c84
-4.4.3-119.drd4tv.6 m16p ax88179_178a.ko b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a
+4.4.3-119.drd4tv.6 m16p ax88179_178a.ko 8a019d701f814b615bdae3caec3bd46159da1dd1233392f3f4d0a080638a0d98
 4.4.3-119.drd4tv.6 m16p usbnet.ko 83a046f10e739ebde0782973afd24146ba3b5d1052af9c5040bf481446db2d0c
-4.4.84-150.glacier.2 - ax88179_178a.ko 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3
+4.4.84-150.glacier.2 - ax88179_178a.ko 07990dbaa4b28989119f1a39589cff7793635e79c17f95fb4d9979879430b0b1
 4.4.84-150.glacier.2 - usbnet.ko 0b0e23b0484ba216755d95789f2e5836675972d6aadf6d3f246cfb430f3741b2
 5.4.96-115.22.meru.2 k8lp r8152_oot.ko 7ca7a20d8fa214e1fba824e18f75d28a67192a43d3f00813c52b44700fc27c99
 5.4.268-223.29.okapi.pine.4 k8hpp ax88179_178a.ko 42e7c03cee10cb0cece885806176cda8a6c2382e7487bae02dd1325135911b9e
@@ -2859,17 +2871,17 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.84-723.kcl4tv.20 k7lp r8152_oot.ko ec89ac2a0da869e2a784bca7c9304dc69a229f9cd8ff3f5673db82ee943e0015
 5.4.268-294.24.papikonda.2 k24 r8152_oot.ko cd06aaa0cd54da1de85e1e70568f2521aa539e3fc7695e85361c4524cb758da6
 5.4.268-329.ptl4tv.2 - r8152_oot.ko 450d1655b507c61a50cc94640926c727bd528bfb4bbd0e2b277f7e50c0ad81a9
-4.4.84-899.19.koli.1 - ax88179_178a.ko 316a5b93461285f2b77cd776af86046a22a70ae3aedb01eec034550ad8dcece5
+4.4.84-899.19.koli.1 - ax88179_178a.ko 5e4a5bc14c6c4f16c6c3750b9ed9cedca56168267453c6d820ae137b69a8f0d3
 4.4.84-899.19.koli.1 - usbnet.ko 9674ec86e7e586bcd7dcd911c94d99afbc92293a954009e2cfcaa31e2e265817
 4.4.84-899.19.koli.1 - r8152_oot.ko e863bc0c1ae38da9598788f374346e92c1bdea40d725656ebd5e2c12def78f3d
-4.4.84-612.40.jimna.1 k6hp ax88179_178a.ko 2bdda8cd0e9ba5dc4a8a8f82266d6695a71a9cb994e82f77a334e6e496253c84
+4.4.84-612.40.jimna.1 k6hp ax88179_178a.ko e822c67205f92145f92ed2d4771f84ed35378d58ba79249693499c465c95bb88
 5.4.268-223.29.okapi.5 k8lpn2 ax88179_178a.ko 5dc25531a00b5f8c0bda28cbadcc8cb2fd7c0781262783ad8d54db14504798bc"
 
 EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
 4.4.84-612.40.jimna.1 k6lp r8152.ko 388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e
-4.4.84-612.40.jimna.1 k6lp ax88179_178a.ko 0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22
+4.4.84-612.40.jimna.1 k6lp ax88179_178a.ko 05f1f7de7192fe3324af9bc9261ae653d96b5a6ca2f3abf4295385be107b022c
 4.4.84-612.21.6.jardine.2 k6lp r8152.ko f4c84da8cf2cf24ec50daede4ff82f36112d745e59a3d3eef65de9a5edbc7c87
-4.4.84-612.21.6.jardine.2 k6lp ax88179_178a.ko 727f2f59e7ab271b88febbde1c9fca5492d0e2c6b106723563daff6ecb2397f3
+4.4.84-612.21.6.jardine.2 k6lp ax88179_178a.ko 3644fcc81c10ca618016f72d8d3c8faf0957777e3dbb33bae462698ffabfe8f8
 5.4.268-294.24.papikonda.2 k24n r8152_oot.ko 9d9a23b5c2384c9ec93c78a750f1b33e8ca73120f2dca9d826d0b77f274baeda
 5.4.268-294.24.papikonda.2 k25lp r8152_oot.ko 31921857e73f83d8958d0d8afb79d4ee8a555128edd294e233fb96997c3decae
 5.4.268-294.24.papikonda.2 k8hp r8152_oot.ko 6b771e9b1abe20dabff4278a0ce290f788d8498a9b39a4d954fc43fcf5570730
@@ -2880,17 +2892,17 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 5.4.268-294.ptl4tv.24 k25lp r8152_oot.ko 9b0035c3094381980cb9ffda2b665e310c22ada4ca056a345f2ebf31fdd02d53
 5.4.268-294.ptl4tv.24 k25lp ax88179_178a.ko db0902a367c93acde238cf48170cb4c48791ddd748380f8e27b99e645f545c49
 5.4.96-115.30.mole.2 k8hp r8152_oot.ko 398b239f2298d00b3dea134eebfa84cee2d79c122f33f68349d923516f1e017c
-5.4.96-115.30.mole.2 k8hp ax88179_178a.ko 33e919bd94cec6e3c20921984ba0405a8fd4768d03e41a288ccfe69732e48770
+5.4.96-115.30.mole.2 k8hp ax88179_178a.ko d988fde14a6535903ebe754d8c0325e1ccd0e7c717d5010c028d509f4a3fb751
 5.4.96-115.30.mole.2 k8lp r8152_oot.ko 2405c5aeded1b052c6ee8f53c7498ac73f38a315788d056cc3eef462577fb801
-5.4.96-115.30.mole.2 k8lp ax88179_178a.ko b754497e8c95b7cb377c1b9b6da8fffc70825b68830c3759077ada0a6b7fc385
+5.4.96-115.30.mole.2 k8lp ax88179_178a.ko 6d10c8c0f415d1db61cbd6e4c98525910392e344be8afa9e175310272e74ce29
 5.4.96-115.30.mole.2 k8ap r8152_oot.ko 65281484986c73df3f95abe7d2fda7bf7f7e0880c388f32732b34167a8a92b94
-5.4.96-115.30.mole.2 k8ap ax88179_178a.ko 6045ef1212973109a33e464f58425770640697cc7c6b838ad708663073d3b852
+5.4.96-115.30.mole.2 k8ap ax88179_178a.ko 808a20d56825604477d08401e3b9c500cc6ec9ef3c163d09f181f4a0e403f4d0
 5.4.96-115.28.mirima.1 k8hp r8152_oot.ko 24eeec6deafe5fb73071732fd1e6bed6de94c5e9a6a877335b830f668829a00d
-5.4.96-115.28.mirima.1 k8hp ax88179_178a.ko 5fa2abdd63d67aaaa75cc17ac0fd79264fb7195662e7568bdf617e3c45cdf5d6
+5.4.96-115.28.mirima.1 k8hp ax88179_178a.ko 1759a84edb2a02c95b54a27d2cc479f5345f713975268bec3065547d4adb5229
 5.4.96-115.28.mirima.1 k8lp r8152_oot.ko 12614a7b59b47a74dc53822436059795ed351a247eba0fcb34587c419d3352db
-5.4.96-115.28.mirima.1 k8lp ax88179_178a.ko 29db46149c50823ea1810d3955d20c94f195bd3471b9ad4244c44030ed84d11e
+5.4.96-115.28.mirima.1 k8lp ax88179_178a.ko 37f7c9a045d4bdad7396d6e41d05878151d1dc87d2dce7a481f7d3a488a9532b
 5.4.96-115.28.mirima.1 k8ap r8152_oot.ko d097f39b6cad9a093cba010931e99b4af419ac25d15b2d0e9208198534dd848e
-5.4.96-115.28.mirima.1 k8ap ax88179_178a.ko b74e8220efe09c51b2d36b2feea7227bab1aa011d30b059e8442260e37f65db7
+5.4.96-115.28.mirima.1 k8ap ax88179_178a.ko efeacddadbd0a6e51545fe857933f709414d319cc451e72375e7f2270e660937
 5.4.268-223.29.okapi.5 k24 r8152_oot.ko 512583cb47eaa2aba21f11425a181753688941e4f1d91f8733172e07483a721c
 5.4.268-223.29.okapi.5 k24 ax88179_178a.ko f9d78b081979c205f604113253bede1519e79fb044e7464a4bb71bdc7cd2ddcf
 5.4.268-223.29.okapi.5 k8lpn2 r8152_oot.ko 2c8d545fea7b2cf301c93a3070ac1356e63140499524a211217a8f0e7b89a8bf
@@ -2904,39 +2916,39 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 5.4.268-223.42.okapi.nmrm.2 k24t r8152_oot.ko b4d92c085389e0da84ec8261bd12767c64dde2035ac6c12b7e1dc982224f1ba0
 5.4.268-223.42.okapi.nmrm.2 k24t ax88179_178a.ko 1f17eb1cf7895edfe1743b14ad38374290cedaa247bad33963cd211035d992c8
 5.4.96-115.16.mebbin.1 k8lp r8152_oot.ko 2551ed3d73a2a96106ab6256f50059a9f3a00691803589434c13526e9b35294f
-5.4.96-115.16.mebbin.1 k8lp ax88179_178a.ko 4a3bc86a2c1335dcf2849ea9d216d423e2dcbf2d4ccefb865b10003c0c967ebb
+5.4.96-115.16.mebbin.1 k8lp ax88179_178a.ko 572f2bd48a02da12606650f7a764fc0aaa584c5173c20acda784457a10302108
 5.4.96-115.16.mebbin.2 k8lp r8152_oot.ko 6746efadc3b19dd2a970aa5be002e72136860c10c0ced0423b28e56686233de7
-5.4.96-115.16.mebbin.2 k8lp ax88179_178a.ko 365a58e4f3985ed47eb8323e68c1b6d137525a113834d8862a9d6185acecaaee
+5.4.96-115.16.mebbin.2 k8lp ax88179_178a.ko cf494b1a48f69d7ac6e5f35886b36b295268e5d8e8a0a2c5eaed8d03f48611a0
 5.4.96-115.22.meru.2 k8hpt r8152_oot.ko 85483420c645c546cef952101254911409a813aec1b7b3701b5b13a5da421ea9
-5.4.96-115.22.meru.2 k8hpt ax88179_178a.ko 60756f6439644a6eaca3566c8d11b10355b78a7c837239c2bd41b204444c2094
-5.4.96-115.22.meru.2 k8lp ax88179_178a.ko 76d2ae8749b8c5ecaf0849d5f65414fe897996342f2960ce804d37c29615606b
+5.4.96-115.22.meru.2 k8hpt ax88179_178a.ko fa15d4f07ac274f054cd7ad927c719e754710e3c9ce9706a137996d0466d3ebc
+5.4.96-115.22.meru.2 k8lp ax88179_178a.ko eed09acb69098f720e253152c9c3ac4e4364982bb277d29abb1b26b9d290d24d
 5.4.96-115.28.1.22.mirima.2 k8ap r8152_oot.ko 01e46f3241637977fe2c7539199b81b224a006631d572059b9b38b52714876ee
-5.4.96-115.28.1.22.mirima.2 k8ap ax88179_178a.ko 90ef60771f0e328675a3c36e8445d9eaa8e9ea9522744d45f63fbe79b73c3820
+5.4.96-115.28.1.22.mirima.2 k8ap ax88179_178a.ko dccd1d45c838f485b7d6efa9f55929eee9187e2c71828c206b6892dd6ee27c80
 5.4.96-115.9.marine.1 k8lp r8152_oot.ko 127a548bb76d831c094375b6463d28d81f371a51155227119ebb7ee45d62a5ce
-5.4.96-115.9.marine.1 k8lp ax88179_178a.ko 10db7625621ead798282fd3ba45d9afa9fb9baf6d558160af4e50871a5499b78
+5.4.96-115.9.marine.1 k8lp ax88179_178a.ko eb077e57363523baa40294f41a9009359e7e007ca3203518cd291967a26f042d
 5.4.96-132.40.nameri.2 k8hpp r8152_oot.ko 154147119ccf6f431e93581c7f9f15b635fc62603b2cfd1f69a4dde53a836112
-5.4.96-132.40.nameri.2 k8hpp ax88179_178a.ko ceeeea4cac5d9e3301fe9bcf88ca4b22c6c52a908d7cabe1d9f74d14e528bde7
+5.4.96-132.40.nameri.2 k8hpp ax88179_178a.ko e4d17254b0cb9c24acd329e2a53747a2ce5b80c48d21832c33d74bdccba727ca
 5.4.96-132.40.nameri.2 k8lpn r8152_oot.ko caa832f4e4baeab1ed1e28988d4b1229e3b292305145d292335869b493c3e158
-5.4.96-132.40.nameri.2 k8lpn ax88179_178a.ko 5f974eb43b9b30e59378943dc2f90fe6750b2523293f8da49188bc7e0e3df76e
+5.4.96-132.40.nameri.2 k8lpn ax88179_178a.ko 71479314712ceb38185956f3b36066807c754f984661b0f070d1e1ac4c58b9ac
 5.4.96-132.40.nameri.pine.1 k8hp r8152_oot.ko 1025328c8e302b29d18e5c10f1e207bdb61a76267223057c67f647eb4653d82b
-5.4.96-132.40.nameri.pine.1 k8hp ax88179_178a.ko 403e0e6de1cda42d6bea552178e07a063eb0360957adc76fc2163e038b02b68f
+5.4.96-132.40.nameri.pine.1 k8hp ax88179_178a.ko 176c4a7073c5984e27af07a1f0a9e2053a9920746024b044ec9655ccc96e150d
 5.4.96-132.50.namtok.2 k8hpp r8152_oot.ko 142319ec9bf7d1d9ac9c2d296f2908b364eeb538d706e3e6b80a9a3ec4bcad0e
-5.4.96-132.50.namtok.2 k8hpp ax88179_178a.ko 66a1b88da655443ebb103caa9f4d639e5e18ccc87e1070f343627fe2625b1b64
+5.4.96-132.50.namtok.2 k8hpp ax88179_178a.ko 0fa99bb7eccc05d0337d93dfe5a086f5af8d63889d50b36f4992da8fbf58457d
 5.4.96-132.50.namtok.2 k8lpn r8152_oot.ko 3d4eaddec0bfb8951d174db5c359d31ade8a04bc1f7be9007d38990f48858bd4
-5.4.96-132.50.namtok.2 k8lpn ax88179_178a.ko da018ad3fa00e31a9514ab4f684ff628a6ca02f9107fd59fa342cbfc855fe217
+5.4.96-132.50.namtok.2 k8lpn ax88179_178a.ko b1a88f2702d81aab0cbbd907b4d0190fd11ee651bce834b4ac5f3a797bbe7375
 5.4.96-223.29.1.okapi.2 k24 r8152_oot.ko 6b4a954a30f722540f52af1d5785bbc5092ee4d694f084a63c099b50ce142050
-5.4.96-223.29.1.okapi.2 k24 ax88179_178a.ko ce4dcf5d1260deea17f92eb79c9b8bccf32726e76b0c90ffb8753e3f40b7e020
+5.4.96-223.29.1.okapi.2 k24 ax88179_178a.ko dcd104387b4fea60b7ade6141a4dd09ee77d899a87a4fec622905cd79152445c
 5.4.96-223.9.oeta.2 k24 r8152_oot.ko aabcb5cd3da9222940916b0f85922937dc3c3a28e9ebe41c646e12a723bb802f
-5.4.96-223.9.oeta.2 k24 ax88179_178a.ko 92d973078eb9021e6368d2957a169e397ea3bee10eab803d6fafd3d74aca5e64
+5.4.96-223.9.oeta.2 k24 ax88179_178a.ko f854b0525324259c51d6cc9e01bb758867737764b20cb98d196991f9af7f14c3
 5.4.96-223.9.oeta.2 k8lpn2 r8152_oot.ko 332888813780ceb254dca62972185c69f6c55b94282e58876fc9c355d80ce472
-5.4.96-223.9.oeta.2 k8lpn2 ax88179_178a.ko 84b3c6a1cf9a24939da08bc4bb782b9e7a734dde4ff3a2f41e0710188f0b1e9f
+5.4.96-223.9.oeta.2 k8lpn2 ax88179_178a.ko 2e3d81c52685e6faf76ecb96f8491f3d4668ad0138c8e1c212eeea78579f2577
 5.4.96-223.obr4tv.29 k24 r8152_oot.ko 952c2545a8a688981d16ed9f7865721d9a92e30b1d7e8a90f198eb46a4983c89
-5.4.96-223.obr4tv.29 k24 ax88179_178a.ko 22a568c650178e9d8812dc65c4a7e8dc88c6311591fa2fbce8c368534d9ed6b6
+5.4.96-223.obr4tv.29 k24 ax88179_178a.ko cf19c36f39e1993513e24db8f7a33bbd62ea93f32cbabfbe29e3a1a70f58ef34
 4.4.84-612.40.jimna.1 k6hp r8152.ko 2502594b536faf6f62a6a89ad618e7d30d43bdcfa9970499196e1bcfcf8b231e
 4.4.84-612.21.6.jardine.2 k6hp r8152.ko dd36ef69cf25345c225452aa311b8133dccd502990ef0a58fc3851c4920d21d3
-4.4.84-612.21.6.jardine.2 k6hp ax88179_178a.ko bf0167932f63ec376d64174d8b4fb7698fc07eef95cf1f19ca9acec9252ad2da
+4.4.84-612.21.6.jardine.2 k6hp ax88179_178a.ko 55da4fdec39d80fe9206db54bd2d77214315efe3fbbcd975a3c357ea7e50e415
 4.4.84-611.japoon.14 k6lp r8152.ko bd7b248ceea3045f2b60074b5cb2a9906cd41ab9b5f4c6ccc2817e0e427a90f7
-4.4.84-611.japoon.14 k6lp ax88179_178a.ko d86d63ae16110ba23867142af62c968a69f3e9230845aeefceb2ae1c325a631c
+4.4.84-611.japoon.14 k6lp ax88179_178a.ko 15e12d540ebbcdca9fa28a38850a81065b44ea9b91a9ed98b467b67b9f27158d
 5.4.268-294.15.paparoa.3 k24n r8152_oot.ko 842d39bae1ec00ddea3dd07d0fefd79af64b5040da551c5a0c5bd3be86d0aa2d
 5.4.268-294.15.paparoa.3 k24n ax88179_178a.ko 273bff897780480cc1d3cf4c0ec52c2c07b59a83eebd98ff1ad8409b4d075d90
 5.4.268-294.15.paparoa.4 k24n r8152_oot.ko e1b94bccd19f11801e5a68249da96fae0b0bb8d8615e77320235dd7b8e9ccba2
@@ -3123,17 +3135,17 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 5.4.96-934.16.1.mirima.1 - r8152_oot.ko fc28abb1bc27b03fd332c384b2e037bd7f897d5779fe4976c02decf593f9882a
 5.4.96-934.16.1.mirima.1 - r8152.ko b7d038d7ffd13ae02ce09ce1f0fe8225c63b13cbab33df1d3e7980dd9ec8ec39
 5.4.96-934.mlt4tv.17 - usbnet.ko 14690e0215980eab06b741047376f66a28049647527dd9a9778cd5ed28e824d9
-5.4.96-934.mlt4tv.17 - ax88179_178a.ko 582a967496f9afb96ce068078fc0938719588d43f60b7286b117f81c02d7dcfc
+5.4.96-934.mlt4tv.17 - ax88179_178a.ko 60799d81f620009d8955090b8b0528fe7eee28635fde79c4401d0c4a002196e1
 5.4.96-934.mlt4tv.17 - dm9601.ko 7cd82d8988ab1ce916ec349628cfa124286d61debef5a26f21db97e9403aa7ea
 5.4.96-934.mlt4tv.17 - aqc111.ko 90451b94ed5f520005959edcb85fae2eadd3521b7fc197c375029df179056ba2
 5.4.96-934.16.1.mirima.1 - usbnet.ko a077664216fe73332e924f35238456cf1ead89cd240306d4c2a8867046b177e6
-5.4.96-934.16.1.mirima.1 - ax88179_178a.ko 8cf34aaa2f8ac689f7ad624e2371cb2d86217cc5c47486db11160b17229df4dc
+5.4.96-934.16.1.mirima.1 - ax88179_178a.ko a455c77b3fac24ff2e847e65bb46af34a9a64e2099014b11135dd92dd12e4081
 5.4.96-934.16.1.mirima.1 - dm9601.ko 952d96d5def983324326c5cc4af4966dc4fa245c6de3a65d52e4ef900d5b9818
 5.4.96-934.16.1.mirima.1 - aqc111.ko 73b4376746d66a6d3614c5b05e836616b78c5bba19f315c6dce98e4affc0a7dd
 5.4.96-955.20.namtok.1 - r8152_oot.ko 848b4b1a3127038ba3578a20b994e41bfc76f5597f11358712f8643bf2c38389
 5.4.96-955.20.namtok.1 - r8152.ko d89876a4e0999ef524d7318512c2ebe71702ed702689bc4709a0e89011c78868
 5.4.96-955.20.namtok.1 - usbnet.ko 684bf8c7e09b54741b1bb4310bf674149f07879184d8b1d248dd53746d46b399
-5.4.96-955.20.namtok.1 - ax88179_178a.ko 1278045563661738deff23f05756cca68b3411413c7b131f7490416ca4b3da72
+5.4.96-955.20.namtok.1 - ax88179_178a.ko 24e45339a06d21c4d530a08e418ca115d663b9e07b93afcc2db1b2e0bb85b488
 5.4.96-955.20.namtok.1 - dm9601.ko 0f466851e6383c81a278d96da25e43c476a2f77d8f9fa7cdc5b1983cbdee0672
 5.4.96-955.20.namtok.1 - aqc111.ko 77c9b4c8fd5ceb05ce43fcb699be2b53fc19f724c3d24bf89983fd2d2c623d30
 5.4.268-966.8.4.okapi.pine.1 - r8152_oot.ko eceadb6d19630fa9682a7766817a8c8432e9656c14a2c696e7d4b881b2c4328c
@@ -3151,7 +3163,7 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 4.4.84-899.kcl4tv.19 - r8152_oot.ko 3aa2dcf4715215506c4074b5a818e102d3323a1c03b41d8c0042465cd9600afd
 4.4.84-899.kcl4tv.19 - r8152.ko 1f4c77b119d249c4d8df9c05ead4c33a4fcac38dee8569eb6353d079163adc3f
 4.4.84-899.kcl4tv.19 - usbnet.ko 8503c66e503726533ed39814ce81aa8f54a54836838c1843a1f9aa50572f3eaf
-4.4.84-899.kcl4tv.19 - ax88179_178a.ko 90427709e3b3c0768f1efe0f6b9035dfa8c678d5d9037cc6b9636fd250bd0aeb
+4.4.84-899.kcl4tv.19 - ax88179_178a.ko eaa6f491563960ef2edd60a2629809098c041e0df432b4238b1a113eb7c5e1f6
 4.4.84-899.kcl4tv.19 - dm9601.ko bf7c15f0a0692e84fe1f4c88b473995240b556dc60c00d6d9093a84c546e16d1
 4.4.84-899.19.koli.1 - r8152.ko b96d7c77b32ef351f7aac682379bef30fa4d9f116fb5e3cde90f31d5bb62d94e
 4.4.84-899.19.koli.1 - dm9601.ko 33b082bcd5c20961200939ffcf09492f4211bd30d0dda2fd7871f8e12d3f3106
@@ -3161,42 +3173,42 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 5.4.268-955.16.nbr4tv.nmrm.10 - ax88179_178a.ko fba0553635804a3b018049db64a31407f9c843428d82ef8a8c13befb8f2dab9c
 5.4.268-955.16.nbr4tv.nmrm.10 - dm9601.ko 7abbe41e5a84d2e7225dc00c6ae0e049842e436f407324caaf53ab666a335d14
 5.4.268-955.16.nbr4tv.nmrm.10 - aqc111.ko f0f7fd57031297f28e578e8cbae1e38617a7d77e4d68080101a70e1e30d72a23
-4.4.84-723.kcl4tv.20 k7lp ax88179_178a.ko 08c91c63048b8efd7315227843bf34db4c11e7ea21966de509b3b9a1034bc725
+4.4.84-723.kcl4tv.20 k7lp ax88179_178a.ko f69985ab51339f2cae4a854fbc0e72655d65645eab61fff2aaa8517edd7c268e
 4.4.84-723.kcl4tv.20 k7lp dm9601.ko 58e26bceaa0f48e5f2703984b526747af7fbf344526e4e7f708e34039229a3ce
 4.4.84-723.kcl4tv.20 k7lp lan78xx.ko 4e2f06b71522a8aac2d3db98e940ea5e66ad3238c46f2e759cc2958b0cce9ae5
 4.4.84-219.jcl4tvmr.6 o208k r8152.ko 683f671f1160f63b0a8eb227269aee6b9c048f781c24693e106304a69e45da82
 4.4.84-219.jcl4tvmr.6 o208k r8152_oot.ko 3c7318f557bbdc3ca92227c539a2242839492fe86efd0188e043f0e0f90d3fb6
-4.4.84-219.jcl4tvmr.6 o208k ax88179_178a.ko 6d9e6ba60d0ceed982f2ab8d2beb26f4dab43ecdb35e52a4f331be4e4df9bfe5
+4.4.84-219.jcl4tvmr.6 o208k ax88179_178a.ko e2ef00d19b2bb27c8a8415ba4dcff2d653873e80929b1851304002737156cb3c
 4.4.84-219.jcl4tvmr.6 o208k dm9601.ko 176a606d09f670a3f64ae8588acc74a42835ac6ffb5021214529c1d2060393cb
 4.4.84-219.jcl4tvmr.6 o208k lan78xx.ko c0edae429e7ce2120ffc0947e8c00f4b2738d0aa892bf374229e528ff97befc9
 4.4.84-229.kcl4tv.6 e60n r8152.ko 456fd387dd142902b41a49187e1645c2a0dbcbf72695c4a6f7ec50bdad512a27
 4.4.84-229.kcl4tv.6 e60n r8152_oot.ko 0f93773025026cf4e1c965d67a7ecb807db95b5d6eb5f2a20b116909bb4634c6
-4.4.84-229.kcl4tv.6 e60n ax88179_178a.ko ff396d3e0631c14b963aca896ad2a45e326464df95e707026265e36113946aa0
+4.4.84-229.kcl4tv.6 e60n ax88179_178a.ko 08c1e384e8cdb70b55b7789e451a36889eb464c146d0fefcdd7ab0b94b855d85
 4.4.84-229.kcl4tv.6 e60n dm9601.ko add3ac9553d3eeb7a9a604e39e54a6fdc6296d746123047bc8246c010a865a0f
 4.4.84-229.kcl4tv.6 e60n lan78xx.ko 7ed83a1334046625edef87f470aed4036e0567ad9e98e0bf2017a3c774fbe024
 4.4.84-p.649.grampians.k5lp.1 k5lp r8152.ko d2a36a02efa01dc0e4d540f938c6429233c04f47a65b759fb40d54d7ca9641eb
 4.4.84-p.649.grampians.k5lp.1 k5lp r8152_oot.ko b8482abff0018011d2971861cb4296070f1ab849b5f59428ca53fb9918960c13
-4.4.84-p.649.grampians.k5lp.1 k5lp ax88179_178a.ko d974e92d31fd83c7a03f6ab89955a7bab504379588f51e6dd40d43333b703a2f
+4.4.84-p.649.grampians.k5lp.1 k5lp ax88179_178a.ko c401189adff86a8c207c54f387818cbfd2a3ad6f959a0865b9a15df5ec0678e1
 4.4.84-p.649.grampians.k5lp.1 k5lp dm9601.ko 355c79a031998432c4536729d2f0beb98f676606523ae28f468528ad829a6a7c
 4.4.84-p.649.grampians.k5lp.1 k5lp lan78xx.ko 4ff5f1afda179bf762ddd40b5c8e9b8dc88f7c43ee15cec24e8baddb56c62d87
 4.4.84-417.gld4tv.7 k5lp r8152.ko 5b31f38ec14ecdb581a58ca0ad8f5a93647219058eae33e6cb9cf546074e59da
 4.4.84-417.gld4tv.7 k5lp r8152_oot.ko f00752a9ac4d6f0f32f4eb2bde34c4204178af7cf76207c5d4d79a8bd8bb593e
-4.4.84-417.gld4tv.7 k5lp ax88179_178a.ko 5ee303ec7ce71100ad7529720792d0807789a464e68bf17184b99eb643642f39
+4.4.84-417.gld4tv.7 k5lp ax88179_178a.ko 7f32ce557253bbfca1d0f756cc177590210ed0f6eea5f25602dbeb32f31b1b21
 4.4.84-417.gld4tv.7 k5lp dm9601.ko 355b6be0802984379e76de956baa551e57c5979e76dcdfe0245d57ebf8929400
 4.4.84-417.gld4tv.7 k5lp lan78xx.ko 166c0bdd895cfeee9e46cdb24e65ec869a431d1c8a265e8dd926537ccb7eb948
 4.4.84-433 m3r r8152.ko 27b5d67150b17efaf69f8280cd550880f8c946c83f73da5e9902ad6a0321a4b4
 4.4.84-433 m3r r8152_oot.ko 9e2266e6d4c062e76713f367f1a0f8b5ff6cb5816792874647befe0a5ff9c893
 4.4.84-433 m3r usbnet.ko b639944dc74485d01a3817b3374518545e74e4cc56d3a89c02827cb0de5f656b
-4.4.84-433 m3r ax88179_178a.ko 175a793f24832a7148199327af7cb1f1e3f26c5c67d2ded4ecc568fede584d0f
+4.4.84-433 m3r ax88179_178a.ko 8e132e4cc9c6d2532a2f67ba38f2d7f844100111617cd31090dad6bbccaf2960
 4.4.84-433 m3r dm9601.ko 044f1cece8c0dfb86bcaeb096b0c39fbc93f83e52cf06b181b78165a8ac60bc9
 4.4.84-404.glacier.10 m3 r8152.ko c775213b1db67281e2ea09c9b87b1d0cd5da7835169f2760eea307981d35864f
 4.4.84-404.glacier.10 m3 r8152_oot.ko a90c12ad4046093f55341891b1df75da0c142fb4ecd77aa9d2d0efb258aceee7
 4.4.84-404.glacier.10 m3 usbnet.ko d66e396794044fd673925ce0516c0b14e8fdd15ef9ffe2b66e5fef05cf72e99c
-4.4.84-404.glacier.10 m3 ax88179_178a.ko 1f1e36c8a86cea8ba2dbbb01bb5e57c6766cd8ea3abfb59369a62575cc856219
+4.4.84-404.glacier.10 m3 ax88179_178a.ko 5e863748d808c1885bc9840a6fafad4e544b452d315babb0e435ff09e8706aab
 4.4.84-404.glacier.10 m3 dm9601.ko 3b3181fab35cd8a441eb598f28a328dec43821c406249adf705b9d587b973a1d
 4.4.84-636.glacier.26 lm18a r8152.ko 423aeba6c26282b701736341180a99f5e04b584244729f0b5a7c314792d5b456
 4.4.84-636.glacier.26 lm18a usbnet.ko 7374f9c280858f21e24d23c46a28991ee92fbfe6a9b20b4c7dc2121ce0040d43
-4.4.84-636.glacier.26 lm18a ax88179_178a.ko 4bef243a4dc461521ba69a17706b4994e2ffa0de543f3b8d386bdcb8452008a6
+4.4.84-636.glacier.26 lm18a ax88179_178a.ko 90a04d06f6b3be5d3e37e1769e4aa58b84d9b7d22ff10baf24c9235a2e47fd35
 4.4.84-636.glacier.26 lm18a dm9601.ko 23c57483a3ebb10e9a6723f9333a0c69964036d17eb2c4c07744ac792a12cbd0
 4.4.84-150.glacier.2 - r8152_oot.ko e50889d81f41dfc4c8a3c36c4d22a27068d1c859aa560ea354ccf50fe6110997
 4.4.84-150.glacier.2 - dm9601.ko 276b96fc1f8ae61fab02afa68f2c65278d7397c128173713c9e14826fafcdf15
@@ -3204,26 +3216,32 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 4.4.84-432 m3r r8152.ko dcd0600fee1667a4d8c0262b3bf763afe5796657ad45ee0243b2d6ff4c17cfef
 4.4.84-432 m3r r8152_oot.ko 6d066211ac18ed7106395b009ae093e70eb731811262410ab632716e39a659fc
 4.4.84-432 m3r usbnet.ko 491bd1cb111c13930631ebf70d69cbd2cfeec29f9e69fdeb71bf4640f4affbad
-4.4.84-432 m3r ax88179_178a.ko 79c377739f891c7a60b3998524de633e7767460ed78fc1e601b3626a24fb870e
+4.4.84-432 m3r ax88179_178a.ko 14f8e7a97f9dcbe4329538c904ddc545d3242750f313f6f57a491755a94ade1d
 4.4.84-432 m3r dm9601.ko b1bbd20f24e3fd29b9c4c05b8a6f0e9672e39beba9ffb52b480166f733f914d9
 4.4.3-208.drd4tv.3 - r8152.ko ebd2bfb6af3e0cad297c1e12c25332850a00b422441cae35deac73d439f8d7be
 4.4.3-208.drd4tv.3 - r8152_oot.ko d4fd0ba8929b1b61550b2618b3ed885d434f38ef2e076811f7f2d1e2fde49815
-4.4.3-208.drd4tv.3 - ax88179_178a.ko 352bacb1a20a3de1931e5d40c790eb86d1875463df03ad57956377fc8ab6d28c
+4.4.3-208.drd4tv.3 - ax88179_178a.ko 6750bfb5919f353bb8696638b2b2fdaf94dbc77f9a6516233459b3f560afda5f
 4.4.3-208.drd4tv.3 - dm9601.ko 235c18e00870f39e572879146be3fd3c4011d9b0701c1fc358b70c5decb9fcdf
 4.4.3-208.drd4tv.3 - lan78xx.ko d266c9c4220428bb30fa470fab7726c1bce701fdfff7e4ec3cbca8bb426529e6
 4.4.3-78.drd4tv.2 - r8152.ko 0e29709c60bf63e1aca86cff204390ba271ef9bae6ca766cc373a5fe5034382f
 4.4.3-78.drd4tv.2 - r8152_oot.ko 98972012d355256d764418d9c54f3b3617a0fe29f52174b82487763c1c7cb939
 4.4.3-78.drd4tv.2 - usbnet.ko 911cdde2d5f1924f8c9c456981cd40a8be45b9f8ce960a1119eba543edef82cf
-4.4.3-78.drd4tv.2 - ax88179_178a.ko 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48
+4.4.3-78.drd4tv.2 - ax88179_178a.ko e97aac905ffe564c14738f3750bb1c7d9655e169d8eebdddf19c10f434ab2b47
 4.4.3-78.drd4tv.2 - dm9601.ko 65b67b9efe9a2c5afb5e69a21596c2d970335e59db0cc040edac28d5ea7a372c
 4.4.3-119.drd4tv.6 m16p dm9601.ko a4cac01d3f78868eb2679bdd59b9e872501a335c2b1e26f974f267a33d321e59
 4.4.3-119.drd4tv.6 m16p lan78xx.ko 999f9df3e4246860df241612be4142ae98ff46766784934585f1aa71e31ae86b
 4.4.84-899.kcl4tv.22 - r8152_oot.ko 8f501b4f463d8dce2a6e99fc8d825062361e9924fde41ca544d4621b76fb2f56
 4.4.84-899.kcl4tv.22 - r8152.ko b42d7814fadde20ffc003daf1524f639054166d9556e4cfe3c94485c91cf23d0
 4.4.84-899.kcl4tv.22 - usbnet.ko 58bd91b60e69458a811e5812b38a5e816faee8f4bfdcdb4be779c6e70d4494bc
-4.4.84-899.kcl4tv.22 - ax88179_178a.ko 48b58ea22f2b60397469ba56162b513891a762d91d17aca6da61c70eada28e85
+4.4.84-899.kcl4tv.22 - ax88179_178a.ko c4190668ee26932f11013e7c10980509dd15be24c117b68bba959b55360cd67e
 4.4.84-899.kcl4tv.22 - dm9601.ko 38d824f4281dab8966b86406fdab116be768b31efefae8217fbc0207afcda1b7
 4.4.84-723.kcl4tv.20 k7lp r8152.ko 5b85ac1b84c0b9341f9c0bb87c325d27366b565b2d4961d0ec884292581a89c0"
+
+# SHA-256s of drivers replaced by a rebuild of the same driver for the same
+# kernel (the ASIX builds from LG's 4.4 and 5.4.96 sources, before Linux's
+# 2022 RX fix).  driver_offer offers the rebuild to a TV set up with one.
+SUPERSEDED_DRIVERS="2bdda8cd0e9ba5dc4a8a8f82266d6695a71a9cb994e82f77a334e6e496253c84 352bacb1a20a3de1931e5d40c790eb86d1875463df03ad57956377fc8ab6d28c 6d9e6ba60d0ceed982f2ab8d2beb26f4dab43ecdb35e52a4f331be4e4df9bfe5 ff396d3e0631c14b963aca896ad2a45e326464df95e707026265e36113946aa0 5ee303ec7ce71100ad7529720792d0807789a464e68bf17184b99eb643642f39 d86d63ae16110ba23867142af62c968a69f3e9230845aeefceb2ae1c325a631c bf0167932f63ec376d64174d8b4fb7698fc07eef95cf1f19ca9acec9252ad2da 727f2f59e7ab271b88febbde1c9fca5492d0e2c6b106723563daff6ecb2397f3 0e915333f96c755a292fbfe828ed689421661c46096b12ee897121c317631b22 08c91c63048b8efd7315227843bf34db4c11e7ea21966de509b3b9a1034bc725 d974e92d31fd83c7a03f6ab89955a7bab504379588f51e6dd40d43333b703a2f 4a3bc86a2c1335dcf2849ea9d216d423e2dcbf2d4ccefb865b10003c0c967ebb 365a58e4f3985ed47eb8323e68c1b6d137525a113834d8862a9d6185acecaaee 60756f6439644a6eaca3566c8d11b10355b78a7c837239c2bd41b204444c2094 76d2ae8749b8c5ecaf0849d5f65414fe897996342f2960ce804d37c29615606b 90ef60771f0e328675a3c36e8445d9eaa8e9ea9522744d45f63fbe79b73c3820 b74e8220efe09c51b2d36b2feea7227bab1aa011d30b059e8442260e37f65db7 5fa2abdd63d67aaaa75cc17ac0fd79264fb7195662e7568bdf617e3c45cdf5d6 29db46149c50823ea1810d3955d20c94f195bd3471b9ad4244c44030ed84d11e 6045ef1212973109a33e464f58425770640697cc7c6b838ad708663073d3b852 33e919bd94cec6e3c20921984ba0405a8fd4768d03e41a288ccfe69732e48770 b754497e8c95b7cb377c1b9b6da8fffc70825b68830c3759077ada0a6b7fc385 10db7625621ead798282fd3ba45d9afa9fb9baf6d558160af4e50871a5499b78 ceeeea4cac5d9e3301fe9bcf88ca4b22c6c52a908d7cabe1d9f74d14e528bde7 5f974eb43b9b30e59378943dc2f90fe6750b2523293f8da49188bc7e0e3df76e 403e0e6de1cda42d6bea552178e07a063eb0360957adc76fc2163e038b02b68f 66a1b88da655443ebb103caa9f4d639e5e18ccc87e1070f343627fe2625b1b64 da018ad3fa00e31a9514ab4f684ff628a6ca02f9107fd59fa342cbfc855fe217 ce4dcf5d1260deea17f92eb79c9b8bccf32726e76b0c90ffb8753e3f40b7e020 92d973078eb9021e6368d2957a169e397ea3bee10eab803d6fafd3d74aca5e64 84b3c6a1cf9a24939da08bc4bb782b9e7a734dde4ff3a2f41e0710188f0b1e9f 22a568c650178e9d8812dc65c4a7e8dc88c6311591fa2fbce8c368534d9ed6b6 b37a3e20b9da3a4d072a377f167c6e99273be42da9326eb509ef6ae3c7ace24a 478c08e5891cd2ae54c18f41e136c7924a8347bed8af65fa9968925b1f6fce48 5e08e1ada063109f903d4564e14988d5219bc6150728688221e14622143043d3 1f1e36c8a86cea8ba2dbbb01bb5e57c6766cd8ea3abfb59369a62575cc856219 79c377739f891c7a60b3998524de633e7767460ed78fc1e601b3626a24fb870e 175a793f24832a7148199327af7cb1f1e3f26c5c67d2ded4ecc568fede584d0f 4bef243a4dc461521ba69a17706b4994e2ffa0de543f3b8d386bdcb8452008a6 316a5b93461285f2b77cd776af86046a22a70ae3aedb01eec034550ad8dcece5 90427709e3b3c0768f1efe0f6b9035dfa8c678d5d9037cc6b9636fd250bd0aeb 48b58ea22f2b60397469ba56162b513891a762d91d17aca6da61c70eada28e85 8cf34aaa2f8ac689f7ad624e2371cb2d86217cc5c47486db11160b17229df4dc 582a967496f9afb96ce068078fc0938719588d43f60b7286b117f81c02d7dcfc 1278045563661738deff23f05756cca68b3411413c7b131f7490416ca4b3da72"
+[ -z "${LGU2E_TEST_SUPERSEDED:-}" ] || SUPERSEDED_DRIVERS=$LGU2E_TEST_SUPERSEDED
 
 # experimental_driver KERNEL: "url sha256 file folder ids" lines for the
 # untested drivers built for exactly that kernel (and this TV's chip)
@@ -4028,7 +4046,7 @@ undo_changes() {
         warn "The Wi-Fi fallback had turned Wi-Fi on, and it stays on.  Turn it off in the TV's network settings if you don't want it."
     fi
     _ucf=0
-    if [ -f "$UPD_MARK" ] || [ -f "$UPD_AUTO_MARK" ] || [ -f "$SSG_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null || { command -v iptables >/dev/null 2>&1 && upd_fw_rule; }; then
+    if [ -f "$UPD_MARK" ] || [ -f "$UPD_AUTO_MARK" ] || [ -f "$SSG_MARK" ] || grep -q "$UPD_TAG" "$HOSTS_FILE" 2>/dev/null || { fw_usable && upd_fw_rule; }; then
         if updates_unblock; then
             echo "Undid --block-updates.  The Homebrew Channel's own Block system updates is unchanged."
         else
@@ -4324,6 +4342,9 @@ show_status() {
             if [ -n "$_hs" ] && command -v sha256sum >/dev/null 2>&1 && [ "$(sha256sum "$_hm" | awk '{print $1}')" != "$_hs" ]; then
                 status_issue "The driver module changed since it was installed, so it won't be loaded. Run 'install' again if you replaced it on purpose."
             fi
+            if [ "$(driver_offer)" = newer ]; then
+                status_note "A fixed build of this driver is ready, with Linux's 2022 receive fix (the old one counts RX errors and drops that aren't real): run 'get-driver', then 'install --module $_hm'."
+            fi
         fi
     fi
     _bi=$(find_builtin_nic)
@@ -4584,7 +4605,7 @@ show_json() {
         "$(js "$VERSION")" "$(js "$_jupd")" "$(js "$TV_MODEL")" "$(js "$WEBOS_NAME")" "$(js "$WEBOS_RELEASE")" "$(js "$FIRMWARE")" "$(js "$(uname -r)")"
     printf '"updates":{"check":%s,"hbcBlock":%s,"missingHosts":%s,"firewall":%s,"tries":%s,"lastTry":%s,"found":%s,"fixed":%s,"fixedWhat":%s,"serverFlag":%s,"auto":%s,"phone":%s,"cancelled":%s,"lastCancel":%s,"keptBy":%s,"leak":%s},' \
         "$(js "$(upd_setting)")" "$(jb "$([ -e "${LGU2E_ROOT}/var/luna/preferences/webosbrew_block_updates" ] && echo 1)")" \
-        "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(command -v iptables >/dev/null 2>&1 && upd_fw_rule && echo 1)")" \
+        "$(js "$(upd_missing_hosts | sed 's/ $//')")" "$(jb "$(fw_usable && upd_fw_rule && echo 1)")" \
         "$(jn "$(upd_stat_get tries)")" "$(jn "$(upd_stat_get last)")" "$(jn "$(upd_stat_get found)")" "$(jn "$(upd_stat_get fixed)")" "$(js "$(upd_stat_get fixedWhat)")" "$(js "$(upd_server_switch)")" "$(js "$(upd_auto_setting)")" \
         "$(js "$(phone_state)")" "$(jn "$(upd_stat_get cancelled)")" "$(jn "$(upd_stat_get lastCancel)")" "$(js "$(upd_kept_by)")" "$(upd_leak_json)"
     printf '"remoteSupport":{"missingHosts":%s,"missingIps":%s},' "$(js "$(rs_missing_hosts | sed 's/ $//')")" "$(js "$(rs_missing_ips | sed 's/ $//')")"
@@ -5679,6 +5700,7 @@ main_menu() {
         case "$_offer" in
             available) echo "9) Get the faster driver for this TV" ;;
             replace) echo "9) Get the driver for the TV's new kernel" ;;
+            newer) echo "9) Get the fixed build of the faster driver" ;;
         esac
         _xoffer=0
         if { [ "$_offer" = none ] || [ "$_offer" = wrong-kernel ]; } && experimental_driver "$(uname -r)" > /dev/null; then
@@ -5698,7 +5720,7 @@ main_menu() {
             8) show_report ;;
             s|S) speed_test ;;
             u|U) update_now ;;
-            9) if [ "$_offer" = available ] || [ "$_offer" = replace ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
+            9) if [ "$_offer" = available ] || [ "$_offer" = replace ] || [ "$_offer" = newer ]; then get_driver; else echo "Pick one of the numbers shown."; fi ;;
             t|T) if [ "$_xoffer" = 1 ]; then test_driver; else echo "Pick one of the numbers shown."; fi ;;
             0|q|Q) echo "Bye."; exit 0 ;;
             *) echo "Pick one of the numbers shown." ;;

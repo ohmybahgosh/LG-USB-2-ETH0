@@ -150,6 +150,10 @@ fi
 case "${OOT:-0}:$BASE" in
     1:4.*) patch -s -d "$M" -p1 < "$HERE/r8152-4.4.patch" ;;
 esac
+# LG's 4.4 and 5.4.96 sources have the ax88179_178a RX code from before
+# Linux's 2022 fix, which counts RX errors and drops that aren't real:
+# ax88179-rx-fixup.py swaps in the fixed function
+[ "$DRIVER" != ax88179_178a ] || python3 "$HERE/ax88179-rx-fixup.py" "$M/ax88179_178a.c" || exit 1
 
 # LG's Makefiles only use the source tree's own path for their include
 # folders when this is set (DonZoomik's build does the same)

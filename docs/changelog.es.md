@@ -2,6 +2,13 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.58] - 2026-11-26
+
+### Fixed
+
+- **Los controladores ASIX contaban errores de recepción y paquetes descartados que no eran reales.**  Todos los `ax88179_178a` compilados con las fuentes 4.4 y 5.4.96 de LG (45, incluidos los probados) tenían el código de recepción de antes de la corrección de Linux de 2022, que cuenta mal las entradas extra que envía el firmware actual del AX88179, así que `ip -s link` mostraba cerca de un 1% de errores y algunos descartes aunque todos los paquetes llegaban (Shintech19, issue #62).  Se recompilaron con el código corregido.  A un TV configurado con una compilación antigua se le ofrece la corregida: **Controlador más rápido** dice que está lista, y `status` explica cómo obtenerla.
+- **El bloqueo de actualizaciones decía que faltaba su regla del cortafuegos en kernels sin la tabla filter.**  Algunos TV tienen `iptables` pero no `ip_tables` en el kernel (un NANO91 de 2020 con webOS 5, issue #62), así que la regla nunca se puede añadir.  El bloqueo ya no la cuenta como ausente allí.
+
 ## [2.11.57] - 2026-11-25
 
 ### Added

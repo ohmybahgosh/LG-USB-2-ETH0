@@ -45,6 +45,8 @@ Their firmware carries the kernel as a U-Boot image around a self-unpacking zIma
 
 ## Built so far
 
+**The ASIX driver gets Linux's 2022 RX fix.**  LG's 4.4 and 5.4.96 sources have the `ax88179_rx_fixup` from before "net: usb: ax88179_178a: Fix packet receiving" (f8ebb3ac881b).  Current AX88179 firmware puts a dummy entry after each packet's entry in the table at the end of a USB transfer, which the old code doesn't know about: it hands up the real packets, then treats the leftover table as one more, counted as an RX length error when it's short and passed up as a junk frame (counted as dropped) when it's longer ([#62](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/62)).  `build.sh` runs `ax88179-rx-fixup.py`, which swaps in the fixed function from Linux 5.4.268 (`ax88179-rx-fixup.c`) when the source doesn't have it.  The rebuilt modules import the same symbols as before.
+
 The 64-bit ones are Realtek's r8152 v2.22.1 as DonZoomik patched it, named `r8152_oot` so it can sit next to an old built-in `r8152`.  It covers RTL8152, RTL8153 (gigabit) and RTL8156 (2.5 gigabit) adapters.  The 32-bit ones are the kernel's own `r8152` (RTL8152 and RTL8153) and `ax88179_178a` (ASIX AX88179), which LG leaves out of those kernels, plus `r8152_oot` ported back to 4.4 for RTL8156.
 
 | Kernel | TVs (from the firmware archive) | LG source used | Struct offsets |
