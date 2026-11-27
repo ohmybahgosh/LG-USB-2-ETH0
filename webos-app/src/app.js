@@ -1108,7 +1108,7 @@
             // builds with Linux's 2022 RX fix)
             if (state.driverOffer === 'newer') {
                 confirmThen(T('Get the fixed build of your driver?'),
-                    T('A new build of the driver you use is ready, with a fix from Linux: the old one counted receive errors and drops that weren\'t real.  This downloads it, checks its checksum, and uses it from now on.  The network drops for a moment while the adapter moves over.'),
+                    T('A new build of the driver you use is ready: it doesn\'t count receive errors and drops that aren\'t real, and on a USB 2.0 port it downloads faster.  This downloads it, checks its checksum, and uses it from now on.  The network drops for a moment while the adapter moves over.'),
                     function () {
                         act(T('Fixed build of the driver'), 'get-driver -y && sh ' + shq(SCRIPT) + ' ' + installArgs('--module ' + shq(state.driverFile)) +
                             ' && sh ' + shq(SCRIPT) + ' apply -y', null, true);

@@ -2,6 +2,12 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.59] - 2026-11-27
+
+### Changed
+
+- **Los adaptadores ASIX descargan cerca de un 60% más rápido en un puerto USB 2.0.**  En USB 2.0, el controlador hacía que el adaptador enviara los paquetes en lotes de 24 KB y solo mantenía 3 en espera, así que el bus USB del TV quedaba parado entre ellos.  Todos los `ax88179_178a` compilados aquí (64) usan ahora lotes de 10 KB en USB 2.0, lo que llevó un NANO91 de 2020 de unos 134 a 212 Mbit/s de bajada, con una subida cerca de un 7% más lenta (Shintech19, issue #62).  USB 3.0 no cambia.  El tamaño es un ajuste del módulo (`hs_size`) para quien quiera ajustarlo.  A un TV con una compilación anterior se le ofrece la nueva, como la corrección de recepción de 2.11.58.
+
 ## [2.11.58] - 2026-11-26
 
 ### Fixed

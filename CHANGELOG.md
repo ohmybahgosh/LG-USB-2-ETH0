@@ -2,6 +2,12 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.59] - 2026-11-27
+
+### Changed
+
+- **ASIX adapters download about 60% faster on a USB 2.0 port.**  On USB 2.0, the driver had the adapter send packets in 24 KB batches and kept only 3 of them waiting, so the TV's USB bus sat idle between them.  Every `ax88179_178a` built here (64 of them) now uses 10 KB batches on USB 2.0, which took a 2020 NANO91 from about 134 to 212 Mbit/s down, for about 7% slower upload (Shintech19, issue #62).  USB 3.0 is unchanged.  The size is a module setting (`hs_size`) for anyone who wants to tune it.  A TV set up with an older build is offered the new one, like the RX fix in 2.11.58.
+
 ## [2.11.58] - 2026-11-26
 
 ### Fixed

@@ -154,6 +154,8 @@ esac
 # Linux's 2022 fix, which counts RX errors and drops that aren't real:
 # ax88179-rx-fixup.py swaps in the fixed function
 [ "$DRIVER" != ax88179_178a ] || python3 "$HERE/ax88179-rx-fixup.py" "$M/ax88179_178a.c" || exit 1
+# and on USB 2.0, smaller receive transfers keep the bus busier (#62)
+[ "$DRIVER" != ax88179_178a ] || python3 "$HERE/ax88179-usb2.py" "$M/ax88179_178a.c" || exit 1
 
 # LG's Makefiles only use the source tree's own path for their include
 # folders when this is set (DonZoomik's build does the same)
