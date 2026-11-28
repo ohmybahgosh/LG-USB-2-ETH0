@@ -2,6 +2,13 @@
 
 Los cambios de LG-USB-2-ETH0 en español, para la pantalla Novedades de la aplicación después de una actualización.  La lista completa en inglés: [CHANGELOG.md](../CHANGELOG.md).  Los títulos de sección (`### Added`, `### Fixed`, `### Changed`) quedan en inglés: la aplicación los traduce sola.
 
+## [2.11.60] - 2026-11-28
+
+### Added
+
+- **Un controlador más confirmado, ahora ofrecido por el controlador más rápido.**  El `r8152_oot` de Realtek para el kernel `4.4.84-150.glacier.2` hizo funcionar un adaptador RTL8153 en un C8 de 2018 (OLED77C8PUA, webOS 4), en línea a 1000 Mbit/s (mnksauce, issue #65).
+- **Auditoría de firmware: webOS 26 43.22.77 en los LCD UR de 2023 y UT de 2024** (chips K8LpN y K8LpN2), el mismo kernel `6.12.44-67.18.qilian.6` con solo `asix` incluido.  Está parcheada contra el root, y la tabla de webOS 26 del README lo indica (issues #63, #64).
+
 ## [2.11.59] - 2026-11-27
 
 ### Changed

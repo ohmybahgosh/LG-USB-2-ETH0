@@ -12,7 +12,7 @@
 # Usage: sh LG-USB-2-ETH0.sh [command] [options]
 #        Run with no arguments for the menu, or with --help for everything.
 
-VERSION="2.11.59"
+VERSION="2.11.60"
 
 # === Color Codes ===
 # Off when the output isn't a terminal (logs, pasted reports) or NO_COLOR is set
@@ -2875,7 +2875,8 @@ TESTED_DRIVERS="4.4.84-612.jcl4tv.40 k6lp r8152.ko 90bb0e88c56b405e730af673c9309
 4.4.84-899.19.koli.1 - usbnet.ko 9674ec86e7e586bcd7dcd911c94d99afbc92293a954009e2cfcaa31e2e265817
 4.4.84-899.19.koli.1 - r8152_oot.ko e863bc0c1ae38da9598788f374346e92c1bdea40d725656ebd5e2c12def78f3d
 4.4.84-612.40.jimna.1 k6hp ax88179_178a.ko 418019e754885532917ace18a17f7dd9e8cc014e847b19f0e4df0c75b8f2652e
-5.4.268-223.29.okapi.5 k8lpn2 ax88179_178a.ko b4d24657eeed098a9a0fc64ea3b3826a29763cc1079fc2aef0886c176e74bde3"
+5.4.268-223.29.okapi.5 k8lpn2 ax88179_178a.ko b4d24657eeed098a9a0fc64ea3b3826a29763cc1079fc2aef0886c176e74bde3
+4.4.84-150.glacier.2 - r8152_oot.ko e50889d81f41dfc4c8a3c36c4d22a27068d1c859aa560ea354ccf50fe6110997"
 
 EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6dd95ca5d7875fb813febde6af44d927da
 4.4.84-612.40.jimna.1 k6lp r8152.ko 388d01ae3d8d58ca7eb82e161bd5675e9d9f2be490a02c2f5c86c42be94edd8e
@@ -3210,7 +3211,6 @@ EXPERIMENTAL_DRIVERS="5.4.96-307 - r8152_oot.ko 8cbc4e1472de11d3720c36180e717a6d
 4.4.84-636.glacier.26 lm18a usbnet.ko 7374f9c280858f21e24d23c46a28991ee92fbfe6a9b20b4c7dc2121ce0040d43
 4.4.84-636.glacier.26 lm18a ax88179_178a.ko 809bf1578308b02da57772320b9d1737d472316dc010a8ea624bc05a018206fb
 4.4.84-636.glacier.26 lm18a dm9601.ko 23c57483a3ebb10e9a6723f9333a0c69964036d17eb2c4c07744ac792a12cbd0
-4.4.84-150.glacier.2 - r8152_oot.ko e50889d81f41dfc4c8a3c36c4d22a27068d1c859aa560ea354ccf50fe6110997
 4.4.84-150.glacier.2 - dm9601.ko 276b96fc1f8ae61fab02afa68f2c65278d7397c128173713c9e14826fafcdf15
 4.4.84-150.glacier.2 - lan78xx.ko 92799ec232f1c0c680978bc95afd788eb021b1872b6ebd492d54ef78b7676639
 4.4.84-432 m3r r8152.ko dcd0600fee1667a4d8c0262b3bf763afe5796657ad45ee0243b2d6ff4c17cfef

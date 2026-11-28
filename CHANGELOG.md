@@ -2,6 +2,13 @@
 
 All notable changes to LG-USB-2-ETH0.  Versions follow [semantic versioning](https://semver.org/).
 
+## [2.11.60] - 2026-11-28
+
+### Added
+
+- **One more driver confirmed working, now offered by Faster driver.**  The Realtek `r8152_oot` for kernel `4.4.84-150.glacier.2` ran an RTL8153 adapter on a 2018 C8 (OLED77C8PUA, webOS 4), online at 1000 Mbit/s (mnksauce, issue #65).
+- **Firmware audit: webOS 26 43.22.77 on the 2023 UR and 2024 UT LCDs** (K8LpN and K8LpN2 chips), the same `6.12.44-67.18.qilian.6` kernel with only `asix` built in.  It's patched against root, and the README's webOS 26 table says so (issues #63, #64).
+
 ## [2.11.59] - 2026-11-27
 
 ### Changed

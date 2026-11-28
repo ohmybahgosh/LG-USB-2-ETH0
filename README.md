@@ -377,6 +377,7 @@ Adapters confirmed on a real TV.  Plain links: no affiliate codes, no sponsorshi
 | TP-Link UE300 ([#57](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/57)) | Realtek RTL8153 (`2357:0601`) | 2021 NANO85 (NANO85APA), webOS 6, USB 2.0 port | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  296 Mbit/s down, 24 up |
 | ASIX AX88179 adapter ([#59](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/59)) | ASIX AX88179/178A (`0b95:1790`) | 2020 NANO91 (55NANO916NA), webOS 5 | Works with the `ax88179_178a` built here for its kernel, which **Faster driver** offers.  Online at 1000 Mbit/s |
 | ASIX AX88179 adapter ([#60](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/60)) | ASIX AX88179/178A (`0b95:1790`) | 2024 NANO81 (65NANO81T6A), webOS 24 | Works with the `ax88179_178a` built here for its kernel, which **Faster driver** offers.  Online at 1000 Mbit/s |
+| RTL8153 adapter ([#65](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/65)) | Realtek RTL8153 (`0bda:8153`) | 2018 C8 (OLED77C8PUA), webOS 4 | Works with the `r8152_oot` built here for its kernel, which **Faster driver** offers.  Online at 1000 Mbit/s |
 
 Got another adapter working?  [Send a compatibility report](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/new?template=compatibility-report.yml) (the TV app makes one for you) and it'll be added here.
 
@@ -437,6 +438,7 @@ These are known to work on a real TV.  Most are built for one exact kernel, and 
 | `ax88179_178a` (from LG's source) | Kernel `5.4.268-294.24.papikonda.2` on webOS 25: the 2025 B5, and the 2024 B4 and QNED85, none of which has an AX88179 driver.  Tested by its author on a B5. | [dd3git](https://github.com/dd3git/lg-webos-ax88179-driver) |
 | `r8152_oot` (Realtek v2.22.1, from LG's source) | Kernel `5.4.96-115.22.meru.2` on webOS 22 with the K8Lp chip, like the 2022 UQ76.  Gigabit RTL8152 and RTL8153 adapters, and RTL8156.  Tested with a TP-Link UE300 at 283 Mbit/s down, 311 up ([#27](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/27)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/5.4.96-115.22.meru.2-k8lp) |
 | `ax88179_178a` (from LG's source) | Kernel `4.4.84-150.glacier.2` on webOS 4.0 (O18 and M16PP chips): 2018 OLEDs like the B8, C8 and E8, SK NanoCells and some UK LCDs, which have no ASIX driver.  Loads its own `usbnet.ko` first.  Tested with an AX88179A on a B8 ([#20](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/20), [#21](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/21)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |
+| `r8152_oot` (Realtek v2.22.1, from LG's source) | Same 2018 TVs (kernel `4.4.84-150.glacier.2`, O18 and M16PP).  Their own `r8152` is too old for newer RTL8153 and RTL8156 adapters.  Tested with an RTL8153 at 1000 Mbit/s on a C8 ([#65](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/65)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |
 | `r8152_oot` (Realtek v2.22.1, from LG's source) | Kernel `4.4.3-119.drd4tv.6` on webOS 3.5 (M16P chip): 2017 OLEDs like the C7, and UJ7 LCDs.  Their own `r8152` is too old for RTL8153B and RTL8156 adapters.  Tested with an RTL8153 at 500 Mbit/s on a C7's USB 3.0 port ([#17](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/17)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.3-119.drd4tv.6-m16p) |
 | `ax88179_178a` (from LG's source) | Same 2017 TVs (kernel `4.4.3-119.drd4tv.6`, M16P), which have no ASIX driver.  Loads its own `usbnet.ko` first.  Tested with a UGREEN AX88179B on a C7 ([#16](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/16), [#18](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/18)). | [OhMyBahGosh](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.3-119.drd4tv.6-m16p) |
 | `r8152`, `ax88179_178a` | TVs with the Realtek K5Lp chip on kernel 4.4.84, picked by chip.  Gigabit Realtek and ASIX adapters.  Not yet tested with this app. | [throwaway96](https://github.com/throwaway96/webos-kernel-drivers) |
@@ -473,7 +475,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**346 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**345 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -493,7 +495,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 346 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
+<summary><b>All 345 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
 
 <br>
 
@@ -541,7 +543,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 | Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
 |---|---|:-:|:-:|---|
 | `4.4.84-636.glacier.26` | [LM18A](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-636.glacier.26-lm18a) | yes |  |  |
-| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |  | yes |  |
+| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) | yes | yes |  |
 
 **Reported working, now offered by get-driver: webOS 3.5**
 
@@ -636,7 +638,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 |---|---|:-:|:-:|---|
 | `4.4.84-636.glacier.26` | [LM18A](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-636.glacier.26-lm18a) | yes | yes | Davicom DM9601 |
 | `4.4.84-404.glacier.10` | [M3](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-404.glacier.10-m3) | yes | yes | Davicom DM9601 |
-| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) | yes |  | Davicom DM9601, Microchip LAN78xx |
+| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |  |  | Davicom DM9601, Microchip LAN78xx |
 
 **webOS 3.5**
 
@@ -707,6 +709,7 @@ The script only needs root, the Homebrew Channel, `ip` and `/sys`, which every r
 | webOS 3.5 / 4 (2017 and 2018: B7, C7, C8) | An older forum thread says ASIX adapters worked out of the box and a TP-Link UE300 (RTL8153) didn't.  The [firmware audit](docs/firmware-audit.md) doesn't back up the ASIX part: these kernels have only `r8152` and `rtl8150`, with no ASIX driver and no `usbnet` (also seen on a C7, [discussion #4](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/4)), and the 2017 `r8152` is too old for newer RTL8153B chips.  Drivers built for these kernels now work and **Faster driver** offers them: see the C7 and B8 rows below. | [lgwebos.com thread](https://www.lgwebos.com/topic/3395-gigabit-ethernet-on-smart-tv/page/2/), this repo |
 | webOS 3.5 (3.9.3, firmware 06.10.65) on a 2017 C7 (OLED65C7T), kernel `4.4.3-119.drd4tv.6` | The TV's own `r8152` is too old for newer Realtek adapters, and there's no ASIX driver.  An RTL8153 adapter works with `r8152_oot`, 500 Mbit/s on the USB 3.0 port, and a UGREEN AX88179B with `ax88179_178a` (it loads its own `usbnet.ko` first).  **Faster driver** and `get-driver` offer both, and the boot hook keeps the adapter as `eth0` after a restart. | [#16](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/16), [#17](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/17), [#18](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/18), [Discussion #4](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/4) |
 | webOS 4 (4.4.3, firmware 05.50.70) on a 2018 B8 (OLED55B8PLA), kernel `4.4.84-150.glacier.2` | No ASIX driver in the kernel.  An AX88179A adapter (`0b95:1790`) works with the `ax88179_178a` built from LG's source for this kernel, which loads its `usbnet.ko` first and which **Faster driver** and `get-driver` offer.  LG-USB-2-ETH0 makes it `eth0` at 1000 Mbit/s, settings show the wired connection and apps play.  222 Mbit/s over USB 2.0. | [#20](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/20), [#21](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/21) |
+| webOS 4 (firmware 05.50.70) on a 2018 C8 (OLED77C8PUA), kernel `4.4.84-150.glacier.2`, O18 chip | An RTL8153 adapter (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer.  Online at 1000 Mbit/s. | [#65](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/65) |
 | webOS 4 (4.4.3, firmware 05.50.70) on a 2018 UK6300 (65UK6300PLB), kernel `4.4.84-636.glacier.26`, LM18A chip | The TV's own `r8152` is too old for current RTL8153 adapters.  An RTL8153 (`0bda:8153`) works with the `r8152_oot` built here for this kernel, which **Faster driver** and `get-driver` offer, and LG-USB-2-ETH0 makes it `eth0` with `--watch` and `--wifi-fallback`.  297 Mbit/s down, 331 up, and settings show the wired connection. | [#43](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/43) |
 | webOS 4 (4.10.2, firmware 05.50.00) on a 2019 C9 (OLED65C9PLA), kernel `4.4.84-169.gld4tv.5` | RTL8153 (`0bda:8153`) and AX88179 (`0b95:1790`) adapters both work on the TV's own `r8152` and `ax88179_178a` drivers, no extra driver needed.  309 and 284 Mbit/s down over USB 2.0. | [#28](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/28), [#29](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/29) |
 | webOS 5 (5.5.0) on a 2020 UN7300 (55UN7300PUF), kernel `4.4.84-612.jcl4tv.40` | No ASIX driver in the kernel.  A TP-Link UE306 (AX88179, `0b95:1790`) works with OCT0PUSCRIME's `ax88179_178a` build, which `get-driver` offers, and LG-USB-2-ETH0 makes it `eth0`.  228 Mbit/s down, 325 up over USB 2.0.  A Cable Matters RTL8153 works with the K6Lp `r8152` build: 184 Mbit/s down, 229 up ([#6](https://github.com/ohmybahgosh/LG-USB-2-ETH0/issues/6)). | [Discussion #3](https://github.com/ohmybahgosh/LG-USB-2-ETH0/discussions/3), [OCT0PUSCRIME/lg-webos-ax88179-driver](https://github.com/OCT0PUSCRIME/lg-webos-ax88179-driver) |
@@ -764,7 +767,8 @@ webOS 4.0 and 4.5 TVs can be rooted with [faultmanager-autoroot](https://github.
 | 2026 QNED7S (K25LpNLM chip) | None known: its webOS 26 updates (43.21.87, 43.21.89) came out late October 2026 | Older ASIX (`asix`) only | Can't load: signed drivers only |
 | 2024 B4 and 2025 B5 (K24, K24N chips) | None yet: their webOS 26 (43.22.72) came out November 3 | Older ASIX (`asix`) only | Would load, but there's no root |
 | 2023 QNED80, QNED85 and UR83 to UR93 LCDs (K8HpP chip) | None yet: their webOS 26 (43.22.73) came out November 10 | Older ASIX (`asix`) only | Would load, but there's no root |
-| 2024 LCDs with the K8LpN2 chip (UT81, QNED80T) | 43.22.13 (September 2026) | Older ASIX (`asix`) only | Would load, but LG hasn't published that kernel's source yet, so none is built |
+| 2024 LCDs with the K8LpN2 chip (UT83, UT93, QNED80T) | 43.22.13 (September 2026).  43.22.77 (November 25) is patched | Older ASIX (`asix`) only | Would load, but LG hasn't published that kernel's source yet, so none is built |
+| 2023 UR82 and UR83 LCDs (K8LpN chip) | None yet: their webOS 26 (43.22.77) came out November 25 | Older ASIX (`asix`) only | Would load, but there's no root |
 
 "Older ASIX" is the `asix` driver for AX88772 and AX88178 adapters, not the more common AX88179.
 
