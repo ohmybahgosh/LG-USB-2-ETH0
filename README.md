@@ -473,7 +473,7 @@ Have a module for a different kernel?  `install --module /full/path/driver.ko` w
 
 ### More drivers on the way
 
-**346 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
+**345 more drivers are built and waiting for testers.**  They're built from LG's own kernel source with each TV's own config, the same way DonZoomik built his, and checked: the exact kernel version, and every symbol they use is in the TV's kernel.  None has run on a TV yet.  Once someone with that TV reports one working, it moves to **Faster driver** for everyone with that kernel.
 
 | Kernel (`uname -r`) | TVs | Drivers |
 |---|---|---|
@@ -493,7 +493,7 @@ Every kernel in the list also has `dm9601` (Davicom DM9601) and `lan78xx` (Micro
 On Realtek-chip TVs, one kernel name runs on several chips with different configs, so there's a build per chip, and `test-driver` picks yours.  How they're built: [docs/driver-build.md](docs/driver-build.md).
 
 <details>
-<summary><b>All 346 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
+<summary><b>All 345 drivers: 52 kernels, 21 Realtek chips and LG's own chips, from webOS 3.5 to webOS 25</b></summary>
 
 <br>
 
@@ -541,7 +541,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 | Kernel (`uname -r`) | Chips | Realtek | ASIX | Others |
 |---|---|:-:|:-:|---|
 | `4.4.84-636.glacier.26` | [LM18A](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-636.glacier.26-lm18a) | yes |  |  |
-| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |  | yes |  |
+| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) | yes | yes |  |
 
 **Reported working, now offered by get-driver: webOS 3.5**
 
@@ -636,7 +636,7 @@ Each chip links to its folder in [lg-webos-usb-drivers](https://github.com/ohmyb
 |---|---|:-:|:-:|---|
 | `4.4.84-636.glacier.26` | [LM18A](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-636.glacier.26-lm18a) | yes | yes | Davicom DM9601 |
 | `4.4.84-404.glacier.10` | [M3](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-404.glacier.10-m3) | yes | yes | Davicom DM9601 |
-| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) | yes |  | Davicom DM9601, Microchip LAN78xx |
+| `4.4.84-150.glacier.2` | [O18, M16PP](https://github.com/ohmybahgosh/lg-webos-usb-drivers/tree/main/experimental/4.4.84-150.glacier.2) |  |  | Davicom DM9601, Microchip LAN78xx |
 
 **webOS 3.5**
 
